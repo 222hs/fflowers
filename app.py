@@ -836,6 +836,17 @@ def tg(chat_id, text):
         timeout=10
     )
 
+def tg_buttons(chat_id, text, buttons):
+    """Send message with inline keyboard buttons."""
+    if not BOT_TOKEN:
+        return
+    keyboard = {"inline_keyboard": [[{"text": b["label"], "callback_data": b["data"]} for b in row] for row in buttons]}
+    requests.post(
+        f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage",
+        json={"chat_id": chat_id, "text": text, "parse_mode": "HTML", "reply_markup": keyboard},
+        timeout=10
+    )
+
 # Store pending photo entries per chat
 pending = {}
 
@@ -877,6 +888,111 @@ def api_del(eid):
 def webhook():
     data = request.json or {}
     msg  = data.get("message") or data.get("edited_message")
+    # ── Callback query (button press) ──
+    cb = data.get("callback_query")
+    if cb:
+        cb_id      = cb["id"]
+        cb_chat    = cb["message"]["chat"]["id"]
+        cb_data    = cb["data"]
+        cb_month   = cur_month()
+        cb_date    = datetime.now().strftime("%d/%m/%Y")
+
+        # Answer callback to remove loading spinner
+        requests.post(
+            f"https://api.telegram.org/bot{BOT_TOKEN}/answerCallbackQuery",
+            json={"callback_query_id": cb_id}, timeout=5
+        )
+
+        # Payment method button
+        if cb_data.startswith("pay:"):
+            payment = cb_data.split("pay:", 1)[1]
+            with get_db() as db:
+                last = db.execute(
+                    "SELECT id FROM entries WHERE type='s' AND month=? ORDER BY created DESC LIMIT 1",
+                    (cb_month,)
+                ).fetchone()
+                if last:
+                    db.execute("UPDATE entries SET payment_method=? WHERE id=?", (payment, last["id"]))
+                    db.commit()
+            # Remove buttons by editing message
+            requests.post(
+                f"https://api.telegram.org/bot{BOT_TOKEN}/editMessageReplyMarkup",
+                json={"chat_id": cb_chat, "message_id": cb["message"]["message_id"], "reply_markup": {"inline_keyboard": []}},
+                timeout=5
+            )
+            tg(cb_chat, f"✅ طريقة الدفع: {payment}")
+            if cb_chat in pending and pending[cb_chat].get("waiting") == "sale_payment":
+                del pending[cb_chat]
+
+        # Payer button
+        elif cb_data.startswith("payer:"):
+            payer_val = cb_data.split("payer:", 1)[1]
+
+            if payer_val == "skip":
+                paid_by = None
+                requests.post(
+                    f"https://api.telegram.org/bot{BOT_TOKEN}/editMessageReplyMarkup",
+                    json={"chat_id": cb_chat, "message_id": cb["message"]["message_id"], "reply_markup": {"inline_keyboard": []}},
+                    timeout=5
+                )
+                tg(cb_chat, "⏭ تم التخطي — لم يُحدد الدافع")
+
+            elif payer_val == "other":
+                pending[cb_chat] = pending.get(cb_chat, {})
+                pending[cb_chat]["waiting_name"] = True
+                requests.post(
+                    f"https://api.telegram.org/bot{BOT_TOKEN}/editMessageReplyMarkup",
+                    json={"chat_id": cb_chat, "message_id": cb["message"]["message_id"], "reply_markup": {"inline_keyboard": []}},
+                    timeout=5
+                )
+                tg(cb_chat, "✏️ اكتب اسم الشخص:")
+                return "ok"
+
+            else:
+                paid_by = payer_val
+                requests.post(
+                    f"https://api.telegram.org/bot{BOT_TOKEN}/editMessageReplyMarkup",
+                    json={"chat_id": cb_chat, "message_id": cb["message"]["message_id"], "reply_markup": {"inline_keyboard": []}},
+                    timeout=5
+                )
+
+            # Save paid_by to last buy entry or pending
+            state = pending.get(cb_chat, {})
+            if state.get("waiting") in ("paid_by", "paid_by_photo"):
+                waiting = state["waiting"]
+                if waiting == "paid_by":
+                    desc  = state.get("desc", "مشتريات")
+                    amt   = state.get("amt", 0)
+                    month_s = state.get("month", cb_month)
+                    dt    = state.get("date", cb_date)
+                    with get_db() as db:
+                        db.execute(
+                            "INSERT INTO entries (type,desc,amt,date,month,paid_by) VALUES (?,?,?,?,?,?)",
+                            ("b", desc, amt, dt, month_s, paid_by)
+                        )
+                        db.commit()
+                    del pending[cb_chat]
+                    paid_line = f"\n👤 دفع: <b>{paid_by}</b>" if paid_by else ""
+                    tg(cb_chat,
+                       f"✅ <b>تم التسجيل!</b>\n\n"
+                       f"📦 مشتريات\n📝 {desc}\n💰 {fmt_omr(amt)}{paid_line}")
+                else:
+                    # paid_by_photo — update last entry
+                    with get_db() as db:
+                        last = db.execute(
+                            "SELECT id FROM entries WHERE month=? ORDER BY created DESC LIMIT 1",
+                            (cb_month,)
+                        ).fetchone()
+                        if last:
+                            db.execute("UPDATE entries SET paid_by=? WHERE id=?", (paid_by, last["id"]))
+                            db.commit()
+                    if cb_chat in pending:
+                        del pending[cb_chat]
+                    paid_line = f"👤 دفع: <b>{paid_by}</b>" if paid_by else "⏭ بدون دافع محدد"
+                    tg(cb_chat, f"✅ {paid_line}")
+
+        return "ok"
+
     if not msg:
         return "ok"
 
@@ -947,12 +1063,12 @@ def webhook():
                     db.commit()
                 # Ask who paid
                 pending[chat_id] = {"waiting": "paid_by_photo", "last_id": None, "amt": amt}
-                tg(chat_id,
-                   f"✅ <b>تم قراءة الفاتورة!</b>\n\n"
-                   f"📦 {desc}\n"
-                   f"💰 {fmt_omr(amt)}\n\n"
-                   f"👤 <b>من دفع؟</b> اكتب الاسم أو أرسل <code>-</code>\n"
-                   f"(إذا المبلغ غلط أرسل: <code>تصحيح 3.500</code>)")
+                tg_buttons(chat_id,
+                   f"✅ <b>تم قراءة الفاتورة!</b>\n\n📦 {desc}\n💰 {fmt_omr(amt)}\n\n👤 <b>من دفع؟</b>",
+                   [[{"label": "👤 حسين", "data": "payer:حسين"},
+                     {"label": "👤 شوق",  "data": "payer:شوق"}],
+                    [{"label": "➕ شخص آخر", "data": "payer:other"},
+                     {"label": "⏭ تخطي",    "data": "payer:skip"}]])
             else:
                 # Gemini couldn't read — ask manually
                 pending[chat_id] = {"waiting": "buy_amt", "desc": caption or "مشتريات"}
@@ -1033,6 +1149,39 @@ def webhook():
                     db.commit()
             del pending[chat_id]
             tg(chat_id, f"✅ تم تسجيل طريقة الدفع: {payment}")
+            return "ok"
+
+        if state.get("waiting_name"):
+            # User typing custom payer name
+            paid_by = text.strip()
+            del state["waiting_name"]
+            # Now handle as if payer was selected
+            if state.get("waiting") == "paid_by":
+                desc  = state.get("desc", "مشتريات")
+                amt   = state.get("amt", 0)
+                month_s = state.get("month", month)
+                dt    = state.get("date", date)
+                with get_db() as db:
+                    db.execute(
+                        "INSERT INTO entries (type,desc,amt,date,month,paid_by) VALUES (?,?,?,?,?,?)",
+                        ("b", desc, amt, dt, month_s, paid_by)
+                    )
+                    db.commit()
+                del pending[chat_id]
+                tg(chat_id,
+                   f"✅ <b>تم التسجيل!</b>\n\n"
+                   f"📦 مشتريات\n📝 {desc}\n💰 {fmt_omr(amt)}\n👤 دفع: <b>{paid_by}</b>")
+            else:
+                with get_db() as db:
+                    last = db.execute(
+                        "SELECT id FROM entries WHERE month=? ORDER BY created DESC LIMIT 1", (month,)
+                    ).fetchone()
+                    if last:
+                        db.execute("UPDATE entries SET paid_by=? WHERE id=?", (paid_by, last["id"]))
+                        db.commit()
+                if chat_id in pending:
+                    del pending[chat_id]
+                tg(chat_id, f"✅ تم تسجيل الدافع: <b>{paid_by}</b>")
             return "ok"
 
         if state["waiting"] == "paid_by":
@@ -1164,18 +1313,18 @@ def webhook():
                 pay_method = "تحويل 🏦"
 
             if not pay_method:
-                pending[chat_id] = {"waiting": "sale_payment", "desc": desc, "amt": amt, "date": date, "month": month}
                 with get_db() as db:
                     db.execute(
                         "INSERT INTO entries (type,desc,amt,date,month) VALUES (?,?,?,?,?)",
                         ("s", desc, amt, date, month)
                     )
                     db.commit()
-                tg(chat_id,
-                   f"🌸 <b>مبيعة {fmt_omr(amt)}</b> — تم التسجيل!\n\n"
-                   f"💳 <b>طريقة الدفع؟</b>\n"
-                   f"1️⃣ كاش\n2️⃣ فيزا\n3️⃣ تحويل\n\n"
-                   f"أرسل الرقم أو الاسم")
+                pending[chat_id] = {"waiting": "sale_payment", "desc": desc, "amt": amt, "date": date, "month": month}
+                tg_buttons(chat_id,
+                   f"🌸 <b>مبيعة {fmt_omr(amt)}</b> — تم التسجيل!\n\n💳 <b>طريقة الدفع؟</b>",
+                   [[{"label": "💵 كاش",    "data": "pay:كاش 💵"},
+                     {"label": "💳 فيزا",   "data": "pay:فيزا 💳"},
+                     {"label": "🏦 تحويل",  "data": "pay:تحويل 🏦"}]])
                 return "ok"
             else:
                 with get_db() as db:
