@@ -1,0 +1,11 @@
+services:
+  - type: web
+    name: fairuz-flowers
+    env: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn app:app --bind 0.0.0.0:$PORT
+    envVars:
+      - key: BOT_TOKEN
+        sync: false
+      - key: DB_PATH
+        value: /opt/render/project/src/fairuz.db
