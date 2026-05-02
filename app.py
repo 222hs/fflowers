@@ -837,16 +837,14 @@ def get_db():
 def db_exec(sql, params=(), fetch=None):
     """Unified DB execute — handles both pg8000 and SQLite."""
     if USE_PG:
-        sql_pg = sql.replace("?", "%s")
+        # Convert ? placeholders to $1,$2,... for pg8000
+        counter = [0]
+        def to_dollar(m):
+            counter[0] += 1
+            return f"${counter[0]}"
+        sql_final = re.sub(r'\?', to_dollar, sql)
         conn = get_db()
         try:
-            # pg8000 native uses $1,$2,... placeholders
-            i = 0
-            def replacer(m):
-                nonlocal i
-                i += 1
-                return f"${i}"
-            sql_final = re.sub(r'%s', replacer, sql_pg)
             rows = conn.run(sql_final, *list(params))
             cols = [c["name"] for c in conn.columns] if conn.columns else []
             if fetch == "one":
@@ -864,7 +862,7 @@ def db_exec(sql, params=(), fetch=None):
                 return result
             return None
         except Exception as e:
-            print(f"DB Error: {e} | SQL: {sql_pg} | Params: {params}")
+            print(f"DB Error: {e} | SQL: {sql_final} | Params: {params}")
             raise
         finally:
             conn.close()
