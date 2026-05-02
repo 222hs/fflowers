@@ -840,7 +840,8 @@ def db_exec(sql, params=(), fetch=None):
         sql_pg = sql.replace("?", "%s")
         conn = get_db()
         try:
-            rows = conn.run(sql_pg, *params)
+            # pg8000 native: pass params as keyword argument
+            rows = conn.run(sql_pg, parameters=list(params))
             cols = [c["name"] for c in conn.columns] if conn.columns else []
             if fetch == "one":
                 if rows:
