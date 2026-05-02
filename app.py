@@ -1025,7 +1025,7 @@ def init_db():
     fixed_sqls = [
         """CREATE TABLE IF NOT EXISTS expenses (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            name TEXT NOT NULL,
+            name TEXT NOT NULL UNIQUE,
             amount REAL NOT NULL,
             type TEXT DEFAULT 'monthly',
             last_paid TEXT,
@@ -1039,16 +1039,21 @@ def init_db():
             try:
                 conn2=sqlite3.connect(DB_PATH); conn2.execute(sql); conn2.commit(); conn2.close()
             except: pass
-    # Insert default expenses
+    # Insert default expenses using INSERT OR IGNORE
     defaults = [
         ("راتب العامل", 220, "monthly"),
         ("إيجار المحل", 100, "monthly"),
         ("فاتورة الكهرباء", 0, "variable"),
     ]
     for name, amt, typ in defaults:
-        ex = db_one("SELECT id FROM expenses WHERE name=?", (name,))
-        if not ex:
-            db_run("INSERT INTO expenses (name,amount,type) VALUES (?,?,?)", (name, amt, typ))
+        if USE_TURSO:
+            turso_run("INSERT OR IGNORE INTO expenses (name,amount,type) VALUES (?,?,?)", (name, amt, typ))
+        else:
+            try:
+                conn3=sqlite3.connect(DB_PATH)
+                conn3.execute("INSERT OR IGNORE INTO expenses (name,amount,type) VALUES (?,?,?)", (name, amt, typ))
+                conn3.commit(); conn3.close()
+            except: pass
     if USE_TURSO:
         for sql in sqls:
             turso_run(sql)
