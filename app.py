@@ -840,26 +840,25 @@ def db_exec(sql, params=(), fetch=None):
         sql_pg = sql.replace("?", "%s")
         conn = get_db()
         try:
+            rows = conn.run(sql_pg, *params)
+            cols = [c["name"] for c in conn.columns] if conn.columns else []
             if fetch == "one":
-                rows = conn.run(sql_pg, *params)
-                cols = [c["name"] for c in conn.columns]
                 if rows:
                     row = dict(zip(cols, rows[0]))
                     if "description" in row: row["desc"] = row.pop("description")
                     return row
                 return None
             elif fetch == "all":
-                rows = conn.run(sql_pg, *params)
-                cols = [c["name"] for c in conn.columns]
                 result = []
                 for r in rows:
                     row = dict(zip(cols, r))
                     if "description" in row: row["desc"] = row.pop("description")
                     result.append(row)
                 return result
-            else:
-                conn.run(sql_pg, *params)
-                return None
+            return None
+        except Exception as e:
+            print(f"DB Error: {e} | SQL: {sql_pg} | Params: {params}")
+            raise
         finally:
             conn.close()
     else:
@@ -976,28 +975,9 @@ def cur_month():
     return datetime.now().strftime("%Y-%m")
 
 def get_month_data(month):
-    if USE_PG:
-        conn = get_db()
-        rows_raw = conn.run("SELECT * FROM entries WHERE month=%s ORDER BY created DESC", month)
-        cols = [c["name"] for c in conn.columns]
-        conn.close()
-        rows = []
-        for r in rows_raw:
-            row = dict(zip(cols, r))
-            # Map description -> desc for JS compatibility
-            if "description" in row:
-                row["desc"] = row.pop("description")
-            rows.append(row)
-    else:
-        import sqlite3 as _sq
-        conn = _sq.connect(DB_PATH)
-        conn.row_factory = _sq.Row
-        rows = [dict(r) for r in conn.execute(
-            "SELECT * FROM entries WHERE month=? ORDER BY created DESC", (month,)
-        ).fetchall()]
-        conn.close()
-    sales = [r for r in rows if r["type"] == "s"]
-    buys  = [r for r in rows if r["type"] == "b"]
+    rows = db_exec("SELECT * FROM entries WHERE month=? ORDER BY created DESC", (month,), fetch="all") or []
+    sales = [r for r in rows if r.get("type") == "s"]
+    buys  = [r for r in rows if r.get("type") == "b"]
     return sales, buys
 
 def month_summary(month):
@@ -1292,9 +1272,7 @@ def api_add():
             month, d.get("img"), d.get("paid_by"),
             d.get("payment_method"), d.get("sale_time"))
     if USE_PG:
-        conn = get_db()
-        conn.run("INSERT INTO entries (type,description,amt,date,month,img,paid_by,payment_method,sale_time) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s)", *vals)
-        conn.close()
+        db_exec("INSERT INTO entries (type,description,amt,date,month,img,paid_by,payment_method,sale_time) VALUES (?,?,?,?,?,?,?,?,?)", vals)
     else:
         import sqlite3 as _sq
         conn = _sq.connect(DB_PATH)
@@ -1307,9 +1285,7 @@ def api_add():
 @app.route("/api/entries/<int:eid>", methods=["DELETE"])
 def api_del(eid):
     if USE_PG:
-        conn = get_db()
-        conn.run("DELETE FROM entries WHERE id=%s", eid)
-        conn.close()
+        db_exec("DELETE FROM entries WHERE id=?", (eid,))
     else:
         import sqlite3 as _sq
         conn = _sq.connect(DB_PATH)
