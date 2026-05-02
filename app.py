@@ -1018,7 +1018,7 @@ def groq_read_sale_receipt(file_id):
             "https://api.groq.com/openai/v1/chat/completions",
             headers={"Authorization": f"Bearer {GROQ_KEY}", "Content-Type": "application/json"},
             json={
-                "model": "llama-3.2-11b-vision-preview",
+                "model": "meta-llama/llama-4-scout-17b-16e-instruct",
                 "messages": [{
                     "role": "user",
                     "content": [
@@ -1073,7 +1073,7 @@ def groq_read_invoice(file_id):
                 "Content-Type": "application/json"
             },
             json={
-                "model": "llama-3.2-11b-vision-preview",
+                "model": "meta-llama/llama-4-scout-17b-16e-instruct",
                 "messages": [{
                     "role": "user",
                     "content": [
