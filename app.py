@@ -1,14 +1,22 @@
 import os
+import sys
+import subprocess
 import requests
 from datetime import datetime
 from flask import Flask, request, jsonify, Response
 
-# PostgreSQL support
-try:
-    import psycopg2
-    import psycopg2.extras
-    USE_PG = bool(os.environ.get("DATABASE_URL"))
-except ImportError:
+# Auto-install psycopg2 if DATABASE_URL is set but psycopg2 missing
+if os.environ.get("DATABASE_URL"):
+    try:
+        import psycopg2
+        import psycopg2.extras
+        USE_PG = True
+    except ImportError:
+        subprocess.check_call([sys.executable, "-m", "pip", "install", "psycopg2-binary", "-q"])
+        import psycopg2
+        import psycopg2.extras
+        USE_PG = True
+else:
     USE_PG = False
 
 if not USE_PG:
@@ -642,7 +650,11 @@ GROQ_KEY    = os.environ.get("GROQ_API_KEY", "")
 # ── Database ──────────────────────────────────────────────
 def get_db():
     if USE_PG:
-        conn = psycopg2.connect(os.environ["DATABASE_URL"], sslmode="require")
+        db_url = os.environ["DATABASE_URL"]
+        # Fix: psycopg2 needs postgresql:// not postgres://
+        if db_url.startswith("postgres://"):
+            db_url = db_url.replace("postgres://", "postgresql://", 1)
+        conn = psycopg2.connect(db_url)
         return conn
     else:
         import sqlite3 as _sq
