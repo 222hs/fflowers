@@ -9,12 +9,13 @@ from flask import Flask, request, jsonify, Response
 app = Flask(__name__)
 
 # ── Config ────────────────────────────────────────────────
-BOT_TOKEN   = os.environ.get("BOT_TOKEN", "")
-GROQ_KEY    = os.environ.get("GROQ_API_KEY", "")
-DB_PATH     = os.environ.get("DB_PATH", "fairuz.db")
-TURSO_URL   = os.environ.get("TURSO_URL", "")
-TURSO_TOKEN = os.environ.get("TURSO_TOKEN", "")
-USE_TURSO   = bool(TURSO_URL and TURSO_TOKEN)
+BOT_TOKEN    = os.environ.get("BOT_TOKEN", "")
+GROQ_KEY     = os.environ.get("GROQ_API_KEY", "")
+DB_PATH      = os.environ.get("DB_PATH", "fairuz.db")
+TURSO_URL    = os.environ.get("TURSO_URL", "")
+TURSO_TOKEN  = os.environ.get("TURSO_TOKEN", "")
+USE_TURSO    = bool(TURSO_URL and TURSO_TOKEN)
+APP_PASSWORD = os.environ.get("APP_PASSWORD", "fairuz2026")
 
 HTML_PAGE = """<!DOCTYPE html>
 <html lang="ar" dir="rtl">
@@ -490,6 +491,7 @@ header {
       <span id="flowerCount" style="font-size:12px;font-weight:700;color:var(--rose-d);">0</span>
       <span style="font-size:9px;color:var(--text3);background:rgba(232,121,138,.15);padding:1px 5px;border-radius:8px;">تجريبي</span>
     </div>
+    <a href="/logout" style="background:rgba(107,76,59,.08);border:1px solid rgba(107,76,59,.15);border-radius:20px;padding:6px 12px;font-size:11px;font-weight:700;color:var(--text3);text-decoration:none;white-space:nowrap;" title="تسجيل الخروج">🔒 خروج</a>
     <div class="mpill" id="mpill">
       <label>📅</label>
       <select id="msel" onchange="changeMonth()">
@@ -1476,7 +1478,78 @@ def groq_read_invoice(file_id):
         return None
 
 # ── Web API ───────────────────────────────────────────────
+LOGIN_PAGE = """<!DOCTYPE html>
+<html lang="ar" dir="rtl"><head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>فيروز فلورز</title>
+<link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;700;900&display=swap" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box;}
+body{font-family:Tajawal,sans-serif;background:linear-gradient(135deg,#fdf3f0,#f0f7f2);
+  min-height:100vh;display:flex;align-items:center;justify-content:center;}
+.c{background:rgba(255,255,255,.92);border:1px solid rgba(249,200,208,.5);border-radius:22px;
+  padding:40px 32px;width:min(360px,90vw);text-align:center;
+  box-shadow:0 20px 60px rgba(107,76,59,.12);}
+.ic{font-size:52px;margin-bottom:12px;}
+h1{font-size:21px;font-weight:900;color:#c4566a;margin-bottom:4px;}
+p{font-size:12px;color:#b09888;margin-bottom:24px;}
+input{width:100%;border:1px solid rgba(249,200,208,.7);border-radius:11px;
+  padding:13px;font-size:16px;font-family:Tajawal,sans-serif;text-align:center;
+  letter-spacing:3px;outline:none;margin-bottom:12px;background:rgba(255,255,255,.8);}
+input:focus{border-color:#e8798a;box-shadow:0 0 0 3px rgba(232,121,138,.15);}
+button{width:100%;padding:13px;background:linear-gradient(135deg,#e8798a,#c4566a);
+  border:none;border-radius:11px;color:white;font-size:15px;font-weight:700;
+  font-family:Tajawal,sans-serif;cursor:pointer;box-shadow:0 4px 16px rgba(232,121,138,.3);}
+.err{color:#c4566a;font-size:12px;margin-bottom:10px;min-height:16px;}
+</style></head>
+<body><div class="c">
+<div class="ic">🌹</div>
+<h1>فيروز فلورز</h1>
+<p>أدخل كلمة المرور للدخول</p>
+<div class="err" id="e"></div>
+<input type="password" id="pw" placeholder="كلمة المرور" onkeydown="if(event.key==='Enter')go()"/>
+<button onclick="go()">🔐 دخول</button>
+</div>
+<script>
+async function go(){
+  const r=await fetch('/auth',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({p:document.getElementById('pw').value})});
+  const d=await r.json();
+  if(d.ok)location.href='/';
+  else{document.getElementById('e').textContent='❌ كلمة المرور غير صحيحة';
+    document.getElementById('pw').value='';}
+}
+</script></body></html>"""
+
+from functools import wraps
+from flask import session, redirect
+
+def auth(f):
+    @wraps(f)
+    def w(*a,**k):
+        if not session.get('ok'): return redirect('/login')
+        return f(*a,**k)
+    return w
+
+@app.route("/login")
+def login(): return Response(LOGIN_PAGE, mimetype="text/html")
+
+@app.route("/auth", methods=["POST"])
+def do_auth():
+    d = request.json or {}
+    if d.get("p") == APP_PASSWORD:
+        session['ok'] = True
+        session.permanent = True
+        return jsonify({"ok": True})
+    return jsonify({"ok": False})
+
+@app.route("/logout")
+def logout():
+    session.clear()
+    return redirect('/login')
+
 @app.route("/")
+@auth
 def index(): return Response(HTML_PAGE, mimetype="text/html")
 
 @app.route("/debug")
@@ -1744,15 +1817,20 @@ def webhook():
            "<code>بعت تاج بـ 3.000 فيزا</code>\n\n"
            "📦 <b>مشتريات:</b>\n"
            "<code>اشتريت زهور بـ 12.000</code>\n\n"
-           "🗄️ <b>بيع من الرف:</b>\n"
-           "<code>/رف ريحان</code> — عرض منتجات رف ريحان\n"
-           "<code>/رف فتحية</code>\n"
-           "<code>/رف فطوم</code>\n"
-           "<code>/رف اكسسوارات</code>\n\n"
-           "🧾 <b>فاتورة:</b> أرسل صورة\n\n"
+           "💸 <b>مصاريف:</b>\n"
+           "<code>دفعت راتب</code>\n"
+           "<code>دفعت إيجار</code>\n"
+           "<code>دفعت كهرباء 45.000</code>\n\n"
+           "🗄️ <b>الرفوف:</b>\n"
+           "<code>/رف ريحان</code> — منتجات الرف\n"
+           "<code>/ايجار_الرفوف</code> — تسجيل الإيجارات\n\n"
+           "🌸 <b>مخزون الورد:</b>\n"
+           "أرسل صورة + تعليق <code>عد الورد</code>\n"
+           "/ورد — عرض المخزون\n\n"
            "📊 /report — تقرير الشهر\n"
+           "📈 /فئات — مبيعات حسب الفئة\n"
            "👤 /من_دفع — تفصيل المشتريات\n"
-           "📈 /فئات — مبيعات حسب الفئة")
+           "💼 /مصاريف — المصاريف الثابتة")
         return "ok"
 
     if text=="/report":
@@ -1801,6 +1879,29 @@ def webhook():
             lines.append(f"{'⚡' if 'كهرب' in e['name'] else '🏪' if 'إيجار' in e['name'] else '👷'} <b>{e['name']}</b>: {fmt_omr(e['amount'])}{last}")
         tg(chat, f"💼 <b>المصاريف الثابتة</b>\n\n" + "\n".join(lines) +
            "\n\nللتسجيل: <code>دفعت راتب</code> أو <code>دفعت إيجار</code> أو <code>دفعت كهرباء 45.000</code>")
+        return "ok"
+
+    if text in ["/ايجار_الرفوف", "/shelf_rent"]:
+        shelves = db_get("SELECT * FROM shelves ORDER BY id")
+        total_rent = sum(float(s.get("rent",0)) for s in shelves)
+        lines = "\n".join(f"🗄️ رف {s['name']}: {fmt_omr(float(s.get('rent',0)))}" for s in shelves)
+        # Auto-register shelf rents as expenses for this month
+        now_date = datetime.now().strftime("%d/%m/%Y")
+        registered = 0
+        for s in shelves:
+            rent = float(s.get("rent",0))
+            if rent > 0:
+                existing = db_one(
+                    "SELECT id FROM entries WHERE type='expense' AND desc=? AND month=?",
+                    (f"إيجار رف {s['name']}", month))
+                if not existing:
+                    db_run("INSERT INTO entries (type,desc,amt,date,month,category) VALUES (?,?,?,?,?,?)",
+                           ("expense", f"إيجار رف {s['name']}", rent, now_date, month, "مصاريف ثابتة"))
+                    registered += 1
+        msg = f"🗄️ <b>إيجارات الرفوف — {month}</b>\n\n{lines}\n\n📊 الإجمالي: {fmt_omr(total_rent)}"
+        if registered > 0:
+            msg += f"\n\n✅ تم تسجيل {registered} إيجار تلقائياً"
+        tg(chat, msg)
         return "ok"
 
     if text == "/فئات":
@@ -1900,6 +2001,12 @@ def webhook():
             elif "تحويل" in text: pay="تحويل 🏦"
             db_run("INSERT INTO entries (type,desc,amt,date,month,payment_method,category,shelf_id) VALUES (?,?,?,?,?,?,?,?)",
                 (etype,desc,amt,date,month,pay,cat,shelf_id_detected))
+            # Auto-decrease shelf product qty if matched
+            if shelf_id_detected and desc:
+                prod=db_one("SELECT * FROM shelf_products WHERE shelf_id=? AND name LIKE ? AND qty>0",
+                           (shelf_id_detected, f"%{desc.split()[0]}%"))
+                if prod:
+                    db_run("UPDATE shelf_products SET qty=qty-1 WHERE id=? AND qty>0",(prod["id"],))
             cat_line=f"\n🏷️ {cat}" if cat else ""
             if pay:
                 tg(chat,f"✅ مبيعة {fmt_omr(amt)} — {pay}{cat_line}")
@@ -2291,6 +2398,38 @@ def api_restore():
         return jsonify({"ok": True, "restored": restored})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
+@app.route("/daily_summary")
+def daily_summary():
+    """Send daily summary to Telegram. Call this via cron at 10pm."""
+    if not BOT_TOKEN:
+        return jsonify({"error": "No BOT_TOKEN"})
+    chat_id = request.args.get("chat_id") or os.environ.get("OWNER_CHAT_ID","")
+    if not chat_id:
+        return jsonify({"error": "No chat_id. Add OWNER_CHAT_ID to Render env or pass ?chat_id=xxx"})
+    try:
+        today = datetime.now().strftime("%d/%m/%Y")
+        month = cur_month()
+        rows = db_get("SELECT * FROM entries WHERE date=? AND month=? ORDER BY created DESC", (today, month))
+        sales = [r for r in rows if r["type"]=="s"]
+        buys  = [r for r in rows if r["type"]=="b"]
+        exps  = [r for r in rows if r["type"]=="expense"]
+        ts = sum(e["amt"] for e in sales)
+        tb = sum(e["amt"] for e in buys)
+        te = sum(e["amt"] for e in exps)
+        if not sales and not buys and not exps:
+            msg = f"🌙 <b>ملخص يوم {today}</b>\n\n😴 لا توجد حركات اليوم"
+        else:
+            msg = (f"🌙 <b>ملخص يوم {today}</b>\n\n"
+                   f"🌸 مبيعات: {fmt_omr(ts)} ({len(sales)} عملية)\n"
+                   f"📦 مشتريات: {fmt_omr(tb)} ({len(buys)} عملية)\n"
+                   f"💸 مصاريف: {fmt_omr(te)}\n"
+                   f"━━━━━━\n"
+                   f"{'✅' if ts-tb-te>=0 else '⚠️'} صافي اليوم: {fmt_omr(ts-tb-te)}")
+        tg(chat_id, msg)
+        return jsonify({"ok": True, "sent": msg[:50]})
+    except Exception as e:
+        return jsonify({"error": str(e)})
 
 @app.route("/set_webhook")
 def set_webhook():
