@@ -576,12 +576,19 @@ header {
   <div class="slbl">المصاريف الثابتة</div>
   <div id="expensesWrap" style="margin-bottom:22px;"></div>
 
-  <!-- BACKUP BAR -->
+  <!-- PDF REPORTS -->
+  <div class="slbl">التقارير والنسخ الاحتياطية</div>
+  <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-bottom:10px;">
+    <button onclick="dlPDF('sales')" style="padding:12px 8px;background:rgba(122,171,138,.1);border:1px solid rgba(122,171,138,.25);border-radius:12px;font-family:Tajawal,sans-serif;font-size:12px;font-weight:700;color:#5a8a6a;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px;">📄 تقرير المبيعات</button>
+    <button onclick="dlPDF('buys')" style="padding:12px 8px;background:rgba(232,121,138,.08);border:1px solid rgba(232,121,138,.2);border-radius:12px;font-family:Tajawal,sans-serif;font-size:12px;font-weight:700;color:#c4566a;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px;">📄 تقرير المشتريات</button>
+    <button onclick="dlPDF('expenses')" style="padding:12px 8px;background:rgba(212,165,87,.08);border:1px solid rgba(212,165,87,.2);border-radius:12px;font-family:Tajawal,sans-serif;font-size:12px;font-weight:700;color:#d4a557;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px;">📄 تقرير المصاريف</button>
+    <button onclick="dlPDF('all')" style="padding:12px 8px;background:rgba(107,76,59,.08);border:1px solid rgba(107,76,59,.2);border-radius:12px;font-family:Tajawal,sans-serif;font-size:12px;font-weight:700;color:var(--brown);cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px;">📊 تقرير شامل</button>
+  </div>
   <div style="display:flex;gap:10px;margin-bottom:20px;flex-wrap:wrap;">
-    <button onclick="doBackup()" style="flex:1;padding:11px;background:rgba(122,171,138,.12);border:1px solid rgba(122,171,138,.3);border-radius:12px;font-family:Tajawal,sans-serif;font-size:13px;font-weight:700;color:#5a8a6a;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:7px;">
-      💾 تصدير نسخة احتياطية
+    <button onclick="doBackup()" style="flex:1;padding:10px;background:rgba(122,171,138,.08);border:1px solid rgba(122,171,138,.2);border-radius:10px;font-family:Tajawal,sans-serif;font-size:12px;font-weight:700;color:#5a8a6a;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px;">
+      💾 نسخة احتياطية JSON
     </button>
-    <label style="flex:1;padding:11px;background:rgba(212,165,87,.1);border:1px solid rgba(212,165,87,.25);border-radius:12px;font-family:Tajawal,sans-serif;font-size:13px;font-weight:700;color:#d4a557;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:7px;">
+    <label style="flex:1;padding:10px;background:rgba(212,165,87,.07);border:1px solid rgba(212,165,87,.2);border-radius:10px;font-family:Tajawal,sans-serif;font-size:12px;font-weight:700;color:#d4a557;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px;">
       📂 استعادة من ملف
       <input type="file" accept=".json" onchange="doRestore(event)" style="display:none"/>
     </label>
@@ -875,18 +882,16 @@ loadExpensesPanel();
 
 /* ── EXPENSES ── */
 async function loadExpensesPanel(){
-  const month_val = month;
-  const d = await api(`/api/expenses?month=${month_val}`);
-  const expMap = {};
-  (d.paid||[]).forEach(p=>{ expMap[p.desc]={amt:p.amt,date:p.date}; });
+  const d = await api(`/api/expenses?month=${month}`);
   const icons = {"راتب العامل":"👷","إيجار المحل":"🏪","فاتورة الكهرباء":"⚡"};
   const wrap = document.getElementById('expensesWrap');
   if(!wrap) return;
-  wrap.innerHTML = (d.expenses||[]).map(e=>{
-    const paid = expMap[e.name];
+
+  // Expense definitions (fixed)
+  const defs = (d.expenses||[]).map(e=>{
+    const isPaid = e.month === month;
     const icon = icons[e.name] || '💼';
     const lastPaid = e.last_paid ? `آخر دفع: ${e.last_paid}` : 'لم يُدفع بعد';
-    const isPaid = paid && paid.date && paid.date.endsWith(month_val.slice(-2)) || (e.month === month_val);
     return `<div class="exp-row">
       <div class="exp-ico">${icon}</div>
       <div class="exp-info">
@@ -898,8 +903,32 @@ async function loadExpensesPanel(){
         ${isPaid?'✅ مدفوع':'💳 دفع'}
       </button>
     </div>`;
-  }).join('') + `
-  <button onclick="addExpensePrompt()" style="width:100%;padding:9px;border:1px dashed rgba(212,165,87,.4);border-radius:10px;background:rgba(255,255,255,0.4);color:var(--text3);font-family:Tajawal,sans-serif;font-size:12px;font-weight:600;cursor:pointer;margin-top:4px;">+ إضافة مصروف ثابت</button>`;
+  }).join('');
+
+  // Paid entries this month (with delete)
+  const paid = (d.paid||[]);
+  const paidHtml = paid.length ? `
+    <div style="font-size:10px;font-weight:700;color:var(--text3);letter-spacing:1.5px;text-transform:uppercase;margin:12px 0 8px;">الفواتير المدفوعة هذا الشهر</div>
+    ${paid.map(e=>`
+      <div class="exp-row" style="background:rgba(122,171,138,.06);">
+        <div class="exp-ico" style="font-size:14px;">${icons[e.desc]||'💸'}</div>
+        <div class="exp-info">
+          <div class="exp-name">${e.desc}</div>
+          <div class="exp-last">📅 ${e.date}</div>
+        </div>
+        <div class="exp-amt" style="color:var(--green-d);">${fmt(e.amt)} ر.ع</div>
+        <button onclick="delExpenseEntry(${e.id})" style="background:rgba(232,121,138,.1);border:1px solid rgba(232,121,138,.2);border-radius:7px;color:var(--rose-d);font-size:11px;padding:4px 9px;cursor:pointer;font-family:Tajawal,sans-serif;flex-shrink:0;">🗑 حذف</button>
+      </div>`).join('')}` : '';
+
+  wrap.innerHTML = defs + paidHtml + `
+  <button onclick="addExpensePrompt()" style="width:100%;padding:9px;border:1px dashed rgba(212,165,87,.4);border-radius:10px;background:rgba(255,255,255,0.4);color:var(--text3);font-family:Tajawal,sans-serif;font-size:12px;font-weight:600;cursor:pointer;margin-top:8px;">+ إضافة مصروف ثابت</button>`;
+}
+
+async function delExpenseEntry(id){
+  if(!confirm('حذف هذه الفاتورة؟')) return;
+  await api(`/api/expense_entries/${id}`, {method:'DELETE'});
+  loadExpensesPanel(); load();
+  showToast('🗑️ تم الحذف');
 }
 
 async function payExpense(id, name, defaultAmt){
@@ -920,6 +949,16 @@ async function addExpensePrompt(){
   await api('/api/expenses',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name,amount:parseFloat(amt)||0})});
   loadExpenses();
   showToast('✅ تمت إضافة المصروف');
+}
+
+/* ── PDF REPORTS ── */
+function dlPDF(type){
+  showToast('⏳ جاري إنشاء التقرير...');
+  const url = `/api/report/pdf?month=${month}&type=${type}`;
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `fairuz_${type}_${month}.pdf`;
+  a.click();
 }
 
 /* ── BACKUP / RESTORE ── */
@@ -1709,6 +1748,198 @@ def api_add_expense():
 def api_del_expense(eid):
     db_run("DELETE FROM expenses WHERE id=?", (eid,))
     return jsonify({"ok": True})
+
+@app.route("/api/expense_entries/<int:eid>", methods=["DELETE"])
+def api_del_expense_entry(eid):
+    """Delete a specific expense entry."""
+    db_run("DELETE FROM entries WHERE id=? AND type='expense'", (eid,))
+    return jsonify({"ok": True})
+
+@app.route("/api/report/pdf")
+def api_report_pdf():
+    """Generate PDF report."""
+    try:
+        from reportlab.lib.pagesizes import A4
+        from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+        from reportlab.lib.units import cm
+        from reportlab.lib import colors
+        from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, HRFlowable
+        from reportlab.pdfbase import pdfmetrics
+        from reportlab.pdfbase.ttfonts import TTFont
+        import io
+
+        month  = request.args.get("month", cur_month())
+        rtype  = request.args.get("type", "all")  # all, sales, buys, expenses
+
+        sales, buys = get_month_data(month)
+        buys_only  = [b for b in buys if b.get("type") == "b"]
+        exps       = db_get("SELECT * FROM entries WHERE type='expense' AND month=? ORDER BY date DESC", (month,))
+        exp_defs   = db_get("SELECT * FROM expenses ORDER BY id")
+
+        ts = sum(e["amt"] for e in sales)
+        tb = sum(e["amt"] for e in buys_only)
+        te = sum(e["amt"] for e in exps)
+        tp = ts - tb
+        tn = tp - te
+
+        def fmt_r(n): return f"{n:,.3f}"
+
+        buf = io.BytesIO()
+        doc = SimpleDocTemplate(buf, pagesize=A4,
+            rightMargin=1.5*cm, leftMargin=1.5*cm,
+            topMargin=2*cm, bottomMargin=2*cm)
+
+        styles = getSampleStyleSheet()
+        story  = []
+
+        # Header style
+        title_style = ParagraphStyle('title', fontName='Helvetica-Bold',
+            fontSize=18, spaceAfter=6, alignment=1)
+        sub_style = ParagraphStyle('sub', fontName='Helvetica',
+            fontSize=10, spaceAfter=4, alignment=1, textColor=colors.HexColor('#888888'))
+        h2_style = ParagraphStyle('h2', fontName='Helvetica-Bold',
+            fontSize=13, spaceBefore=14, spaceAfter=6,
+            textColor=colors.HexColor('#c4566a'))
+        normal = ParagraphStyle('normal', fontName='Helvetica',
+            fontSize=9, spaceAfter=3)
+
+        # Title
+        story.append(Paragraph("Fairuz Flowers - Monthly Report", title_style))
+        story.append(Paragraph(f"Period: {month}", sub_style))
+        story.append(HRFlowable(width="100%", thickness=1,
+            color=colors.HexColor('#e8798a'), spaceAfter=12))
+
+        # Summary box
+        if rtype in ("all",):
+            summary_data = [
+                ["Category", "Amount (OMR)", "Count"],
+                ["Total Sales", fmt_r(ts), str(len(sales))],
+                ["Total Purchases", fmt_r(tb), str(len(buys_only))],
+                ["Fixed Expenses", fmt_r(te), str(len(exps))],
+                ["Gross Profit", fmt_r(tp), ""],
+                ["Net Profit", fmt_r(tn), ""],
+            ]
+            t = Table(summary_data, colWidths=[8*cm, 5*cm, 3*cm])
+            t.setStyle(TableStyle([
+                ('BACKGROUND', (0,0), (-1,0), colors.HexColor('#e8798a')),
+                ('TEXTCOLOR', (0,0), (-1,0), colors.white),
+                ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold'),
+                ('FONTSIZE', (0,0), (-1,-1), 9),
+                ('ALIGN', (1,0), (-1,-1), 'CENTER'),
+                ('BACKGROUND', (0,-2), (-1,-2), colors.HexColor('#fff3e0')),
+                ('BACKGROUND', (0,-1), (-1,-1), colors.HexColor('#e8f5e9')),
+                ('FONTNAME', (0,-2), (-1,-1), 'Helvetica-Bold'),
+                ('GRID', (0,0), (-1,-1), 0.5, colors.HexColor('#dddddd')),
+                ('ROWBACKGROUNDS', (0,1), (-1,-3), [colors.white, colors.HexColor('#fafafa')]),
+            ]))
+            story.append(t)
+            story.append(Spacer(1, 12))
+
+        # Sales section
+        if rtype in ("all", "sales") and sales:
+            story.append(Paragraph("Sales", h2_style))
+            sale_data = [["#", "Description", "Category", "Payment", "Date", "Amount"]]
+            for i, e in enumerate(sales, 1):
+                sale_data.append([
+                    str(i), e.get("desc","")[:30],
+                    e.get("category","")[:15] or "-",
+                    e.get("payment_method","")[:10] or "-",
+                    e.get("date",""),
+                    fmt_r(e["amt"])
+                ])
+            sale_data.append(["", "TOTAL", "", "", "", fmt_r(ts)])
+            t = Table(sale_data, colWidths=[1*cm, 7*cm, 3*cm, 2.5*cm, 2.5*cm, 2.5*cm])
+            t.setStyle(TableStyle([
+                ('BACKGROUND', (0,0), (-1,0), colors.HexColor('#7aab8a')),
+                ('TEXTCOLOR', (0,0), (-1,0), colors.white),
+                ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold'),
+                ('FONTNAME', (0,-1), (-1,-1), 'Helvetica-Bold'),
+                ('BACKGROUND', (0,-1), (-1,-1), colors.HexColor('#e8f5e9')),
+                ('FONTSIZE', (0,0), (-1,-1), 8),
+                ('GRID', (0,0), (-1,-1), 0.3, colors.HexColor('#dddddd')),
+                ('ROWBACKGROUNDS', (0,1), (-1,-2), [colors.white, colors.HexColor('#f9fff9')]),
+            ]))
+            story.append(t)
+            story.append(Spacer(1, 10))
+
+        # Purchases section
+        if rtype in ("all", "buys") and buys_only:
+            story.append(Paragraph("Purchases", h2_style))
+            buy_data = [["#", "Description", "Paid By", "Date", "Amount"]]
+            for i, e in enumerate(buys_only, 1):
+                buy_data.append([
+                    str(i), e.get("desc","")[:35],
+                    e.get("paid_by","")[:12] or "-",
+                    e.get("date",""),
+                    fmt_r(e["amt"])
+                ])
+            buy_data.append(["", "TOTAL", "", "", fmt_r(tb)])
+            t = Table(buy_data, colWidths=[1*cm, 9*cm, 3*cm, 2.5*cm, 3*cm])
+            t.setStyle(TableStyle([
+                ('BACKGROUND', (0,0), (-1,0), colors.HexColor('#e8798a')),
+                ('TEXTCOLOR', (0,0), (-1,0), colors.white),
+                ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold'),
+                ('FONTNAME', (0,-1), (-1,-1), 'Helvetica-Bold'),
+                ('BACKGROUND', (0,-1), (-1,-1), colors.HexColor('#fce4ec')),
+                ('FONTSIZE', (0,0), (-1,-1), 8),
+                ('GRID', (0,0), (-1,-1), 0.3, colors.HexColor('#dddddd')),
+                ('ROWBACKGROUNDS', (0,1), (-1,-2), [colors.white, colors.HexColor('#fff9f9')]),
+            ]))
+            story.append(t)
+            story.append(Spacer(1, 10))
+
+        # Expenses section
+        if rtype in ("all", "expenses"):
+            story.append(Paragraph("Fixed Expenses", h2_style))
+            # Expense definitions
+            exp_def_data = [["Expense", "Monthly Amount", "Last Paid", "Status"]]
+            for e in exp_defs:
+                last = e.get("last_paid") or "Not paid"
+                paid_this = e.get("month") == month
+                status = "PAID" if paid_this else "UNPAID"
+                exp_def_data.append([e["name"], fmt_r(float(e["amount"])), last, status])
+            if exps:
+                exp_def_data.append(["", "", "TOTAL PAID", fmt_r(te)])
+
+            t = Table(exp_def_data, colWidths=[6*cm, 4*cm, 4*cm, 3*cm])
+            t.setStyle(TableStyle([
+                ('BACKGROUND', (0,0), (-1,0), colors.HexColor('#d4a557')),
+                ('TEXTCOLOR', (0,0), (-1,0), colors.white),
+                ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold'),
+                ('FONTNAME', (0,-1), (-1,-1), 'Helvetica-Bold'),
+                ('BACKGROUND', (0,-1), (-1,-1), colors.HexColor('#fff8e1')),
+                ('FONTSIZE', (0,0), (-1,-1), 8),
+                ('GRID', (0,0), (-1,-1), 0.3, colors.HexColor('#dddddd')),
+                ('ROWBACKGROUNDS', (0,1), (-1,-2), [colors.white, colors.HexColor('#fffdf5')]),
+            ]))
+            story.append(t)
+
+            # Paid expense entries
+            if exps:
+                story.append(Spacer(1, 6))
+                story.append(Paragraph("Paid Expense Entries", ParagraphStyle('h3',
+                    fontName='Helvetica-Bold', fontSize=10, spaceBefore=8, spaceAfter=4)))
+                ep_data = [["#", "Description", "Date", "Amount"]]
+                for i, e in enumerate(exps, 1):
+                    ep_data.append([str(i), e.get("desc",""), e.get("date",""), fmt_r(e["amt"])])
+                t = Table(ep_data, colWidths=[1*cm, 9*cm, 4*cm, 3*cm])
+                t.setStyle(TableStyle([
+                    ('BACKGROUND', (0,0), (-1,0), colors.HexColor('#f5f5f5')),
+                    ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold'),
+                    ('FONTSIZE', (0,0), (-1,-1), 8),
+                    ('GRID', (0,0), (-1,-1), 0.3, colors.HexColor('#eeeeee')),
+                ]))
+                story.append(t)
+
+        doc.build(story)
+        buf.seek(0)
+        fname = f"fairuz_report_{month}_{rtype}.pdf"
+        return Response(buf.read(), mimetype="application/pdf",
+            headers={"Content-Disposition": f"attachment; filename={fname}"})
+
+    except Exception as e:
+        import traceback
+        return jsonify({"error": str(e), "trace": traceback.format_exc()}), 500
 
 @app.route("/fix_expenses")
 def fix_expenses():
