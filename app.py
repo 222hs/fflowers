@@ -676,7 +676,7 @@ def init_db():
             CREATE TABLE IF NOT EXISTS entries (
                 id             SERIAL PRIMARY KEY,
                 type           TEXT NOT NULL,
-                desc           TEXT NOT NULL,
+                description    TEXT NOT NULL,
                 amt            REAL NOT NULL,
                 date           TEXT NOT NULL,
                 month          TEXT NOT NULL,
@@ -688,6 +688,9 @@ def init_db():
                 created        TIMESTAMP DEFAULT NOW()
             )
         """)
+        try:
+            conn.run("ALTER TABLE entries RENAME COLUMN desc TO description")
+        except: pass
         cur.execute("""
             CREATE TABLE IF NOT EXISTS shelves (
                 id      SERIAL PRIMARY KEY,
@@ -794,12 +797,19 @@ def db_exec(sql, params=(), fetch=None):
                 rows = conn.run(sql_pg, *params)
                 cols = [c["name"] for c in conn.columns]
                 if rows:
-                    return dict(zip(cols, rows[0]))
+                    row = dict(zip(cols, rows[0]))
+                    if "description" in row: row["desc"] = row.pop("description")
+                    return row
                 return None
             elif fetch == "all":
                 rows = conn.run(sql_pg, *params)
                 cols = [c["name"] for c in conn.columns]
-                return [dict(zip(cols, r)) for r in rows]
+                result = []
+                for r in rows:
+                    row = dict(zip(cols, r))
+                    if "description" in row: row["desc"] = row.pop("description")
+                    result.append(row)
+                return result
             else:
                 conn.run(sql_pg, *params)
                 return None
@@ -829,20 +839,26 @@ def cur_month():
 def get_month_data(month):
     if USE_PG:
         conn = get_db()
-        cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
-        cur.execute("SELECT * FROM entries WHERE month=%s ORDER BY created DESC", (month,))
-        rows = cur.fetchall()
-        cur.close(); conn.close()
+        rows_raw = conn.run("SELECT * FROM entries WHERE month=%s ORDER BY created DESC", month)
+        cols = [c["name"] for c in conn.columns]
+        conn.close()
+        rows = []
+        for r in rows_raw:
+            row = dict(zip(cols, r))
+            # Map description -> desc for JS compatibility
+            if "description" in row:
+                row["desc"] = row.pop("description")
+            rows.append(row)
     else:
         import sqlite3 as _sq
         conn = _sq.connect(DB_PATH)
         conn.row_factory = _sq.Row
-        rows = conn.execute(
+        rows = [dict(r) for r in conn.execute(
             "SELECT * FROM entries WHERE month=? ORDER BY created DESC", (month,)
-        ).fetchall()
+        ).fetchall()]
         conn.close()
-    sales = [dict(r) for r in rows if r["type"] == "s"]
-    buys  = [dict(r) for r in rows if r["type"] == "b"]
+    sales = [r for r in rows if r["type"] == "s"]
+    buys  = [r for r in rows if r["type"] == "b"]
     return sales, buys
 
 def month_summary(month):
@@ -1147,7 +1163,7 @@ def api_add():
         import sqlite3 as _sq
         conn = _sq.connect(DB_PATH)
         conn.execute(
-            "INSERT INTO entries (type,desc,amt,date,month,img,paid_by,payment_method,sale_time) VALUES (?,?,?,?,?,?,?,?,?)",
+            "INSERT INTO entries (type,description,amt,date,month,img,paid_by,payment_method,sale_time) VALUES (?,?,?,?,?,?,?,?,?)",
             vals)
         conn.commit(); conn.close()
     return jsonify({"ok": True})
@@ -1235,7 +1251,7 @@ def api_sell_product(pid):
     total = prod["price"] * qty
     shelf = db_exec("SELECT name FROM shelves WHERE id=?", (prod["shelf_id"],), fetch="one")
     shelf_name = shelf["name"] if shelf else ""
-    db_exec("INSERT INTO entries (type,desc,amt,date,month,shelf_id,payment_method) VALUES (?,?,?,?,?,?,?)",
+    db_exec("INSERT INTO entries (type,description,amt,date,month,shelf_id,payment_method) VALUES (?,?,?,?,?,?,?)",
             ("s", f'{prod["name"]} — رف {shelf_name}', total, date, month, prod["shelf_id"], payment_method))
     return jsonify({"ok": True, "new_qty": new_qty, "total": total})
 
@@ -1327,7 +1343,7 @@ def webhook():
                     amt   = state.get("amt", 0)
                     month_s = state.get("month", cb_month)
                     dt    = state.get("date", cb_date)
-                    db_exec(                             "INSERT INTO entries (type,desc,amt,date,month,paid_by) VALUES (?,?,?,?,?,?)",                             ("b", desc, amt, dt, month_s, paid_by)                         )
+                    db_exec(                             "INSERT INTO entries (type,description,amt,date,month,paid_by) VALUES (?,?,?,?,?,?)",                             ("b", desc, amt, dt, month_s, paid_by)                         )
                     del pending[cb_chat]
                     paid_line = f"\n👤 دفع: <b>{paid_by}</b>" if paid_by else ""
                     tg(cb_chat,
@@ -1402,7 +1418,7 @@ def webhook():
             if result and result.get("found") and result.get("amt"):
                 amt  = float(result["amt"])
                 desc = result.get("desc", caption or "مشتريات")
-                db_exec(                         "INSERT INTO entries (type,desc,amt,date,month) VALUES (?,?,?,?,?)",                         ("b", desc, amt, date, month)                     )
+                db_exec(                         "INSERT INTO entries (type,description,amt,date,month) VALUES (?,?,?,?,?)",                         ("b", desc, amt, date, month)                     )
                 # Ask who paid
                 pending[chat_id] = {"waiting": "paid_by_photo", "last_id": None, "amt": amt}
                 tg_buttons(chat_id,
@@ -1488,7 +1504,7 @@ def webhook():
                 amt   = state.get("amt", 0)
                 month_s = state.get("month", month)
                 dt    = state.get("date", date)
-                db_exec(                         "INSERT INTO entries (type,desc,amt,date,month,paid_by) VALUES (?,?,?,?,?,?)",                         ("b", desc, amt, dt, month_s, paid_by)                     )
+                db_exec(                         "INSERT INTO entries (type,description,amt,date,month,paid_by) VALUES (?,?,?,?,?,?)",                         ("b", desc, amt, dt, month_s, paid_by)                     )
                 del pending[chat_id]
                 tg(chat_id,
                    f"✅ <b>تم التسجيل!</b>\n\n"
@@ -1507,7 +1523,7 @@ def webhook():
             desc  = state["desc"]
             amt   = state["amt"]
             month_s = state["month"]
-            db_exec(                     "INSERT INTO entries (type,desc,amt,date,month,paid_by) VALUES (?,?,?,?,?,?)",                     ("b", desc, amt, state["date"], month_s, paid_by)                 )
+            db_exec(                     "INSERT INTO entries (type,description,amt,date,month,paid_by) VALUES (?,?,?,?,?,?)",                     ("b", desc, amt, state["date"], month_s, paid_by)                 )
             del pending[chat_id]
             paid_line = f"\n👤 <b>دفع:</b> {paid_by}" if paid_by else ""
             tg(chat_id,
@@ -1521,7 +1537,7 @@ def webhook():
             try:
                 amt = float(text.replace(",", "."))
                 desc = state.get("desc", "مشتريات")
-                db_exec(                         "INSERT INTO entries (type,desc,amt,date,month) VALUES (?,?,?,?,?)",                         ("b", desc, amt, date, month)                     )
+                db_exec(                         "INSERT INTO entries (type,description,amt,date,month) VALUES (?,?,?,?,?)",                         ("b", desc, amt, date, month)                     )
                 del pending[chat_id]
                 tg(chat_id,
                    f"✅ <b>تم التسجيل!</b>\n\n"
@@ -1621,7 +1637,7 @@ def webhook():
                 pay_method = "تحويل 🏦"
 
             if not pay_method:
-                db_exec(                         "INSERT INTO entries (type,desc,amt,date,month) VALUES (?,?,?,?,?)",                         ("s", desc, amt, date, month)                     )
+                db_exec(                         "INSERT INTO entries (type,description,amt,date,month) VALUES (?,?,?,?,?)",                         ("s", desc, amt, date, month)                     )
                 pending[chat_id] = {"waiting": "sale_payment", "desc": desc, "amt": amt, "date": date, "month": month}
                 tg_buttons(chat_id,
                    f"🌸 <b>مبيعة {fmt_omr(amt)}</b> — تم التسجيل!\n\n💳 <b>طريقة الدفع؟</b>",
@@ -1630,13 +1646,13 @@ def webhook():
                      {"label": "🏦 تحويل",  "data": "pay:تحويل 🏦"}]])
                 return "ok"
             else:
-                db_exec(                         "INSERT INTO entries (type,desc,amt,date,month,payment_method) VALUES (?,?,?,?,?,?)",                         ("s", desc, amt, date, month, pay_method)                     )
+                db_exec(                         "INSERT INTO entries (type,description,amt,date,month,payment_method) VALUES (?,?,?,?,?,?)",                         ("s", desc, amt, date, month, pay_method)                     )
                 tg(chat_id,
                    f"✅ <b>تم التسجيل!</b>\n\n"
                    f"🌸 مبيعة\n📝 {desc}\n💰 {fmt_omr(amt)}\n💳 {pay_method}\n📅 {date}")
                 return "ok"
 
-        db_exec(                 "INSERT INTO entries (type,desc,amt,date,month,paid_by) VALUES (?,?,?,?,?,?)",                 (etype, desc, amt, date, month, paid_by)             )
+        db_exec(                 "INSERT INTO entries (type,description,amt,date,month,paid_by) VALUES (?,?,?,?,?,?)",                 (etype, desc, amt, date, month, paid_by)             )
         label = "مبيعة 🌸" if etype == "s" else "مشتريات 📦"
         paid_line = f"\n👤 <b>دفع:</b> {paid_by}" if paid_by else ""
         tg(chat_id,
