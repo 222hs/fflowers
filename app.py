@@ -536,6 +536,17 @@ header {
     <div class="panel pb gc"><div class="ph"><div class="ph-l"><div class="pico">📦</div><div class="ptitle">المشتريات</div></div><div class="pcnt" id="bbadge">0</div></div><div class="pbody" id="bl"></div></div>
   </div>
 
+  <!-- BACKUP BAR -->
+  <div style="display:flex;gap:10px;margin-bottom:20px;flex-wrap:wrap;">
+    <button onclick="doBackup()" style="flex:1;padding:11px;background:rgba(122,171,138,.12);border:1px solid rgba(122,171,138,.3);border-radius:12px;font-family:Tajawal,sans-serif;font-size:13px;font-weight:700;color:#5a8a6a;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:7px;">
+      💾 تصدير نسخة احتياطية
+    </button>
+    <label style="flex:1;padding:11px;background:rgba(212,165,87,.1);border:1px solid rgba(212,165,87,.25);border-radius:12px;font-family:Tajawal,sans-serif;font-size:13px;font-weight:700;color:#d4a557;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:7px;">
+      📂 استعادة من ملف
+      <input type="file" accept=".json" onchange="doRestore(event)" style="display:none"/>
+    </label>
+  </div>
+
   <div class="slbl">الإحصائيات</div>
   <div class="charts-row">
     <div class="chart-card gc"><h3>📈 مبيعات ومشتريات 2026</h3><canvas id="barChart" height="150"></canvas></div>
