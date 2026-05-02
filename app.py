@@ -1079,7 +1079,15 @@ def init_db():
             try:
                 conn2=sqlite3.connect(DB_PATH); conn2.execute(sql); conn2.commit(); conn2.close()
             except: pass
-    # Insert default expenses only if table is empty
+    # Clean duplicate expenses first, then insert defaults
+    if USE_TURSO:
+        all_exp = turso_get("SELECT * FROM expenses ORDER BY id")
+        seen = {}
+        for e in all_exp:
+            if e["name"] in seen:
+                turso_run("DELETE FROM expenses WHERE id=?", (e["id"],))
+            else:
+                seen[e["name"]] = e["id"]
     defaults = [
         ("راتب العامل", 220, "monthly"),
         ("إيجار المحل", 100, "monthly"),
@@ -1087,7 +1095,6 @@ def init_db():
     ]
     for name, amt, typ in defaults:
         if USE_TURSO:
-            # Check if exists first
             existing = turso_get("SELECT id FROM expenses WHERE name=?", (name,))
             if not existing:
                 turso_run("INSERT INTO expenses (name,amount,type) VALUES (?,?,?)", (name, amt, typ))
@@ -1227,22 +1234,28 @@ def groq_read_invoice(file_id):
         fp=r.json()["result"]["file_path"]
         img=requests.get(f"https://api.telegram.org/file/bot{BOT_TOKEN}/{fp}",timeout=15).content
         b64=base64.b64encode(img).decode()
+        prompt = 'This is a receipt/invoice. Extract total amount, description, and if it is an electricity bill. Reply ONLY with JSON like: {"amt":3.52,"desc":"shop name","is_electricity":false,"found":true}'
         res=requests.post("https://api.groq.com/openai/v1/chat/completions",
             headers={"Authorization":f"Bearer {GROQ_KEY}","Content-Type":"application/json"},
-            json={"model":"meta-llama/llama-4-scout-17b-16e-instruct","messages":[{"role":"user","content":[
-                {"type":"image_url","image_url":{"url":f"data:image/jpeg;base64,{b64}"}},
-                {"type":"text","text":"""هذه فاتورة أو إيصال. استخرج:
-1. المبلغ الإجمالي
-2. وصف المحتوى
-3. هل هي فاتورة كهرباء أو تعبئة رصيد كهرباء؟ (true/false)
-
-أجب فقط بـ JSON بدون أي نص إضافي:
-{"amt":0,"desc":"وصف","is_electricity":false,"found":true}"""}
-            ]}],"max_tokens":200,"temperature":0.1},timeout=20)
-        raw=res.json()["choices"][0]["message"]["content"].replace("```json","").replace("```","").strip()
-        return json.loads(raw)
+            json={"model":"meta-llama/llama-4-scout-17b-16e-instruct",
+                  "messages":[{"role":"user","content":[
+                      {"type":"image_url","image_url":{"url":f"data:image/jpeg;base64,{b64}"}},
+                      {"type":"text","text":prompt}
+                  ]}],
+                  "max_tokens":300,"temperature":0},timeout=25)
+        resp = res.json()
+        if "error" in resp:
+            print("Groq API error:", resp["error"])
+            return None
+        raw = resp["choices"][0]["message"]["content"]
+        import re as _re
+        match = _re.search(r'\{.*?\}', raw, _re.DOTALL)
+        if match:
+            return json.loads(match.group())
+        return json.loads(raw.replace("```json","").replace("```","").strip())
     except Exception as e:
-        print("Groq error:",e); return None
+        print("Groq error:", e)
+        return None
 
 # ── Web API ───────────────────────────────────────────────
 @app.route("/")
