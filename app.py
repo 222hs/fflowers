@@ -388,6 +388,16 @@ header {
 .lb.open{display:flex;}
 .lb img{max-width:90vw;max-height:88vh;border-radius:16px;box-shadow:0 24px 80px rgba(0,0,0,.3);}
 
+.exp-row{display:flex;align-items:center;gap:10px;padding:12px 16px;border-radius:12px;margin-bottom:8px;background:var(--glass);backdrop-filter:blur(12px);border:1px solid var(--glass-border);transition:.2s;}
+.exp-row:hover{box-shadow:0 4px 16px var(--shadow);}
+.exp-ico{width:38px;height:38px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:18px;background:rgba(255,255,255,0.7);flex-shrink:0;}
+.exp-info{flex:1;min-width:0;}
+.exp-name{font-size:13px;font-weight:700;color:var(--brown);}
+.exp-last{font-size:10px;color:var(--text3);margin-top:2px;}
+.exp-amt{font-size:16px;font-weight:800;font-family:"Cormorant Garamond",serif;color:var(--rose-d);flex-shrink:0;}
+.exp-pay-btn{background:linear-gradient(135deg,var(--green),var(--green-d));border:none;border-radius:8px;color:white;font-size:11px;font-weight:700;padding:6px 12px;cursor:pointer;font-family:"Tajawal",sans-serif;transition:.2s;flex-shrink:0;box-shadow:0 2px 8px rgba(90,138,106,.25);}
+.exp-pay-btn.paid{background:rgba(122,171,138,.15);color:var(--green-d);box-shadow:none;}
+.exp-pay-btn:hover{transform:scale(1.04);}
 .toast{position:fixed;bottom:28px;left:50%;transform:translateX(-50%) translateY(80px);background:rgba(255,255,255,0.9);backdrop-filter:blur(20px);border:1px solid var(--glass-border);color:var(--text);padding:10px 24px;border-radius:40px;font-size:13px;font-weight:600;box-shadow:0 8px 32px var(--shadow);transition:transform .4s cubic-bezier(.34,1.56,.64,1);z-index:9999;white-space:nowrap;}
 .toast.show{transform:translateX(-50%) translateY(0);}
 
@@ -546,6 +556,10 @@ header {
     <div class="panel ps gc"><div class="ph"><div class="ph-l"><div class="pico">🌸</div><div class="ptitle">المبيعات</div></div><div class="pcnt" id="sbadge">0</div></div><div class="pbody" id="sl"></div></div>
     <div class="panel pb gc"><div class="ph"><div class="ph-l"><div class="pico">📦</div><div class="ptitle">المشتريات</div></div><div class="pcnt" id="bbadge">0</div></div><div class="pbody" id="bl"></div></div>
   </div>
+
+  <!-- EXPENSES -->
+  <div class="slbl">المصاريف الثابتة</div>
+  <div id="expensesWrap" style="margin-bottom:22px;"></div>
 
   <!-- BACKUP BAR -->
   <div style="display:flex;gap:10px;margin-bottom:20px;flex-wrap:wrap;">
@@ -813,10 +827,60 @@ async function saveRent(){
 }
 
 document.querySelectorAll('.overlay').forEach(o=>o.addEventListener('click',function(e){if(e.target===this)this.classList.remove('open');}));
-function changeMonth(){month=document.getElementById('msel').value;load();if(document.getElementById('tab-shelves').classList.contains('active'))loadShelves();}
+function changeMonth(){month=document.getElementById('msel').value;load();loadExpenses();if(document.getElementById('tab-shelves').classList.contains('active'))loadShelves();}
 function showToast(msg){const el=document.getElementById('toast');el.textContent=msg;el.classList.add('show');setTimeout(()=>el.classList.remove('show'),3000);}
 
 load();
+loadExpenses();
+
+/* ── EXPENSES ── */
+async function loadExpenses(){
+  const month_val = month;
+  const d = await api(`/api/expenses?month=${month_val}`);
+  const expMap = {};
+  (d.paid||[]).forEach(p=>{ expMap[p.desc]={amt:p.amt,date:p.date}; });
+  const icons = {"راتب العامل":"👷","إيجار المحل":"🏪","فاتورة الكهرباء":"⚡"};
+  const wrap = document.getElementById('expensesWrap');
+  if(!wrap) return;
+  wrap.innerHTML = (d.expenses||[]).map(e=>{
+    const paid = expMap[e.name];
+    const icon = icons[e.name] || '💼';
+    const lastPaid = e.last_paid ? `آخر دفع: ${e.last_paid}` : 'لم يُدفع بعد';
+    const isPaid = paid && paid.date && paid.date.endsWith(month_val.slice(-2)) || (e.month === month_val);
+    return `<div class="exp-row">
+      <div class="exp-ico">${icon}</div>
+      <div class="exp-info">
+        <div class="exp-name">${e.name}</div>
+        <div class="exp-last">${lastPaid}</div>
+      </div>
+      <div class="exp-amt">${fmt(e.amount)} ر.ع</div>
+      <button class="exp-pay-btn ${isPaid?'paid':''}" onclick="payExpense(${e.id},'${e.name}',${e.amount})">
+        ${isPaid?'✅ مدفوع':'💳 دفع'}
+      </button>
+    </div>`;
+  }).join('') + `
+  <button onclick="addExpensePrompt()" style="width:100%;padding:9px;border:1px dashed rgba(212,165,87,.4);border-radius:10px;background:rgba(255,255,255,0.4);color:var(--text3);font-family:Tajawal,sans-serif;font-size:12px;font-weight:600;cursor:pointer;margin-top:4px;">+ إضافة مصروف ثابت</button>`;
+}
+
+async function payExpense(id, name, defaultAmt){
+  const amt = prompt(`ادفع ${name}\nالمبلغ (ر.ع):`, defaultAmt.toFixed(3));
+  if(!amt) return;
+  const a = parseFloat(amt);
+  if(isNaN(a)||a<=0){showToast('⚠️ مبلغ غير صحيح');return;}
+  await api(`/api/expenses/${id}/pay`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({month,amount:a})});
+  loadExpenses(); load();
+  showToast(`✅ تم تسجيل دفع ${name} — ${fmt(a)} ر.ع`);
+}
+
+async function addExpensePrompt(){
+  const name = prompt('اسم المصروف (مثال: صيانة، تأمين...):');
+  if(!name) return;
+  const amt = prompt('المبلغ الشهري (ر.ع):','0.000');
+  if(!amt) return;
+  await api('/api/expenses',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name,amount:parseFloat(amt)||0})});
+  loadExpenses();
+  showToast('✅ تمت إضافة المصروف');
+}
 
 /* ── BACKUP / RESTORE ── */
 async function doBackup(){
@@ -957,6 +1021,34 @@ def init_db():
         "ALTER TABLE shelves ADD COLUMN rent REAL DEFAULT 0",
         "ALTER TABLE entries ADD COLUMN category TEXT",
     ]
+    # Expenses table
+    fixed_sqls = [
+        """CREATE TABLE IF NOT EXISTS expenses (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL,
+            amount REAL NOT NULL,
+            type TEXT DEFAULT 'monthly',
+            last_paid TEXT,
+            month TEXT,
+            note TEXT,
+            created TEXT DEFAULT (datetime('now')))""",
+    ]
+    for sql in fixed_sqls:
+        if USE_TURSO: turso_run(sql)
+        else:
+            try:
+                conn2=sqlite3.connect(DB_PATH); conn2.execute(sql); conn2.commit(); conn2.close()
+            except: pass
+    # Insert default expenses
+    defaults = [
+        ("راتب العامل", 220, "monthly"),
+        ("إيجار المحل", 100, "monthly"),
+        ("فاتورة الكهرباء", 0, "variable"),
+    ]
+    for name, amt, typ in defaults:
+        ex = db_one("SELECT id FROM expenses WHERE name=?", (name,))
+        if not ex:
+            db_run("INSERT INTO expenses (name,amount,type) VALUES (?,?,?)", (name, amt, typ))
     if USE_TURSO:
         for sql in sqls:
             turso_run(sql)
@@ -1005,7 +1097,8 @@ def cur_month(): return datetime.now().strftime("%Y-%m")
 
 def get_month_data(month):
     rows = db_get("SELECT * FROM entries WHERE month=? ORDER BY created DESC", (month,))
-    return [r for r in rows if r["type"]=="s"], [r for r in rows if r["type"]=="b"]
+    return ([r for r in rows if r["type"]=="s"],
+            [r for r in rows if r["type"] in ("b","expense")])
 
 def month_summary(month):
     s,b = get_month_data(month)
@@ -1313,7 +1406,32 @@ def webhook():
             p=en.get("paid_by") or "غير محدد"
             pd[p]=pd.get(p,0)+en["amt"]
         pl="\n".join(f"  👤 {k}: {fmt_omr(v)}" for k,v in pd.items()) or "  غير محدد"
-        tg(chat,f"📊 <b>تقرير {month}</b>\n\n🌸 المبيعات: {fmt_omr(ts)} ({sc})\n📦 المشتريات: {fmt_omr(tb)} ({bc})\n━━━━━━\n{e} الربح: {fmt_omr(tp)}\n\n💳 من دفع:\n{pl}")
+        # Expenses summary
+        exps = db_get("SELECT * FROM entries WHERE type='expense' AND month=? ORDER BY created DESC", (month,))
+        exp_total = sum(e2["amt"] for e2 in exps)
+        exp_lines = "\n".join(f"  💸 {e2['desc']}: {fmt_omr(e2['amt'])}" for e2 in exps) or "  لا يوجد"
+        net_after_exp = tp - exp_total
+        emoji2 = "✅" if net_after_exp >= 0 else "⚠️"
+        tg(chat,
+           f"📊 <b>تقرير {month}</b>\n\n"
+           f"🌸 المبيعات: {fmt_omr(ts)} ({sc})\n"
+           f"📦 المشتريات: {fmt_omr(tb)} ({bc})\n"
+           f"💸 المصاريف: {fmt_omr(exp_total)}\n"
+           f"━━━━━━\n"
+           f"{e} الربح قبل المصاريف: {fmt_omr(tp)}\n"
+           f"{emoji2} الربح الصافي: {fmt_omr(net_after_exp)}\n\n"
+           f"💳 من دفع:\n{pl}\n\n"
+           f"💼 المصاريف المدفوعة:\n{exp_lines}")
+        return "ok"
+
+    if text in ["/مصاريف","/expenses"]:
+        expenses = db_get("SELECT * FROM expenses ORDER BY id")
+        lines = []
+        for e in expenses:
+            last = f" — آخر دفع: {e['last_paid']}" if e.get("last_paid") else " — لم يُدفع بعد"
+            lines.append(f"{'⚡' if 'كهرب' in e['name'] else '🏪' if 'إيجار' in e['name'] else '👷'} <b>{e['name']}</b>: {fmt_omr(e['amount'])}{last}")
+        tg(chat, f"💼 <b>المصاريف الثابتة</b>\n\n" + "\n".join(lines) +
+           "\n\nللتسجيل: <code>دفعت راتب</code> أو <code>دفعت إيجار</code> أو <code>دفعت كهرباء 45.000</code>")
         return "ok"
 
     if text == "/فئات":
@@ -1358,6 +1476,31 @@ def webhook():
             pd[p]["t"]+=en["amt"]; pd[p]["c"]+=1
         lines="\n".join(f"👤 <b>{k}</b>: {fmt_omr(v['t'])} ({v['c']} عمليات)" for k,v in pd.items()) if pd else "لا يوجد"
         tg(chat,f"💳 <b>من دفع — {month}</b>\n\n{lines}"); return "ok"
+
+    # Expense detection
+    exp_keywords = {
+        "راتب": ("راتب العامل", 220),
+        "إيجار المحل": ("إيجار المحل", 100),
+        "إيجار": ("إيجار المحل", 100),
+        "كهرباء": ("فاتورة الكهرباء", 0),
+        "كهربا": ("فاتورة الكهرباء", 0),
+        "تعبئة": ("فاتورة الكهرباء", 0),
+    }
+    for kw, (exp_name, default_amt) in exp_keywords.items():
+        if kw in text and any(w in text for w in ["دفعت","دفع","سددت","سديت"]):
+            import re as _re
+            nums = _re.findall(r'\d+[.,]\d+|\d+', text)
+            amt = float(nums[0].replace(',','.')) if nums else default_amt
+            if amt > 0:
+                exp = db_one("SELECT * FROM expenses WHERE name=?", (exp_name,))
+                date_now = datetime.now().strftime("%d/%m/%Y")
+                db_run("INSERT INTO entries (type,desc,amt,date,month,category) VALUES (?,?,?,?,?,?)",
+                       ("expense", exp_name, amt, date_now, month, "مصاريف ثابتة"))
+                if exp:
+                    db_run("UPDATE expenses SET last_paid=?, month=?, amount=? WHERE id=?",
+                           (date_now, month, amt, exp["id"]))
+                tg(chat, f"✅ <b>تم تسجيل {exp_name}</b>\n💰 {fmt_omr(amt)}\n📅 {date_now}")
+                return "ok"
 
     parsed=parse_text(text)
     if parsed["found"]:
@@ -1407,6 +1550,49 @@ def turso_debug():
         return jsonify({"raw": res})
     except Exception as e:
         return jsonify({"error": str(e)})
+
+# ── Expenses API ─────────────────────────────────────────
+@app.route("/api/expenses")
+def api_get_expenses():
+    month = request.args.get("month", cur_month())
+    expenses = db_get("SELECT * FROM expenses ORDER BY id")
+    # Get paid expenses for this month
+    paid = db_get("SELECT * FROM entries WHERE type='expense' AND month=? ORDER BY created DESC", (month,))
+    return jsonify({"expenses": expenses, "paid": paid})
+
+@app.route("/api/expenses/<int:eid>/pay", methods=["POST"])
+def api_pay_expense(eid):
+    d = request.json
+    month = d.get("month", cur_month())
+    date  = datetime.now().strftime("%d/%m/%Y")
+    exp = db_one("SELECT * FROM expenses WHERE id=?", (eid,))
+    if not exp: return jsonify({"ok": False}), 404
+    amt = float(d.get("amount", exp["amount"]))
+    # Record as special expense entry
+    db_run("INSERT INTO entries (type,desc,amt,date,month,category) VALUES (?,?,?,?,?,?)",
+           ("expense", exp["name"], amt, date, month, "مصاريف ثابتة"))
+    # Update last paid date
+    db_run("UPDATE expenses SET last_paid=?, month=?, amount=? WHERE id=?",
+           (date, month, amt, eid))
+    return jsonify({"ok": True})
+
+@app.route("/api/expenses/<int:eid>", methods=["POST"])
+def api_update_expense(eid):
+    d = request.json
+    db_run("UPDATE expenses SET amount=? WHERE id=?", (float(d["amount"]), eid))
+    return jsonify({"ok": True})
+
+@app.route("/api/expenses", methods=["POST"])
+def api_add_expense():
+    d = request.json
+    db_run("INSERT INTO expenses (name,amount,type) VALUES (?,?,?)",
+           (d["name"], float(d.get("amount",0)), d.get("type","monthly")))
+    return jsonify({"ok": True})
+
+@app.route("/api/expenses/<int:eid>", methods=["DELETE"])
+def api_del_expense(eid):
+    db_run("DELETE FROM expenses WHERE id=?", (eid,))
+    return jsonify({"ok": True})
 
 @app.route("/init_shelves")
 def init_shelves():
