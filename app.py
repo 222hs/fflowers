@@ -1522,31 +1522,42 @@ async function go(){
 </script></body></html>"""
 
 from functools import wraps
-from flask import session, redirect
+from flask import make_response, redirect
+import hashlib
+
+def get_token():
+    return hashlib.md5((APP_PASSWORD + "_fairuz_token").encode()).hexdigest()
+
+def check_auth():
+    return request.cookies.get("fairuz_auth") == get_token()
 
 def auth(f):
     @wraps(f)
     def w(*a,**k):
-        if not session.get('ok'): return redirect('/login')
+        if not check_auth():
+            return redirect('/login')
         return f(*a,**k)
     return w
 
 @app.route("/login")
-def login(): return Response(LOGIN_PAGE, mimetype="text/html")
+def login():
+    return Response(LOGIN_PAGE, mimetype="text/html")
 
 @app.route("/auth", methods=["POST"])
 def do_auth():
     d = request.json or {}
     if d.get("p") == APP_PASSWORD:
-        session['ok'] = True
-        session.permanent = True
-        return jsonify({"ok": True})
+        resp = make_response(jsonify({"ok": True}))
+        resp.set_cookie("fairuz_auth", get_token(),
+                       max_age=60*60*24*30, httponly=True, samesite="Lax")
+        return resp
     return jsonify({"ok": False})
 
 @app.route("/logout")
 def logout():
-    session.clear()
-    return redirect('/login')
+    resp = make_response(redirect('/login'))
+    resp.delete_cookie("fairuz_auth")
+    return resp
 
 @app.route("/")
 @auth
