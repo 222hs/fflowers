@@ -800,15 +800,16 @@ load();
 # ── Database (Turso or SQLite) ────────────────────────────
 def turso_exec(sql, params=()):
     """Execute SQL on Turso via HTTP API."""
-    args = [{"type": "text", "value": str(p) if p is not None else None} for p in params]
-    # Fix None values
     args = [{"type": "null"} if p is None else {"type": "text", "value": str(p)} for p in params]
     payload = {"requests": [{"type": "execute", "stmt": {"sql": sql, "args": args}}, {"type": "close"}]}
+    # Fix URL: libsql:// -> https://
+    url = TURSO_URL.replace("libsql://", "https://")
     r = requests.post(
-        f"{TURSO_URL}/v2/pipeline",
+        f"{url}/v2/pipeline",
         headers={"Authorization": f"Bearer {TURSO_TOKEN}", "Content-Type": "application/json"},
         json=payload, timeout=15
     )
+    r.raise_for_status()
     return r.json()
 
 def turso_get(sql, params=()):
