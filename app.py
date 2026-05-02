@@ -1079,7 +1079,7 @@ def init_db():
             try:
                 conn2=sqlite3.connect(DB_PATH); conn2.execute(sql); conn2.commit(); conn2.close()
             except: pass
-    # Insert default expenses using INSERT OR IGNORE
+    # Insert default expenses only if table is empty
     defaults = [
         ("راتب العامل", 220, "monthly"),
         ("إيجار المحل", 100, "monthly"),
@@ -1087,7 +1087,10 @@ def init_db():
     ]
     for name, amt, typ in defaults:
         if USE_TURSO:
-            turso_run("INSERT OR IGNORE INTO expenses (name,amount,type) VALUES (?,?,?)", (name, amt, typ))
+            # Check if exists first
+            existing = turso_get("SELECT id FROM expenses WHERE name=?", (name,))
+            if not existing:
+                turso_run("INSERT INTO expenses (name,amount,type) VALUES (?,?,?)", (name, amt, typ))
         else:
             try:
                 conn3=sqlite3.connect(DB_PATH)
@@ -1658,6 +1661,25 @@ def api_add_expense():
 def api_del_expense(eid):
     db_run("DELETE FROM expenses WHERE id=?", (eid,))
     return jsonify({"ok": True})
+
+@app.route("/fix_expenses")
+def fix_expenses():
+    """Remove duplicate expenses keeping only latest per name."""
+    try:
+        all_exp = db_get("SELECT * FROM expenses ORDER BY id")
+        seen = {}
+        to_delete = []
+        for e in all_exp:
+            if e["name"] in seen:
+                to_delete.append(e["id"])
+            else:
+                seen[e["name"]] = e["id"]
+        for eid in to_delete:
+            db_run("DELETE FROM expenses WHERE id=?", (eid,))
+        remaining = db_get("SELECT * FROM expenses ORDER BY id")
+        return jsonify({"ok": True, "deleted": len(to_delete), "remaining": remaining})
+    except Exception as e:
+        return jsonify({"error": str(e)})
 
 @app.route("/init_shelves")
 def init_shelves():
