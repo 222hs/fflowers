@@ -484,6 +484,12 @@ header {
       <button class="mtab on" onclick="switchTab('home')">📊 الرئيسية</button>
       <button class="mtab" onclick="switchTab('shelves')">🗄️ الرفوف</button>
     </div>
+    <!-- FLOWER COUNTER - EXPERIMENTAL -->
+    <div id="flowerPill" onclick="toggleFlowerPanel()" style="display:flex;align-items:center;gap:6px;background:rgba(249,200,208,.2);border:1px solid rgba(249,200,208,.5);padding:6px 12px;border-radius:40px;cursor:pointer;transition:.2s;" title="مخزون الورد - تجريبي">
+      <span>🌸</span>
+      <span id="flowerCount" style="font-size:12px;font-weight:700;color:var(--rose-d);">0</span>
+      <span style="font-size:9px;color:var(--text3);background:rgba(232,121,138,.15);padding:1px 5px;border-radius:8px;">تجريبي</span>
+    </div>
     <div class="mpill" id="mpill">
       <label>📅</label>
       <select id="msel" onchange="changeMonth()">
@@ -497,6 +503,21 @@ header {
     </div>
   </div>
 </header>
+
+<!-- FLOWER PANEL -->
+<div id="flowerPanel" style="display:none;position:fixed;top:68px;left:50%;transform:translateX(-50%);
+  z-index:200;width:min(420px,95vw);background:rgba(255,255,255,0.95);
+  backdrop-filter:blur(20px);border:1px solid rgba(249,200,208,.6);
+  border-radius:0 0 18px 18px;box-shadow:0 8px 32px rgba(107,76,59,.15);padding:16px;">
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
+    <div style="font-size:13px;font-weight:800;color:var(--brown);">🌸 مخزون الورد <span style="font-size:9px;background:rgba(232,121,138,.15);color:var(--rose-d);padding:2px 7px;border-radius:8px;margin-right:4px;">تجريبي</span></div>
+    <button onclick="toggleFlowerPanel()" style="background:none;border:none;font-size:16px;cursor:pointer;color:var(--text3);">✕</button>
+  </div>
+  <div id="flowerList" style="max-height:240px;overflow-y:auto;margin-bottom:10px;"></div>
+  <div style="font-size:10px;color:var(--text3);text-align:center;line-height:1.6;">
+    📸 أرسل للبوت صورة الورد مع تعليق <b>"عد الورد"</b><br>ليتم التحديث تلقائياً بالذكاء الاصطناعي
+  </div>
+</div>
 
 <!-- HOME -->
 <div id="tab-home" class="page active">
@@ -879,6 +900,7 @@ function showToast(msg){const el=document.getElementById('toast');el.textContent
 
 load();
 loadExpensesPanel();
+loadFlowers();
 
 /* ── EXPENSES ── */
 async function loadExpensesPanel(){
@@ -1019,6 +1041,54 @@ async function addExpensePrompt(){
   await api('/api/expenses',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name,amount:parseFloat(amt)||0})});
   loadExpenses();
   showToast('✅ تمت إضافة المصروف');
+}
+
+/* ── FLOWERS ── */
+let flowerPanelOpen = false;
+
+async function loadFlowers(){
+  try {
+    const d = await api('/api/flowers');
+    document.getElementById('flowerCount').textContent = d.total || 0;
+    if(d.flowers && d.flowers.length){
+      document.getElementById('flowerList').innerHTML = d.flowers.map(f=>`
+        <div style="display:flex;align-items:center;gap:8px;padding:7px 4px;border-bottom:1px solid rgba(249,200,208,.3);">
+          <span style="font-size:18px;">🌹</span>
+          <div style="flex:1;">
+            <div style="font-size:12px;font-weight:600;color:var(--brown);">${f.name}</div>
+          </div>
+          <div style="display:flex;align-items:center;gap:5px;">
+            <button onclick="updateFlowerCount(${f.id},${f.count-1})" style="width:22px;height:22px;border-radius:50%;border:1px solid rgba(232,121,138,.3);background:rgba(232,121,138,.1);color:var(--rose-d);cursor:pointer;font-size:14px;display:flex;align-items:center;justify-content:center;">−</button>
+            <span style="font-size:14px;font-weight:800;color:var(--rose-d);min-width:24px;text-align:center;">${f.count}</span>
+            <button onclick="updateFlowerCount(${f.id},${f.count+1})" style="width:22px;height:22px;border-radius:50%;border:1px solid rgba(122,171,138,.3);background:rgba(122,171,138,.1);color:var(--green-d);cursor:pointer;font-size:14px;display:flex;align-items:center;justify-content:center;">+</button>
+            <button onclick="delFlower(${f.id})" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:12px;padding:2px 4px;">🗑</button>
+          </div>
+        </div>`).join('') +
+        (d.updated ? `<div style="font-size:9px;color:var(--text3);text-align:center;margin-top:6px;">آخر تحديث: ${d.updated}</div>` : '');
+    } else {
+      document.getElementById('flowerList').innerHTML = `<div style="padding:16px;text-align:center;color:var(--text3);font-size:12px;">لا يوجد مخزون بعد<br>أرسل صورة للبوت مع "عد الورد"</div>`;
+    }
+  } catch(e){}
+}
+
+function toggleFlowerPanel(){
+  flowerPanelOpen = !flowerPanelOpen;
+  document.getElementById('flowerPanel').style.display = flowerPanelOpen ? 'block' : 'none';
+  if(flowerPanelOpen) loadFlowers();
+}
+
+async function updateFlowerCount(id, newCount){
+  if(newCount < 0) return;
+  await api(`/api/flowers/${id}`, {method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({count:newCount})});
+  loadFlowers();
+}
+
+async function delFlower(id){
+  await api(`/api/flowers/${id}`, {method:'DELETE'});
+  loadFlowers();
+  showToast('🗑️ تم الحذف');
 }
 
 /* ── PDF REPORTS ── */
@@ -1170,6 +1240,17 @@ def init_db():
         "ALTER TABLE shelves ADD COLUMN rent REAL DEFAULT 0",
         "ALTER TABLE entries ADD COLUMN category TEXT",
     ]
+    # Flowers inventory table
+    flowers_sql = """CREATE TABLE IF NOT EXISTS flowers (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL,
+        count INTEGER DEFAULT 0,
+        updated TEXT DEFAULT (datetime('now')))"""
+    if USE_TURSO: turso_run(flowers_sql)
+    else:
+        try:
+            conn4=sqlite3.connect(DB_PATH); conn4.execute(flowers_sql); conn4.commit(); conn4.close()
+        except: pass
     # Expenses table
     fixed_sqls = [
         """CREATE TABLE IF NOT EXISTS expenses (
@@ -1334,6 +1415,37 @@ def parse_text(text):
         desc=' '.join(desc.split()) or ("مبيعة" if etype=="s" else "مشتريات")
         return {"type":etype,"desc":desc,"amt":amt,"found":True}
     return {"found":False}
+
+def groq_count_flowers(file_id):
+    """Use Groq to count and identify flowers in image."""
+    if not GROQ_KEY or not BOT_TOKEN: return None
+    try:
+        import base64
+        r = requests.get(f"https://api.telegram.org/bot{BOT_TOKEN}/getFile",
+                        params={"file_id": file_id}, timeout=10)
+        fp = r.json()["result"]["file_path"]
+        img = requests.get(f"https://api.telegram.org/file/bot{BOT_TOKEN}/{fp}", timeout=15).content
+        b64 = base64.b64encode(img).decode()
+        prompt = 'Count and identify all flowers in this image. For each flower type, count exactly how many stems/flowers are visible. Reply ONLY with JSON array: [{"name":"Rose","name_ar":"ورد","count":5},{"name":"Lily","name_ar":"زنبق","count":3}]. Use Arabic flower names when possible.'
+        res = requests.post("https://api.groq.com/openai/v1/chat/completions",
+            headers={"Authorization": f"Bearer {GROQ_KEY}", "Content-Type": "application/json"},
+            json={"model": "meta-llama/llama-4-scout-17b-16e-instruct",
+                  "messages": [{"role": "user", "content": [
+                      {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{b64}"}},
+                      {"type": "text", "text": prompt}
+                  ]}],
+                  "max_tokens": 500, "temperature": 0}, timeout=30)
+        resp = res.json()
+        if "error" in resp:
+            print("Groq flower error:", resp["error"]); return None
+        raw = resp["choices"][0]["message"]["content"]
+        import re as _re
+        match = _re.search(r'\[.*?\]', raw, _re.DOTALL)
+        if match:
+            return json.loads(match.group())
+        return None
+    except Exception as e:
+        print("Groq flower error:", e); return None
 
 def groq_read_invoice(file_id):
     if not GROQ_KEY or not BOT_TOKEN: return None
@@ -1501,8 +1613,32 @@ def webhook():
 
     if "photo" in msg:
         file_id=msg["photo"][-1]["file_id"]; caption=msg.get("caption","").strip()
+        # Check if flower counting request
+        caption_is_flowers = any(w in caption for w in ["ورد","عد","flowers","زهور","مخزون"])
         # Pre-detect electricity from caption
         caption_is_elec = any(w in caption for w in ["كهرباء","كهربا","تعبئة","تعبئه","⚡","electric","kwh","prepaid"])
+
+        if caption_is_flowers:
+            tg(chat,"🌸 جاري عد الورد وتحديد الأنواع...")
+            flowers = groq_count_flowers(file_id)
+            if flowers and len(flowers) > 0:
+                now = datetime.now().strftime("%d/%m/%Y %H:%M")
+                db_run("DELETE FROM flowers")
+                for f in flowers:
+                    name = f.get("name_ar") or f.get("name","ورد")
+                    cnt = int(f.get("count",0))
+                    db_run("INSERT INTO flowers (name,count,updated) VALUES (?,?,?)",(name,cnt,now))
+                total = sum(int(f.get("count",0)) for f in flowers)
+                lines = "\n".join(f"🌹 {f.get('name_ar') or f.get('name')}: {f.get('count')} وردة" for f in flowers)
+                tg(chat,
+                   f"✅ <b>تم عد الورد!</b>\n\n{lines}\n\n"
+                   f"📊 الإجمالي: {total} وردة\n"
+                   f"🕐 {now}\n\n"
+                   f"لعرض المخزون: /ورد")
+            else:
+                tg(chat,"⚠️ ما قدرت أعد الورد بوضوح. جرّب صورة أوضح.")
+            return "ok"
+
         tg(chat,"⏳ جاري قراءة الفاتورة...")
         result=groq_read_invoice(file_id)
         if result and result.get("found") and result.get("amt"):
@@ -1647,6 +1783,17 @@ def webhook():
            f"{emoji2} الربح الصافي: {fmt_omr(net_after_exp)}\n\n"
            f"💳 من دفع:\n{pl}\n\n"
            f"💼 المصاريف المدفوعة:\n{exp_lines}")
+        return "ok"
+
+    if text in ["/ورد", "/flowers", "/عد_الورد"]:
+        flowers = db_get("SELECT * FROM flowers ORDER BY count DESC")
+        if not flowers:
+            tg(chat, "🌸 لا يوجد مخزون ورد مسجل بعد\n\nأرسل صورة الورد مع التعليق: <code>عد الورد</code>")
+        else:
+            total = sum(f["count"] for f in flowers)
+            updated = flowers[0]["updated"] if flowers else ""
+            lines = "\n".join(f"🌹 {f['name']}: {f['count']} وردة" for f in flowers)
+            tg(chat, f"🌸 <b>مخزون الورد</b>\n\n{lines}\n\n📊 الإجمالي: {total} وردة\n🕐 آخر تحديث: {updated}")
         return "ok"
 
     if text in ["/مصاريف","/expenses"]:
@@ -2035,6 +2182,38 @@ def api_list_expense_entries():
     else:
         entries = db_get("SELECT * FROM entries WHERE type='expense' ORDER BY created DESC LIMIT 50")
     return jsonify(entries)
+
+# ── Flowers API ──────────────────────────────────────────
+@app.route("/api/flowers")
+def api_get_flowers():
+    flowers = db_get("SELECT * FROM flowers ORDER BY count DESC")
+    total = sum(f["count"] for f in flowers)
+    updated = flowers[0]["updated"] if flowers else None
+    return jsonify({"flowers": flowers, "total": total, "updated": updated})
+
+@app.route("/api/flowers", methods=["POST"])
+def api_set_flowers():
+    """Save flower inventory from AI scan."""
+    d = request.json
+    flowers = d.get("flowers", [])
+    now = datetime.now().strftime("%d/%m/%Y %H:%M")
+    # Clear old inventory
+    db_run("DELETE FROM flowers")
+    for f in flowers:
+        db_run("INSERT INTO flowers (name, count, updated) VALUES (?,?,?)",
+               (f["name"], int(f["count"]), now))
+    return jsonify({"ok": True, "count": len(flowers)})
+
+@app.route("/api/flowers/<int:fid>", methods=["DELETE"])
+def api_del_flower(fid):
+    db_run("DELETE FROM flowers WHERE id=?", (fid,))
+    return jsonify({"ok": True})
+
+@app.route("/api/flowers/<int:fid>", methods=["POST"])
+def api_update_flower(fid):
+    d = request.json
+    db_run("UPDATE flowers SET count=? WHERE id=?", (int(d["count"]), fid))
+    return jsonify({"ok": True})
 
 @app.route("/fix_elec")
 def fix_elec():
