@@ -887,45 +887,83 @@ async function loadExpensesPanel(){
   const wrap = document.getElementById('expensesWrap');
   if(!wrap) return;
 
-  // Expense definitions (fixed)
-  const defs = (d.expenses||[]).map(e=>{
-    const isPaid = e.month === month;
+  let html = '';
+
+  // Each expense definition
+  for(const e of (d.expenses||[])){
+    const isElec = e.name.includes('كهرباء');
     const icon = icons[e.name] || '💼';
-    const lastPaid = e.last_paid ? `آخر دفع: ${e.last_paid}` : 'لم يُدفع بعد';
-    // Find paid entry - match by desc containing expense name
-    const paidEntry = (d.paid||[]).find(p => p.desc && p.desc.includes(e.name.split(' ')[0]));
-    const displayAmt = isPaid && paidEntry ? paidEntry.amt : e.amount;
-    return `<div class="exp-row">
+    // Get all paid entries for this expense this month
+    const myPaid = (d.paid||[]).filter(p => p.desc && p.desc.includes(e.name.replace('فاتورة ','').split(' ')[0]));
+    const totalPaid = myPaid.reduce((a,p)=>a+p.amt, 0);
+    const isPaid = myPaid.length > 0;
+    const lastDate = myPaid.length ? myPaid[myPaid.length-1].date : null;
+
+    html += `<div class="exp-row" style="${isPaid?'border-color:rgba(122,171,138,.3);':''}" >
       <div class="exp-ico">${icon}</div>
       <div class="exp-info">
         <div class="exp-name">${e.name}</div>
-        <div class="exp-last">${isPaid ? '✅ ' + lastPaid : lastPaid}</div>
+        <div class="exp-last">${isPaid ? '✅ آخر دفع: '+lastDate : (e.last_paid ? 'آخر تعبئة: '+e.last_paid : 'لم يُدفع بعد')}</div>
       </div>
-      <div class="exp-amt" style="color:${isPaid?'var(--green-d)':'var(--rose-d)'};">${fmt(displayAmt)} ر.ع</div>
-      ${isPaid ?
-        `<button onclick="cancelExpense(${e.id},'${e.name}')" style="background:rgba(232,121,138,.12);border:1px solid rgba(232,121,138,.3);border-radius:8px;color:var(--rose-d);font-size:11px;font-weight:700;padding:6px 10px;cursor:pointer;font-family:Tajawal,sans-serif;flex-shrink:0;white-space:nowrap;">🗑 إلغاء</button>` :
-        `<button class="exp-pay-btn" onclick="payExpense(${e.id},'${e.name}',${e.amount})">💳 دفع</button>`
-      }
+      <div class="exp-amt" style="color:${isPaid?'var(--green-d)':'var(--rose-d)'};">${isPaid?fmt(totalPaid):fmt(e.amount)} ر.ع</div>
+      <button class="exp-pay-btn" onclick="${isElec?`addElecBill(${e.id})`:`payExpense(${e.id},'${e.name}',${e.amount})`}">
+        ${isElec?'⚡ إضافة تعبئة':'💳 دفع'}
+      </button>
     </div>`;
-  }).join('');
 
-  // Paid entries this month (with delete)
-  const paid = (d.paid||[]);
-  const paidHtml = paid.length ? `
-    <div style="font-size:10px;font-weight:700;color:var(--text3);letter-spacing:1.5px;text-transform:uppercase;margin:12px 0 8px;">الفواتير المدفوعة هذا الشهر</div>
-    ${paid.map(e=>`
-      <div class="exp-row" style="background:rgba(122,171,138,.06);">
-        <div class="exp-ico" style="font-size:14px;">${icons[e.desc]||'💸'}</div>
-        <div class="exp-info">
-          <div class="exp-name">${e.desc}</div>
-          <div class="exp-last">📅 ${e.date}</div>
-        </div>
-        <div class="exp-amt" style="color:var(--green-d);">${fmt(e.amt)} ر.ع</div>
-        <button onclick="delExpenseEntry(${e.id})" style="background:rgba(232,121,138,.1);border:1px solid rgba(232,121,138,.2);border-radius:7px;color:var(--rose-d);font-size:11px;padding:4px 9px;cursor:pointer;font-family:Tajawal,sans-serif;flex-shrink:0;">🗑 حذف</button>
-      </div>`).join('')}` : '';
+    // Show all paid entries for this expense with delete button
+    if(myPaid.length){
+      html += `<div style="margin:-4px 0 8px 0;padding:6px 10px;background:rgba(122,171,138,.06);border-radius:0 0 10px 10px;border:1px solid rgba(122,171,138,.15);border-top:none;">`;
+      for(const p of myPaid){
+        html += `<div style="display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid rgba(0,0,0,.04);">
+          <span style="font-size:11px;color:var(--text2);flex:1;">📅 ${p.date} — ${fmt(p.amt)} ر.ع</span>
+          <button onclick="delSingleExpEntry(${p.id},${e.id})" style="background:rgba(232,121,138,.1);border:1px solid rgba(232,121,138,.25);border-radius:6px;color:var(--rose-d);font-size:10px;padding:3px 8px;cursor:pointer;font-family:Tajawal,sans-serif;">🗑 حذف</button>
+        </div>`;
+      }
+      html += `</div>`;
+    }
+  }
 
-  wrap.innerHTML = defs + paidHtml + `
-  <button onclick="addExpensePrompt()" style="width:100%;padding:9px;border:1px dashed rgba(212,165,87,.4);border-radius:10px;background:rgba(255,255,255,0.4);color:var(--text3);font-family:Tajawal,sans-serif;font-size:12px;font-weight:600;cursor:pointer;margin-top:8px;">+ إضافة مصروف ثابت</button>`;
+  html += `<button onclick="addExpensePrompt()" style="width:100%;padding:9px;border:1px dashed rgba(212,165,87,.4);border-radius:10px;background:rgba(255,255,255,0.4);color:var(--text3);font-family:Tajawal,sans-serif;font-size:12px;font-weight:600;cursor:pointer;margin-top:8px;">+ إضافة مصروف ثابت</button>`;
+
+  wrap.innerHTML = html;
+}
+
+async function delSingleExpEntry(entryId, expId){
+  if(!confirm('حذف هذه الفاتورة؟')) return;
+  await api(`/api/expense_entries/${entryId}`, {method:'DELETE'});
+  // Check if any paid entries remain, if not reset expense
+  const d2 = await api(`/api/expenses?month=${month}`);
+  const exp = (d2.expenses||[]).find(e=>e.id===expId);
+  if(exp){
+    const remaining = (d2.paid||[]).filter(p=>p.desc&&p.desc.includes(exp.name.replace('فاتورة ','').split(' ')[0]));
+    if(!remaining.length){
+      await api(`/api/expenses/${expId}/reset`,{method:'POST',
+        headers:{'Content-Type':'application/json'},body:JSON.stringify({month})});
+    }
+  }
+  loadExpensesPanel(); load();
+  showToast('✅ تم حذف الفاتورة');
+}
+
+async function addElecBill(expId){
+  const amt = prompt('مبلغ التعبئة (ر.ع):', '');
+  if(!amt) return;
+  const a = parseFloat(amt);
+  if(isNaN(a)||a<=0){showToast('⚠️ مبلغ غير صحيح');return;}
+  const dateStr = prompt('تاريخ التعبئة (DD/MM/YYYY):', new Date().toLocaleDateString('en-GB'));
+  if(!dateStr) return;
+  // Parse month from date
+  let entryMonth = month;
+  try{
+    const parts = dateStr.split('/');
+    if(parts.length===3) entryMonth = `${parts[2]}-${parts[1].padStart(2,'0')}`;
+  }catch(e){}
+  await api(`/api/expenses/${expId}/pay`,{method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({month:entryMonth, amount:a, date:dateStr})});
+  loadExpensesPanel(); load();
+  showToast(`⚡ تم تسجيل تعبئة ${fmt(a)} ر.ع`);
 }
 
 async function delExpenseEntry(entryId, name, expId){
@@ -1738,17 +1776,16 @@ def api_get_expenses():
 @app.route("/api/expenses/<int:eid>/pay", methods=["POST"])
 def api_pay_expense(eid):
     d = request.json
-    month = d.get("month", cur_month())
-    date  = datetime.now().strftime("%d/%m/%Y")
+    month_val = d.get("month", cur_month())
+    custom_date = d.get("date", "").strip()
+    date_val = custom_date if custom_date else datetime.now().strftime("%d/%m/%Y")
     exp = db_one("SELECT * FROM expenses WHERE id=?", (eid,))
     if not exp: return jsonify({"ok": False}), 404
     amt = float(d.get("amount", exp["amount"]))
-    # Record as special expense entry
     db_run("INSERT INTO entries (type,desc,amt,date,month,category) VALUES (?,?,?,?,?,?)",
-           ("expense", exp["name"], amt, date, month, "مصاريف ثابتة"))
-    # Update last paid date
+           ("expense", exp["name"], amt, date_val, month_val, "مصاريف ثابتة"))
     db_run("UPDATE expenses SET last_paid=?, month=?, amount=? WHERE id=?",
-           (date, month, amt, eid))
+           (date_val, month_val, amt, eid))
     return jsonify({"ok": True})
 
 @app.route("/api/expenses/<int:eid>", methods=["POST"])
