@@ -827,7 +827,13 @@ def turso_get(sql, params=()):
             for i, col in enumerate(cols):
                 v = row[i]
                 if isinstance(v, dict):
-                    d[col] = None if v.get("type") == "null" else v.get("value")
+                    if v.get("type") == "null":
+                        d[col] = None
+                    elif v.get("type") in ("integer","float","real"):
+                        try: d[col] = float(v.get("value",0))
+                        except: d[col] = v.get("value")
+                    else:
+                        d[col] = v.get("value")
                 else:
                     d[col] = v
             rows.append(d)
@@ -1006,9 +1012,11 @@ def index(): return Response(HTML_PAGE, mimetype="text/html")
 
 @app.route("/debug")
 def debug():
-    try: total=db_one("SELECT COUNT(*) as c FROM entries")
-    except: total=None
-    cnt = total["c"] if total else "error"
+    try:
+        total = db_one("SELECT COUNT(*) as c FROM entries")
+        cnt = int(total["c"]) if total and total.get("c") is not None else 0
+    except Exception as e:
+        cnt = str(e)
     return jsonify({
         "database": "Turso ✅" if USE_TURSO else "SQLite (local)",
         "total_entries": cnt,
