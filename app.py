@@ -669,6 +669,50 @@ def get_db():
         conn.row_factory = _sq.Row
         return conn
 
+# ── DB query helper ──────────────────────────────────────
+def db_exec(sql, params=(), fetch=None):
+    """Unified DB execute — handles both pg8000 and SQLite."""
+    if USE_PG:
+        sql_pg = sql.replace("?", "%s")
+        conn = get_db()
+        try:
+            if fetch == "one":
+                rows = conn.run(sql_pg, *params)
+                cols = [c["name"] for c in conn.columns]
+                if rows:
+                    row = dict(zip(cols, rows[0]))
+                    if "description" in row: row["desc"] = row.pop("description")
+                    return row
+                return None
+            elif fetch == "all":
+                rows = conn.run(sql_pg, *params)
+                cols = [c["name"] for c in conn.columns]
+                result = []
+                for r in rows:
+                    row = dict(zip(cols, r))
+                    if "description" in row: row["desc"] = row.pop("description")
+                    result.append(row)
+                return result
+            else:
+                conn.run(sql_pg, *params)
+                return None
+        finally:
+            conn.close()
+    else:
+        import sqlite3 as _sq
+        conn = _sq.connect(DB_PATH)
+        conn.row_factory = _sq.Row
+        cur = conn.execute(sql, params)
+        result = None
+        if fetch == "one":
+            row = cur.fetchone()
+            result = dict(row) if row else None
+        elif fetch == "all":
+            result = [dict(r) for r in cur.fetchall()]
+        conn.commit(); conn.close()
+        return result
+
+
 def init_db():
     if USE_PG:
         sqls = [
@@ -759,49 +803,6 @@ def init_db():
         conn.close()
 
 init_db()
-
-# ── DB query helper ──────────────────────────────────────
-def db_exec(sql, params=(), fetch=None):
-    """Unified DB execute — handles both pg8000 and SQLite."""
-    if USE_PG:
-        sql_pg = sql.replace("?", "%s")
-        conn = get_db()
-        try:
-            if fetch == "one":
-                rows = conn.run(sql_pg, *params)
-                cols = [c["name"] for c in conn.columns]
-                if rows:
-                    row = dict(zip(cols, rows[0]))
-                    if "description" in row: row["desc"] = row.pop("description")
-                    return row
-                return None
-            elif fetch == "all":
-                rows = conn.run(sql_pg, *params)
-                cols = [c["name"] for c in conn.columns]
-                result = []
-                for r in rows:
-                    row = dict(zip(cols, r))
-                    if "description" in row: row["desc"] = row.pop("description")
-                    result.append(row)
-                return result
-            else:
-                conn.run(sql_pg, *params)
-                return None
-        finally:
-            conn.close()
-    else:
-        import sqlite3 as _sq
-        conn = _sq.connect(DB_PATH)
-        conn.row_factory = _sq.Row
-        cur = conn.execute(sql, params)
-        result = None
-        if fetch == "one":
-            row = cur.fetchone()
-            result = dict(row) if row else None
-        elif fetch == "all":
-            result = [dict(r) for r in cur.fetchall()]
-        conn.commit(); conn.close()
-        return result
 
 # ── Helpers ───────────────────────────────────────────────
 def fmt_omr(n):
