@@ -1,23 +1,22 @@
 import os
 import re
+import sqlite3
+import json
 import requests
 from datetime import datetime
 from flask import Flask, request, jsonify, Response
 
-# PostgreSQL via pg8000 (pure Python, works with any Python version)
-if os.environ.get("DATABASE_URL"):
-    try:
-        import pg8000.native as pg
-        USE_PG = True
-    except ImportError:
-        USE_PG = False
-else:
-    USE_PG = False
-
-if not USE_PG:
-    import sqlite3
-
 app = Flask(__name__)
+
+# ── Config ────────────────────────────────────────────────
+BOT_TOKEN  = os.environ.get("BOT_TOKEN", "")
+GROQ_KEY   = os.environ.get("GROQ_API_KEY", "")
+DB_PATH    = os.environ.get("DB_PATH", "fairuz.db")
+
+# Supabase REST API (no driver needed, pure HTTP)
+SUPABASE_URL = os.environ.get("SUPABASE_URL", "")
+SUPABASE_KEY = os.environ.get("SUPABASE_KEY", "")
+USE_SUPABASE = bool(SUPABASE_URL and SUPABASE_KEY)
 
 HTML_PAGE = """<!DOCTYPE html>
 <html lang="ar" dir="rtl">
@@ -800,1003 +799,372 @@ load();
 </html>
 """
 
-
-BOT_TOKEN   = os.environ.get("BOT_TOKEN", "")
-DB_PATH     = os.environ.get("DB_PATH", "fairuz.db")
-GEMINI_KEY  = os.environ.get("GEMINI_API_KEY", "")
-GROQ_KEY    = os.environ.get("GROQ_API_KEY", "")
-
-# ── Database ──────────────────────────────────────────────
-def parse_pg_url(url):
-    """Parse postgres:// URL into pg8000 connection params."""
-    m = re.match(r'postgres(?:ql)?://([^:]+):([^@]+)@([^:/]+):?(\d*)/(.+)', url)
-    if not m:
-        raise ValueError("Invalid DATABASE_URL")
-    user, password, host, port, database = m.groups()
-    return {
-        "user": user,
-        "password": password,
-        "host": host,
-        "port": int(port) if port else 5432,
-        "database": database.split("?")[0],
-        "ssl_context": True
-    }
-
-def get_db():
-    if USE_PG:
-        params = parse_pg_url(os.environ["DATABASE_URL"])
-        conn = pg.Connection(**params)
-        return conn
-    else:
-        import sqlite3 as _sq
-        conn = _sq.connect(DB_PATH)
-        conn.row_factory = _sq.Row
-        return conn
-
-# ── DB query helper ──────────────────────────────────────
-def db_exec(sql, params=(), fetch=None):
-    """Unified DB execute — handles both pg8000 and SQLite."""
-    if USE_PG:
-        # Convert ? placeholders to $1,$2,... for pg8000
-        counter = [0]
-        def to_dollar(m):
-            counter[0] += 1
-            return f"${counter[0]}"
-        sql_final = re.sub(r'\?', to_dollar, sql)
-        conn = get_db()
-        try:
-            rows = conn.run(sql_final, *list(params))
-            cols = [c["name"] for c in conn.columns] if conn.columns else []
-            if fetch == "one":
-                if rows:
-                    row = dict(zip(cols, rows[0]))
-                    if "description" in row: row["desc"] = row.pop("description")
-                    return row
-                return None
-            elif fetch == "all":
-                result = []
-                for r in rows:
-                    row = dict(zip(cols, r))
-                    if "description" in row: row["desc"] = row.pop("description")
-                    result.append(row)
-                return result
-            return None
-        except Exception as e:
-            print(f"DB Error: {e} | SQL: {sql_final} | Params: {params}")
-            raise
-        finally:
-            conn.close()
-    else:
-        import sqlite3 as _sq
-        conn = _sq.connect(DB_PATH)
-        conn.row_factory = _sq.Row
-        cur = conn.execute(sql, params)
-        result = None
-        if fetch == "one":
-            row = cur.fetchone()
-            result = dict(row) if row else None
-        elif fetch == "all":
-            result = [dict(r) for r in cur.fetchall()]
-        conn.commit(); conn.close()
-        return result
-
-
+# ── SQLite DB ─────────────────────────────────────────────
 def init_db():
-    if USE_PG:
-        sqls = [
-            """CREATE TABLE IF NOT EXISTS entries (
-                id SERIAL PRIMARY KEY, type TEXT NOT NULL,
-                description TEXT NOT NULL, amt REAL NOT NULL,
-                date TEXT NOT NULL, month TEXT NOT NULL, img TEXT,
-                paid_by TEXT DEFAULT NULL, payment_method TEXT DEFAULT NULL,
-                sale_time TEXT DEFAULT NULL, shelf_id INTEGER DEFAULT NULL,
-                created TIMESTAMP DEFAULT NOW())""",
-            """CREATE TABLE IF NOT EXISTS shelves (
-                id SERIAL PRIMARY KEY, name TEXT NOT NULL UNIQUE,
-                color TEXT DEFAULT '#e8547a', rent REAL DEFAULT 0)""",
-            """CREATE TABLE IF NOT EXISTS shelf_products (
-                id SERIAL PRIMARY KEY, shelf_id INTEGER NOT NULL,
-                name TEXT NOT NULL, price REAL NOT NULL,
-                qty INTEGER NOT NULL DEFAULT 0, img TEXT,
-                created TIMESTAMP DEFAULT NOW())""",
-            """INSERT INTO shelves (name,color,rent) VALUES
-                ('ريحان','#f07090',10),('فتحية','#4ecdc4',8),
-                ('فطوم','#b794f4',8),('اكسسوارات','#f5c842',18)
-                ON CONFLICT (name) DO UPDATE SET rent=EXCLUDED.rent""",
-        ]
-        optional_sqls = [
-            "ALTER TABLE entries RENAME COLUMN desc TO description",
-            "ALTER TABLE shelves ADD COLUMN IF NOT EXISTS rent REAL DEFAULT 0",
-            "ALTER TABLE entries ADD COLUMN IF NOT EXISTS paid_by TEXT DEFAULT NULL",
-            "ALTER TABLE entries ADD COLUMN IF NOT EXISTS payment_method TEXT DEFAULT NULL",
-            "ALTER TABLE entries ADD COLUMN IF NOT EXISTS sale_time TEXT DEFAULT NULL",
-            "ALTER TABLE entries ADD COLUMN IF NOT EXISTS shelf_id TEXT DEFAULT NULL",
-        ]
-        for sql in sqls:
-            db_exec(sql)
-        for sql in optional_sqls:
-            try: db_exec(sql)
-            except: pass
-    else:
-        import sqlite3 as _sq
-        conn = _sq.connect(DB_PATH)
-        conn.execute("""
-            CREATE TABLE IF NOT EXISTS entries (
-                id             INTEGER PRIMARY KEY AUTOINCREMENT,
-                type           TEXT NOT NULL,
-                desc           TEXT NOT NULL,
-                amt            REAL NOT NULL,
-                date           TEXT NOT NULL,
-                month          TEXT NOT NULL,
-                img            TEXT,
-                paid_by        TEXT DEFAULT NULL,
-                payment_method TEXT DEFAULT NULL,
-                sale_time      TEXT DEFAULT NULL,
-                shelf_id       INTEGER DEFAULT NULL,
-                created        TEXT DEFAULT (datetime('now'))
-            )
-        """)
-        conn.execute("""
-            CREATE TABLE IF NOT EXISTS shelves (
-                id    INTEGER PRIMARY KEY AUTOINCREMENT,
-                name  TEXT NOT NULL UNIQUE,
-                color TEXT DEFAULT '#e8547a'
-            )
-        """)
-        conn.execute("""
-            CREATE TABLE IF NOT EXISTS shelf_products (
-                id       INTEGER PRIMARY KEY AUTOINCREMENT,
-                shelf_id INTEGER NOT NULL,
-                name     TEXT NOT NULL,
-                price    REAL NOT NULL,
-                qty      INTEGER NOT NULL DEFAULT 0,
-                img      TEXT,
-                created  TEXT DEFAULT (datetime('now'))
-            )
-        """)
-        try:
-            conn.execute("ALTER TABLE shelves ADD COLUMN rent REAL DEFAULT 0")
+    conn = sqlite3.connect(DB_PATH)
+    conn.execute("""CREATE TABLE IF NOT EXISTS entries (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        type TEXT NOT NULL, desc TEXT NOT NULL,
+        amt REAL NOT NULL, date TEXT NOT NULL,
+        month TEXT NOT NULL, img TEXT,
+        paid_by TEXT, payment_method TEXT,
+        sale_time TEXT, shelf_id INTEGER,
+        created TEXT DEFAULT (datetime('now')))""")
+    conn.execute("""CREATE TABLE IF NOT EXISTS shelves (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL UNIQUE,
+        color TEXT DEFAULT '#e8547a',
+        rent REAL DEFAULT 0)""")
+    conn.execute("""CREATE TABLE IF NOT EXISTS shelf_products (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        shelf_id INTEGER NOT NULL, name TEXT NOT NULL,
+        price REAL NOT NULL, qty INTEGER DEFAULT 0,
+        img TEXT, created TEXT DEFAULT (datetime('now')))""")
+    for row in [('ريحان','#f07090',10),('فتحية','#4ecdc4',8),('فطوم','#b794f4',8),('اكسسوارات','#f5c842',18)]:
+        try: conn.execute("INSERT OR IGNORE INTO shelves (name,color,rent) VALUES (?,?,?)", row)
         except: pass
-        for row in [('ريحان','#f07090',10),('فتحية','#4ecdc4',8),('فطوم','#b794f4',8),('اكسسوارات','#f5c842',18)]:
-            try:
-                conn.execute("INSERT OR IGNORE INTO shelves (name,color,rent) VALUES (?,?,?)", row)
-                conn.execute("UPDATE shelves SET rent=? WHERE name=?", (row[2], row[0]))
-            except: pass
-        for col in ["paid_by","payment_method","sale_time","shelf_id"]:
-            try:
-                conn.execute(f"ALTER TABLE entries ADD COLUMN {col} TEXT DEFAULT NULL")
-            except:
-                pass
-        conn.commit()
-        conn.close()
+    for col in ["paid_by","payment_method","sale_time","shelf_id"]:
+        try: conn.execute(f"ALTER TABLE entries ADD COLUMN {col} TEXT")
+        except: pass
+    try: conn.execute("ALTER TABLE shelves ADD COLUMN rent REAL DEFAULT 0")
+    except: pass
+    conn.commit(); conn.close()
 
 init_db()
 
-# ── Helpers ───────────────────────────────────────────────
-def fmt_omr(n):
-    return f"{n:,.3f} ر.ع"
+def db_get(sql, params=()):
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    rows = [dict(r) for r in conn.execute(sql, params).fetchall()]
+    conn.close()
+    return rows
 
-def cur_month():
-    return datetime.now().strftime("%Y-%m")
+def db_one(sql, params=()):
+    rows = db_get(sql, params)
+    return rows[0] if rows else None
+
+def db_run(sql, params=()):
+    conn = sqlite3.connect(DB_PATH)
+    conn.execute(sql, params)
+    conn.commit(); conn.close()
+
+# ── Helpers ───────────────────────────────────────────────
+def fmt_omr(n): return f"{n:,.3f} ر.ع"
+def cur_month(): return datetime.now().strftime("%Y-%m")
 
 def get_month_data(month):
-    rows = db_exec("SELECT * FROM entries WHERE month=? ORDER BY created DESC", (month,), fetch="all") or []
-    sales = [r for r in rows if r.get("type") == "s"]
-    buys  = [r for r in rows if r.get("type") == "b"]
-    return sales, buys
+    rows = db_get("SELECT * FROM entries WHERE month=? ORDER BY created DESC", (month,))
+    return [r for r in rows if r["type"]=="s"], [r for r in rows if r["type"]=="b"]
 
 def month_summary(month):
-    sales, buys = get_month_data(month)
-    ts = sum(e["amt"] for e in sales)
-    tb = sum(e["amt"] for e in buys)
-    return ts, tb, ts - tb, len(sales), len(buys)
+    s,b = get_month_data(month)
+    ts=sum(e["amt"] for e in s); tb=sum(e["amt"] for e in b)
+    return ts,tb,ts-tb,len(s),len(b)
 
-# ── Simple NLP — no AI needed ─────────────────────────────
-SALE_WORDS  = ["بعت","بعت","مبيعة","بيع","بعثت","باعت","وصل","استلم العميل"]
-BUY_WORDS   = ["اشتريت","شريت","مشتريات","شراء","دفعت","فاتورة","طلبية"]
-
-def parse_text(text):
-    """Parse Arabic text to extract type, description and amount."""
-    import re
-    text = text.strip()
-
-    # Detect type
-    etype = None
-    for w in SALE_WORDS:
-        if w in text:
-            etype = "s"
-            break
-    if not etype:
-        for w in BUY_WORDS:
-            if w in text:
-                etype = "b"
-                break
-
-    # Extract amount smartly:
-    # 1. Look for keywords like "الإجمالي" or "المجموع" or "بـ" followed by number
-    # 2. Otherwise take the LARGEST number (likely the total)
-    amt = None
-
-    # Priority 1: explicit total keywords
-    total_patterns = [
-        r'الإجمالي[^\d]*(\d+[.,]\d+)',
-        r'صافي الإجمالي[^\d]*(\d+[.,]\d+)',
-        r'Net Total[^\d]*(\d+[.,]\d+)',
-        r'المجموع[^\d]*(\d+[.,]\d+)',
-        r'بـ\s*(\d+[.,]\d+)',
-        r'بـ\s*(\d+)',
-        r'ب\s*(\d+[.,]\d+)',
-    ]
-    for pat in total_patterns:
-        m = re.search(pat, text)
-        if m:
-            try:
-                amt = float(m.group(1).replace(',', '.'))
-                if amt > 0:
-                    break
-            except:
-                pass
-
-    # Priority 2: largest number in text (likely the total)
-    if not amt:
-        nums = re.findall(r'\d+[.,]\d+|\d+', text.replace('٫','.'))
-        candidates = []
-        for n in nums:
-            try:
-                v = float(n.replace(',', '.'))
-                if v > 0:
-                    candidates.append(v)
-            except:
-                pass
-        if candidates:
-            amt = max(candidates)
-
-    if etype and amt:
-        # Build description from first line or key words
-        first_line = text.split("\n")[0].strip()
-        desc = first_line
-
-        # Extract paid_by — look for "دفع X" or "من X" or "حسين" "شوق" etc
-        paid_by = None
-        paid_patterns = [
-            r'دفع(?:ت)?\s+([\u0600-\u06FFa-zA-Z]+)',
-            r'من\s+حساب\s+([\u0600-\u06FFa-zA-Z]+)',
-            r'على\s+([\u0600-\u06FFa-zA-Z]+)',
-        ]
-        for pat in paid_patterns:
-            m = re.search(pat, text)
-            if m:
-                paid_by = m.group(1).strip()
-                break
-
-        for w in SALE_WORDS + BUY_WORDS + ["بـ","ب","ريال","ر.ع","ومان","اغراض","أغراض"]:
-            desc = desc.replace(w, " ")
-        desc = re.sub(r'\d+(?:[.,]\d+)?', '', desc).strip()
-        desc = ' '.join(desc.split()) or ("مبيعة" if etype == "s" else "مشتريات")
-        return {"type": etype, "desc": desc, "amt": amt, "paid_by": paid_by, "found": True}
-
-    return {"found": False}
-
-# ── Gemini invoice reader (free) ─────────────────────────
-def gemini_read_invoice(file_id):
-    """Download image from Telegram and read it with Gemini (free)."""
-    if not GEMINI_KEY or not BOT_TOKEN:
-        return None
-    try:
-        import base64, json as _json
-        # Get file from Telegram
-        r = requests.get(
-            f"https://api.telegram.org/bot{BOT_TOKEN}/getFile",
-            params={"file_id": file_id}, timeout=10
-        )
-        file_path = r.json()["result"]["file_path"]
-        img_bytes = requests.get(
-            f"https://api.telegram.org/file/bot{BOT_TOKEN}/{file_path}",
-            timeout=15
-        ).content
-        b64 = base64.b64encode(img_bytes).decode()
-
-        # Call Gemini API (free tier)
-        prompt = """هذه فاتورة. استخرج منها:
-1. المبلغ الإجمالي (Net Total أو الإجمالي شامل الضريبة)
-2. اسم المتجر أو وصف المشتريات
-
-أجب فقط بـ JSON هكذا بدون أي نص إضافي:
-{"amt": 3.520, "desc": "نانا هايبر - أدوات", "found": true}
-إذا لم تكن فاتورة: {"found": false}"""
-
-        res = requests.post(
-            f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={GEMINI_KEY}",
-            json={
-                "contents": [{
-                    "parts": [
-                        {"inline_data": {"mime_type": "image/jpeg", "data": b64}},
-                        {"text": prompt}
-                    ]
-                }]
-            },
-            timeout=20
-        )
-        raw = res.json()["candidates"][0]["content"]["parts"][0]["text"]
-        raw = raw.replace("```json","").replace("```","").strip()
-        return _json.loads(raw)
-    except Exception as e:
-        print("Gemini error:", e)
-        return None
-
-# ── Groq sale receipt reader ─────────────────────────────
-def groq_read_sale_receipt(file_id):
-    """Read a sales receipt image and extract full details."""
-    if not GROQ_KEY or not BOT_TOKEN:
-        return None
-    try:
-        import base64, json as _json
-        r = requests.get(
-            f"https://api.telegram.org/bot{BOT_TOKEN}/getFile",
-            params={"file_id": file_id}, timeout=10
-        )
-        file_path = r.json()["result"]["file_path"]
-        img_bytes = requests.get(
-            f"https://api.telegram.org/file/bot{BOT_TOKEN}/{file_path}",
-            timeout=15
-        ).content
-        b64 = base64.b64encode(img_bytes).decode()
-
-        res = requests.post(
-            "https://api.groq.com/openai/v1/chat/completions",
-            headers={"Authorization": f"Bearer {GROQ_KEY}", "Content-Type": "application/json"},
-            json={
-                "model": "meta-llama/llama-4-scout-17b-16e-instruct",
-                "messages": [{
-                    "role": "user",
-                    "content": [
-                        {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{b64}"}},
-                        {"type": "text", "text": """هذا إيصال بيع. استخرج منه كل التفاصيل التالية:
-1. المبلغ الإجمالي
-2. وصف المنتجات المباعة
-3. طريقة الدفع (كاش أو فيزا أو تحويل أو غير محدد)
-4. الوقت إن وجد
-5. التاريخ إن وجد
-
-أجب فقط بـ JSON بدون أي نص إضافي:
-{"amt": 5.500, "desc": "باقة ورد حمراء", "payment": "كاش", "time": "10:30 AM", "date": "01/05/2026", "found": true}
-إذا لم يكن إيصال بيع: {"found": false}"""}
-                    ]
-                }],
-                "max_tokens": 300,
-                "temperature": 0.1
-            },
-            timeout=20
-        )
-        raw = res.json()["choices"][0]["message"]["content"]
-        raw = raw.replace("```json","").replace("```","").strip()
-        return _json.loads(raw)
-    except Exception as e:
-        print("Groq sale error:", e)
-        return None
-
-# ── Groq invoice reader (free, no card needed) ───────────
-def groq_read_invoice(file_id):
-    """Download image from Telegram and read it with Groq (free)."""
-    if not GROQ_KEY or not BOT_TOKEN:
-        return None
-    try:
-        import base64, json as _json
-        # Get file from Telegram
-        r = requests.get(
-            f"https://api.telegram.org/bot{BOT_TOKEN}/getFile",
-            params={"file_id": file_id}, timeout=10
-        )
-        file_path = r.json()["result"]["file_path"]
-        img_bytes = requests.get(
-            f"https://api.telegram.org/file/bot{BOT_TOKEN}/{file_path}",
-            timeout=15
-        ).content
-        b64 = base64.b64encode(img_bytes).decode()
-
-        res = requests.post(
-            "https://api.groq.com/openai/v1/chat/completions",
-            headers={
-                "Authorization": f"Bearer {GROQ_KEY}",
-                "Content-Type": "application/json"
-            },
-            json={
-                "model": "meta-llama/llama-4-scout-17b-16e-instruct",
-                "messages": [{
-                    "role": "user",
-                    "content": [
-                        {
-                            "type": "image_url",
-                            "image_url": {"url": f"data:image/jpeg;base64,{b64}"}
-                        },
-                        {
-                            "type": "text",
-                            "text": """هذه فاتورة. استخرج منها:
-1. المبلغ الإجمالي (Net Total أو الإجمالي شامل الضريبة)
-2. اسم المتجر أو وصف المشتريات
-
-أجب فقط بـ JSON هكذا بدون أي نص إضافي:
-{"amt": 3.520, "desc": "نانا هايبر - أدوات", "found": true}
-إذا لم تكن فاتورة: {"found": false}"""
-                        }
-                    ]
-                }],
-                "max_tokens": 200,
-                "temperature": 0.1
-            },
-            timeout=20
-        )
-        raw = res.json()["choices"][0]["message"]["content"]
-        raw = raw.replace("```json","").replace("```","").strip()
-        return _json.loads(raw)
-    except Exception as e:
-        print("Groq error:", e)
-        return None
-
-# ── Telegram helpers ──────────────────────────────────────
+# ── Telegram ──────────────────────────────────────────────
 def tg(chat_id, text):
-    if not BOT_TOKEN:
-        return
-    requests.post(
-        f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage",
-        json={"chat_id": chat_id, "text": text, "parse_mode": "HTML"},
-        timeout=10
-    )
+    if not BOT_TOKEN: return
+    try:
+        requests.post(f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage",
+            json={"chat_id":chat_id,"text":text,"parse_mode":"HTML"}, timeout=10)
+    except: pass
 
 def tg_buttons(chat_id, text, buttons):
-    """Send message with inline keyboard buttons."""
-    if not BOT_TOKEN:
-        return
-    keyboard = {"inline_keyboard": [[{"text": b["label"], "callback_data": b["data"]} for b in row] for row in buttons]}
-    requests.post(
-        f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage",
-        json={"chat_id": chat_id, "text": text, "parse_mode": "HTML", "reply_markup": keyboard},
-        timeout=10
-    )
+    if not BOT_TOKEN: return
+    kb={"inline_keyboard":[[{"text":b["label"],"callback_data":b["data"]} for b in row] for row in buttons]}
+    try:
+        requests.post(f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage",
+            json={"chat_id":chat_id,"text":text,"parse_mode":"HTML","reply_markup":kb}, timeout=10)
+    except: pass
 
-# Store pending photo entries per chat
-pending = {}
+SALE_WORDS=["بعت","مبيعة","بيع","بعثت","باعت"]
+BUY_WORDS=["اشتريت","شريت","مشتريات","شراء","دفعت","فاتورة","طلبية"]
+
+def parse_text(text):
+    text=text.strip()
+    etype=None
+    for w in SALE_WORDS:
+        if w in text: etype="s"; break
+    if not etype:
+        for w in BUY_WORDS:
+            if w in text: etype="b"; break
+    amt=None
+    for pat in [r'الإجمالي[^\d]*(\d+[.,]\d+)',r'Net Total[^\d]*(\d+[.,]\d+)',r'بـ\s*(\d+[.,]\d+)',r'بـ\s*(\d+)']:
+        m=re.search(pat,text)
+        if m:
+            try: amt=float(m.group(1).replace(',','.')); break
+            except: pass
+    if not amt:
+        nums=re.findall(r'\d+[.,]\d+|\d+',text)
+        candidates=[float(n.replace(',','.')) for n in nums if float(n.replace(',','.'))>0]
+        if candidates: amt=max(candidates)
+    if etype and amt:
+        first=text.split("\n")[0].strip()
+        desc=first
+        for w in SALE_WORDS+BUY_WORDS+["بـ","ب","ريال","ر.ع","اغراض","أغراض"]:
+            desc=desc.replace(w," ")
+        desc=re.sub(r'\d+(?:[.,]\d+)?','',desc).strip()
+        desc=' '.join(desc.split()) or ("مبيعة" if etype=="s" else "مشتريات")
+        return {"type":etype,"desc":desc,"amt":amt,"found":True}
+    return {"found":False}
+
+def groq_read_invoice(file_id):
+    if not GROQ_KEY or not BOT_TOKEN: return None
+    try:
+        import base64
+        r=requests.get(f"https://api.telegram.org/bot{BOT_TOKEN}/getFile",params={"file_id":file_id},timeout=10)
+        fp=r.json()["result"]["file_path"]
+        img=requests.get(f"https://api.telegram.org/file/bot{BOT_TOKEN}/{fp}",timeout=15).content
+        b64=base64.b64encode(img).decode()
+        res=requests.post("https://api.groq.com/openai/v1/chat/completions",
+            headers={"Authorization":f"Bearer {GROQ_KEY}","Content-Type":"application/json"},
+            json={"model":"meta-llama/llama-4-scout-17b-16e-instruct","messages":[{"role":"user","content":[
+                {"type":"image_url","image_url":{"url":f"data:image/jpeg;base64,{b64}"}},
+                {"type":"text","text":'هذه فاتورة. استخرج المبلغ الإجمالي والوصف. أجب فقط بـ JSON: {"amt":0,"desc":"وصف","found":true}'}
+            ]}],"max_tokens":200,"temperature":0.1},timeout=20)
+        raw=res.json()["choices"][0]["message"]["content"].replace("```json","").replace("```","").strip()
+        return json.loads(raw)
+    except Exception as e:
+        print("Groq error:",e); return None
 
 # ── Web API ───────────────────────────────────────────────
 @app.route("/")
-def index():
-    return Response(HTML_PAGE, mimetype="text/html")
+def index(): return Response(HTML_PAGE, mimetype="text/html")
+
+@app.route("/debug")
+def debug():
+    try: total=db_one("SELECT COUNT(*) as c FROM entries")["c"]
+    except: total="error"
+    return jsonify({"database":"SQLite (local)","total_entries":total,
+                    "supabase":USE_SUPABASE,"bot":bool(BOT_TOKEN)})
 
 @app.route("/api/entries")
 def api_get():
-    month = request.args.get("month", cur_month())
-    sales, buys = get_month_data(month)
-    return jsonify({"sales": sales, "buys": buys})
+    month=request.args.get("month",cur_month())
+    s,b=get_month_data(month)
+    return jsonify({"sales":s,"buys":b})
 
-@app.route("/api/entries", methods=["POST"])
+@app.route("/api/entries",methods=["POST"])
 def api_add():
-    d = request.json
-    month = d.get("month", cur_month())
-    vals = (d["type"], d["desc"], float(d["amt"]),
-            d.get("date", datetime.now().strftime("%d/%m/%Y")),
-            month, d.get("img"), d.get("paid_by"),
-            d.get("payment_method"), d.get("sale_time"))
-    if USE_PG:
-        db_exec("INSERT INTO entries (type,description,amt,date,month,img,paid_by,payment_method,sale_time) VALUES (?,?,?,?,?,?,?,?,?)", vals)
-    else:
-        import sqlite3 as _sq
-        conn = _sq.connect(DB_PATH)
-        conn.execute(
-            "INSERT INTO entries (type,desc,amt,date,month,img,paid_by,payment_method,sale_time) VALUES (?,?,?,?,?,?,?,?,?)",
-            vals)
-        conn.commit(); conn.close()
-    return jsonify({"ok": True})
+    d=request.json
+    month=d.get("month",cur_month())
+    db_run("INSERT INTO entries (type,desc,amt,date,month,img,paid_by,payment_method,sale_time) VALUES (?,?,?,?,?,?,?,?,?)",
+        (d["type"],d["desc"],float(d["amt"]),
+         d.get("date",datetime.now().strftime("%d/%m/%Y")),
+         month,d.get("img"),d.get("paid_by"),d.get("payment_method"),d.get("sale_time")))
+    return jsonify({"ok":True})
 
-@app.route("/api/entries/<int:eid>", methods=["DELETE"])
+@app.route("/api/entries/<int:eid>",methods=["DELETE"])
 def api_del(eid):
-    if USE_PG:
-        db_exec("DELETE FROM entries WHERE id=?", (eid,))
-    else:
-        import sqlite3 as _sq
-        conn = _sq.connect(DB_PATH)
-        conn.execute("DELETE FROM entries WHERE id=?", (eid,))
-        conn.commit(); conn.close()
-    return jsonify({"ok": True})
+    db_run("DELETE FROM entries WHERE id=?",(eid,))
+    return jsonify({"ok":True})
 
-# ── Telegram Webhook ──────────────────────────────────────
-# ── Debug endpoint ───────────────────────────────────────
-@app.route("/debug")
-def debug():
-    db_type = "PostgreSQL ✅" if USE_PG else "SQLite ⚠️"
-    try:
-        count = db_exec("SELECT COUNT(*) as c FROM entries", fetch="one")
-        total = count["c"] if count else 0
-    except Exception as e:
-        total = f"Error: {e}"
-    return jsonify({
-        "database": db_type,
-        "DATABASE_URL_set": bool(os.environ.get("DATABASE_URL")),
-        "total_entries": total
-    })
-
-# ── Shelves API ───────────────────────────────────────────
 @app.route("/api/shelves")
 def api_shelves():
-    month = request.args.get("month", cur_month())
-    rows = db_exec("SELECT * FROM shelves ORDER BY id", fetch="all")
-    result = []
-    for s in (rows or []):
-        prods = db_exec("SELECT * FROM shelf_products WHERE shelf_id=? ORDER BY created DESC", (s["id"],), fetch="all")
-        # Calculate monthly sales for this shelf
-        sales = db_exec(
-            "SELECT COALESCE(SUM(amt),0) as total, COUNT(*) as cnt FROM entries WHERE type='s' AND shelf_id=? AND month=?",
-            (s["id"], month), fetch="one"
-        )
-        total_sales = float(sales["total"]) if sales else 0
-        sales_count = int(sales["cnt"]) if sales else 0
-        rent = float(s.get("rent") or 0)
-        result.append({
-            **dict(s),
-            "products": prods or [],
-            "monthly_sales": total_sales,
-            "sales_count": sales_count,
-            "rent": rent,
-            "net": total_sales - rent
-        })
+    month=request.args.get("month",cur_month())
+    shelves=db_get("SELECT * FROM shelves ORDER BY id")
+    result=[]
+    for s in shelves:
+        prods=db_get("SELECT * FROM shelf_products WHERE shelf_id=? ORDER BY created DESC",(s["id"],))
+        row=db_one("SELECT COALESCE(SUM(amt),0) as total,COUNT(*) as cnt FROM entries WHERE type='s' AND shelf_id=? AND month=?",(s["id"],month))
+        ms=float(row["total"]) if row else 0
+        rent=float(s.get("rent") or 0)
+        result.append({**s,"products":prods,"monthly_sales":ms,"sales_count":int(row["cnt"]) if row else 0,"rent":rent,"net":ms-rent})
     return jsonify(result)
 
-@app.route("/api/shelves/<int:sid>/products", methods=["POST"])
-def api_add_product(sid):
-    d = request.json
-    db_exec("INSERT INTO shelf_products (shelf_id,name,price,qty,img) VALUES (?,?,?,?,?)",
-            (sid, d["name"], float(d["price"]), int(d.get("qty",0)), d.get("img")))
-    return jsonify({"ok": True})
+@app.route("/api/shelves/<int:sid>/products",methods=["POST"])
+def api_add_prod(sid):
+    d=request.json
+    db_run("INSERT INTO shelf_products (shelf_id,name,price,qty) VALUES (?,?,?,?)",
+        (sid,d["name"],float(d["price"]),int(d.get("qty",0))))
+    return jsonify({"ok":True})
 
-@app.route("/api/shelf_products/<int:pid>", methods=["DELETE"])
-def api_del_product(pid):
-    db_exec("DELETE FROM shelf_products WHERE id=?", (pid,))
-    return jsonify({"ok": True})
+@app.route("/api/shelf_products/<int:pid>",methods=["DELETE"])
+def api_del_prod(pid):
+    db_run("DELETE FROM shelf_products WHERE id=?",(pid,)); return jsonify({"ok":True})
 
-@app.route("/api/shelf_products/<int:pid>/sell", methods=["POST"])
-def api_sell_product(pid):
-    d = request.json
-    qty = int(d.get("qty", 1))
-    payment_method = d.get("payment_method") or None
-    prod = db_exec("SELECT * FROM shelf_products WHERE id=?", (pid,), fetch="one")
-    if not prod:
-        return jsonify({"ok": False, "error": "not found"}), 404
-    new_qty = max(0, prod["qty"] - qty)
-    db_exec("UPDATE shelf_products SET qty=? WHERE id=?", (new_qty, pid))
-    month = datetime.now().strftime("%Y-%m")
-    date  = datetime.now().strftime("%d/%m/%Y")
-    total = prod["price"] * qty
-    shelf = db_exec("SELECT name FROM shelves WHERE id=?", (prod["shelf_id"],), fetch="one")
-    shelf_name = shelf["name"] if shelf else ""
-    db_exec("INSERT INTO entries (type,description,amt,date,month,shelf_id,payment_method) VALUES (?,?,?,?,?,?,?)",
-            ("s", f'{prod["name"]} — رف {shelf_name}', total, date, month, prod["shelf_id"], payment_method))
-    return jsonify({"ok": True, "new_qty": new_qty, "total": total})
+@app.route("/api/shelf_products/<int:pid>/sell",methods=["POST"])
+def api_sell(pid):
+    d=request.json; qty=int(d.get("qty",1)); pay=d.get("payment_method")
+    prod=db_one("SELECT * FROM shelf_products WHERE id=?",(pid,))
+    if not prod: return jsonify({"ok":False}),404
+    new_qty=max(0,prod["qty"]-qty)
+    db_run("UPDATE shelf_products SET qty=? WHERE id=?",(new_qty,pid))
+    month=cur_month(); date=datetime.now().strftime("%d/%m/%Y")
+    shelf=db_one("SELECT name FROM shelves WHERE id=?",(prod["shelf_id"],))
+    sname=shelf["name"] if shelf else ""
+    db_run("INSERT INTO entries (type,desc,amt,date,month,shelf_id,payment_method) VALUES (?,?,?,?,?,?,?)",
+        ("s",f'{prod["name"]} — رف {sname}',prod["price"]*qty,date,month,prod["shelf_id"],pay))
+    return jsonify({"ok":True,"new_qty":new_qty,"total":prod["price"]*qty})
 
-@app.route("/api/shelf_products/<int:pid>/qty", methods=["POST"])
-def api_update_qty(pid):
-    d = request.json
-    db_exec("UPDATE shelf_products SET qty=? WHERE id=?", (int(d["qty"]), pid))
-    return jsonify({"ok": True})
+@app.route("/api/shelves/<int:sid>/rent",methods=["POST"])
+def api_rent(sid):
+    db_run("UPDATE shelves SET rent=? WHERE id=?",(float(request.json["rent"]),sid))
+    return jsonify({"ok":True})
 
-@app.route("/api/shelves/<int:sid>/rent", methods=["POST"])
-def api_update_rent(sid):
-    d = request.json
-    db_exec("UPDATE shelves SET rent=? WHERE id=?", (float(d["rent"]), sid))
-    return jsonify({"ok": True})
+# ── Telegram Webhook ──────────────────────────────────────
+pending={}
 
-@app.route("/webhook", methods=["POST"])
+@app.route("/webhook",methods=["POST"])
 def webhook():
-    data = request.json or {}
-    msg  = data.get("message") or data.get("edited_message")
-    # ── Callback query (button press) ──
-    cb = data.get("callback_query")
+    data=request.json or {}
+    
+    cb=data.get("callback_query")
     if cb:
-        cb_id      = cb["id"]
-        cb_chat    = cb["message"]["chat"]["id"]
-        cb_data    = cb["data"]
-        cb_month   = cur_month()
-        cb_date    = datetime.now().strftime("%d/%m/%Y")
-
-        # Answer callback to remove loading spinner
-        requests.post(
-            f"https://api.telegram.org/bot{BOT_TOKEN}/answerCallbackQuery",
-            json={"callback_query_id": cb_id}, timeout=5
-        )
-
-        # Payment method button
-        if cb_data.startswith("pay:"):
-            payment = cb_data.split("pay:", 1)[1]
-            last = db_exec("SELECT id FROM entries WHERE type='s' AND month=?  ORDER BY created DESC LIMIT 1", (cb_month,), fetch="one")
-            if last:
-                db_exec("UPDATE entries SET payment_method=? WHERE id=?", (payment, last["id"]))
-            # Remove buttons by editing message
-            requests.post(
-                f"https://api.telegram.org/bot{BOT_TOKEN}/editMessageReplyMarkup",
-                json={"chat_id": cb_chat, "message_id": cb["message"]["message_id"], "reply_markup": {"inline_keyboard": []}},
-                timeout=5
-            )
-            tg(cb_chat, f"✅ طريقة الدفع: {payment}")
-            if cb_chat in pending and pending[cb_chat].get("waiting") == "sale_payment":
-                del pending[cb_chat]
-
-        # Payer button
-        elif cb_data.startswith("payer:"):
-            payer_val = cb_data.split("payer:", 1)[1]
-
-            if payer_val == "skip":
-                paid_by = None
-                requests.post(
-                    f"https://api.telegram.org/bot{BOT_TOKEN}/editMessageReplyMarkup",
-                    json={"chat_id": cb_chat, "message_id": cb["message"]["message_id"], "reply_markup": {"inline_keyboard": []}},
-                    timeout=5
-                )
-                tg(cb_chat, "⏭ تم التخطي — لم يُحدد الدافع")
-
-            elif payer_val == "other":
-                pending[cb_chat] = pending.get(cb_chat, {})
-                pending[cb_chat]["waiting_name"] = True
-                requests.post(
-                    f"https://api.telegram.org/bot{BOT_TOKEN}/editMessageReplyMarkup",
-                    json={"chat_id": cb_chat, "message_id": cb["message"]["message_id"], "reply_markup": {"inline_keyboard": []}},
-                    timeout=5
-                )
-                tg(cb_chat, "✏️ اكتب اسم الشخص:")
-                return "ok"
-
-            else:
-                paid_by = payer_val
-                requests.post(
-                    f"https://api.telegram.org/bot{BOT_TOKEN}/editMessageReplyMarkup",
-                    json={"chat_id": cb_chat, "message_id": cb["message"]["message_id"], "reply_markup": {"inline_keyboard": []}},
-                    timeout=5
-                )
-
-            # Save paid_by to last buy entry or pending
-            state = pending.get(cb_chat, {})
-            if state.get("waiting") in ("paid_by", "paid_by_photo"):
-                waiting = state["waiting"]
-                if waiting == "paid_by":
-                    desc  = state.get("desc", "مشتريات")
-                    amt   = state.get("amt", 0)
-                    month_s = state.get("month", cb_month)
-                    dt    = state.get("date", cb_date)
-                    db_exec(                             "INSERT INTO entries (type,description,amt,date,month,paid_by) VALUES (?,?,?,?,?,?)",                             ("b", desc, amt, dt, month_s, paid_by)                         )
-                    del pending[cb_chat]
-                    paid_line = f"\n👤 دفع: <b>{paid_by}</b>" if paid_by else ""
-                    tg(cb_chat,
-                       f"✅ <b>تم التسجيل!</b>\n\n"
-                       f"📦 مشتريات\n📝 {desc}\n💰 {fmt_omr(amt)}{paid_line}")
+        cid=cb["id"]; chat=cb["message"]["chat"]["id"]; cbd=cb["data"]
+        month=cur_month(); date=datetime.now().strftime("%d/%m/%Y")
+        try: requests.post(f"https://api.telegram.org/bot{BOT_TOKEN}/answerCallbackQuery",json={"callback_query_id":cid},timeout=5)
+        except: pass
+        try: requests.post(f"https://api.telegram.org/bot{BOT_TOKEN}/editMessageReplyMarkup",json={"chat_id":chat,"message_id":cb["message"]["message_id"],"reply_markup":{"inline_keyboard":[]}},timeout=5)
+        except: pass
+        
+        if cbd.startswith("pay:"):
+            pay=cbd.split("pay:",1)[1]
+            last=db_one("SELECT id FROM entries WHERE type='s' AND month=? ORDER BY created DESC LIMIT 1",(month,))
+            if last: db_run("UPDATE entries SET payment_method=? WHERE id=?",(pay,last["id"]))
+            if chat in pending and pending[chat].get("waiting")=="sale_payment": del pending[chat]
+            tg(chat,f"✅ طريقة الدفع: {pay}")
+            
+        elif cbd.startswith("payer:"):
+            val=cbd.split("payer:",1)[1]
+            if val=="skip": paid_by=None; tg(chat,"⏭ تم التخطي")
+            elif val=="other":
+                if chat not in pending: pending[chat]={}
+                pending[chat]["waiting_name"]=True
+                tg(chat,"✏️ اكتب اسم الشخص:"); return "ok"
+            else: paid_by=val; tg(chat,f"✅ دفع: {paid_by}")
+            
+            state=pending.get(chat,{})
+            if state.get("waiting") in ("paid_by","paid_by_photo"):
+                if state.get("waiting")=="paid_by":
+                    db_run("INSERT INTO entries (type,desc,amt,date,month,paid_by) VALUES (?,?,?,?,?,?)",
+                        ("b",state.get("desc","مشتريات"),state.get("amt",0),state.get("date",date),state.get("month",month),paid_by))
+                    if chat in pending: del pending[chat]
+                    tg(chat,f"✅ تم التسجيل!\n📦 {state.get('desc')}\n💰 {fmt_omr(state.get('amt',0))}" + (f"\n👤 {paid_by}" if paid_by else ""))
                 else:
-                    # paid_by_photo — update last entry
-                    last = db_exec("SELECT id FROM entries WHERE month=? ORDER BY created DESC LIMIT 1", (cb_month,), fetch="one")
-                    if last:
-                        db_exec("UPDATE entries SET paid_by=? WHERE id=?", (paid_by, last["id"]))
-                    if cb_chat in pending:
-                        del pending[cb_chat]
-                    paid_line = f"👤 دفع: <b>{paid_by}</b>" if paid_by else "⏭ بدون دافع محدد"
-                    tg(cb_chat, f"✅ {paid_line}")
-
+                    last=db_one("SELECT id FROM entries WHERE month=? ORDER BY created DESC LIMIT 1",(month,))
+                    if last: db_run("UPDATE entries SET paid_by=? WHERE id=?",(paid_by,last["id"]))
+                    if chat in pending: del pending[chat]
         return "ok"
 
-    if not msg:
-        return "ok"
+    msg=data.get("message") or data.get("edited_message")
+    if not msg: return "ok"
+    chat=msg["chat"]["id"]; month=cur_month(); date=datetime.now().strftime("%d/%m/%Y")
 
-    chat_id = msg["chat"]["id"]
-    month   = cur_month()
-    date    = datetime.now().strftime("%d/%m/%Y")
-
-    # ── Photo received ──
     if "photo" in msg:
-        file_id = msg["photo"][-1]["file_id"]
-        caption = msg.get("caption", "").strip()
-        # Detect if sales receipt (caption has بيع/مبيعة keyword)
-        is_sale_receipt = any(w in caption for w in ["بيع","مبيعة","بعت","فاتورة بيع","sale"])
-
-        if is_sale_receipt and (GROQ_KEY or GEMINI_KEY):
-            tg(chat_id, "⏳ جاري قراءة إيصال البيع...")
-            result = groq_read_sale_receipt(file_id) if GROQ_KEY else None
-            if result and result.get("found") and result.get("amt"):
-                amt     = float(result["amt"])
-                desc    = result.get("desc", "مبيعة")
-                payment = result.get("payment", "غير محدد")
-                stime   = result.get("time", "")
-                sdate   = result.get("date", date)
-                smonth  = sdate[-7:].replace("/","") if len(sdate)==10 else month
-                # Normalize month from date
-                try:
-                    from datetime import datetime as _dt
-                    d_obj = _dt.strptime(sdate, "%d/%m/%Y")
-                    smonth = d_obj.strftime("%Y-%m")
-                except:
-                    smonth = month
-                db_exec(                         "INSERT INTO entries (type,desc,amt,date,month,payment_method,sale_time) VALUES (?,?,?,?,?,?,?)",                         ("s", desc, amt, sdate, smonth, payment, stime)                     )
-                pay_icon = "💵" if "كاش" in payment else "💳" if "فيزا" in payment else "🏦" if "تحويل" in payment else "💰"
-                tg(chat_id,
-                   f"✅ <b>تم تسجيل المبيعة!</b>\n\n"
-                   f"🌸 مبيعة\n"
-                   f"📝 {desc}\n"
-                   f"💰 {fmt_omr(amt)}\n"
-                   f"{pay_icon} <b>الدفع:</b> {payment}\n"
-                   f"{'🕐 ' + stime if stime else ''}\n"
-                   f"📅 {sdate}\n\n"
-                   f"إذا المبلغ غلط أرسل: <code>تصحيح {amt}</code>")
-            else:
-                pending[chat_id] = {"waiting": "buy_amt", "desc": caption or "مبيعة", "force_type": "s"}
-                tg(chat_id, "🌸 ما قدرت أقرأ الإيصال بوضوح\n\nكم <b>المبلغ</b>؟ أرسل الرقم:")
-            return "ok"
-
-        if GROQ_KEY or GEMINI_KEY:
-            # Auto-read with AI (Groq first, then Gemini) — purchase invoice
-            tg(chat_id, "⏳ جاري قراءة الفاتورة تلقائياً...")
-            result = groq_read_invoice(file_id) if GROQ_KEY else None
-            if not result or not result.get("found"):
-                result = gemini_read_invoice(file_id) if GEMINI_KEY else None
-
-            if result and result.get("found") and result.get("amt"):
-                amt  = float(result["amt"])
-                desc = result.get("desc", caption or "مشتريات")
-                db_exec(                         "INSERT INTO entries (type,description,amt,date,month) VALUES (?,?,?,?,?)",                         ("b", desc, amt, date, month)                     )
-                # Ask who paid
-                pending[chat_id] = {"waiting": "paid_by_photo", "last_id": None, "amt": amt}
-                tg_buttons(chat_id,
-                   f"✅ <b>تم قراءة الفاتورة!</b>\n\n📦 {desc}\n💰 {fmt_omr(amt)}\n\n👤 <b>من دفع؟</b>",
-                   [[{"label": "👤 حسين", "data": "payer:حسين"},
-                     {"label": "👤 شوق",  "data": "payer:شوق"}],
-                    [{"label": "➕ شخص آخر", "data": "payer:other"},
-                     {"label": "⏭ تخطي",    "data": "payer:skip"}]])
-            else:
-                # Gemini couldn't read — ask manually
-                pending[chat_id] = {"waiting": "buy_amt", "desc": caption or "مشتريات"}
-                tg(chat_id,
-                   "🧾 وصلت الفاتورة بس ما قدرت أقرأها بوضوح\n\n"
-                   "كم <b>المبلغ الإجمالي</b>؟\n"
-                   "أرسل الرقم فقط: <code>3.520</code>")
+        file_id=msg["photo"][-1]["file_id"]; caption=msg.get("caption","").strip()
+        tg(chat,"⏳ جاري قراءة الفاتورة...")
+        result=groq_read_invoice(file_id)
+        if result and result.get("found") and result.get("amt"):
+            amt=float(result["amt"]); desc=result.get("desc","مشتريات")
+            db_run("INSERT INTO entries (type,desc,amt,date,month) VALUES (?,?,?,?,?)",("b",desc,amt,date,month))
+            pending[chat]={"waiting":"paid_by_photo","amt":amt}
+            tg_buttons(chat,f"✅ تم قراءة الفاتورة!\n📦 {desc}\n💰 {fmt_omr(amt)}\n\n👤 من دفع؟",
+                [[{"label":"👤 حسين","data":"payer:حسين"},{"label":"👤 شوق","data":"payer:شوق"}],
+                 [{"label":"➕ شخص آخر","data":"payer:other"},{"label":"⏭ تخطي","data":"payer:skip"}]])
         else:
-            # No AI key — ask manually
-            pending[chat_id] = {"waiting": "buy_amt", "desc": caption or "مشتريات"}
-            tg(chat_id,
-               "🧾 وصلت الفاتورة!\n\n"
-               "كم <b>المبلغ الإجمالي</b>؟\n"
-               "أرسل الرقم فقط مثل: <code>3.520</code>")
+            pending[chat]={"waiting":"buy_amt","desc":caption or "مشتريات"}
+            tg(chat,"🧾 كم المبلغ الإجمالي؟\nأرسل الرقم فقط: <code>3.520</code>")
         return "ok"
 
-    # ── Text message ──
-    text = msg.get("text", "").strip()
-    if not text:
+    text=msg.get("text","").strip()
+    if not text: return "ok"
+
+    if pending.get(chat,{}).get("waiting_name"):
+        paid_by=text.strip(); state=pending[chat]; del state["waiting_name"]
+        if state.get("waiting")=="paid_by":
+            db_run("INSERT INTO entries (type,desc,amt,date,month,paid_by) VALUES (?,?,?,?,?,?)",
+                ("b",state.get("desc"),state.get("amt"),state.get("date",date),state.get("month",month),paid_by))
+            del pending[chat]
+            tg(chat,f"✅ تم!\n📦 {state.get('desc')}\n💰 {fmt_omr(state.get('amt',0))}\n👤 {paid_by}")
+        else:
+            last=db_one("SELECT id FROM entries WHERE month=? ORDER BY created DESC LIMIT 1",(month,))
+            if last: db_run("UPDATE entries SET paid_by=? WHERE id=?",(paid_by,last["id"]))
+            if chat in pending: del pending[chat]
+            tg(chat,f"✅ دفع: {paid_by}")
         return "ok"
 
-    # Handle "تصحيح X" correction after auto-read
-    import re as _re
-    corr = _re.match(r'تصحيح\s+(\d+[.,]\d+|\d+)', text.strip())
-    if corr:
+    state=pending.get(chat,{})
+    if state.get("waiting")=="buy_amt":
         try:
-            amt = float(corr.group(1).replace(",","."))
-            # Update last entry
-            last = db_exec("UPDATE entries SET amt=? WHERE id=?", (amt, last["id"]), fetch="one")
-            if last:
-                db_exec("UPDATE entries SET amt=? WHERE id=?", (amt, last["id"]))
-        except:
-            tg(chat_id, "⚠️ تنسيق خاطئ، مثال: <code>تصحيح 3.500</code>")
+            amt=float(text.replace(",","."))
+            desc=state.get("desc","مشتريات")
+            db_run("INSERT INTO entries (type,desc,amt,date,month) VALUES (?,?,?,?,?)",("b",desc,amt,date,month))
+            pending[chat]={"waiting":"paid_by_photo","amt":amt}
+            tg_buttons(chat,f"✅ تم التسجيل!\n📦 {desc}\n💰 {fmt_omr(amt)}\n\n👤 من دفع؟",
+                [[{"label":"👤 حسين","data":"payer:حسين"},{"label":"👤 شوق","data":"payer:شوق"}],
+                 [{"label":"➕ شخص آخر","data":"payer:other"},{"label":"⏭ تخطي","data":"payer:skip"}]])
+        except: tg(chat,"⚠️ أرسل رقم: <code>3.520</code>")
+        return "ok"
+    
+    if state.get("waiting")=="sale_payment":
+        pay=text.strip()
+        if pay in ["1","كاش","نقد"]: pay="كاش 💵"
+        elif pay in ["2","فيزا","بطاقة"]: pay="فيزا 💳"
+        elif pay in ["3","تحويل"]: pay="تحويل 🏦"
+        last=db_one("SELECT id FROM entries WHERE type='s' AND month=? ORDER BY created DESC LIMIT 1",(month,))
+        if last: db_run("UPDATE entries SET payment_method=? WHERE id=?",(pay,last["id"]))
+        del pending[chat]
+        tg(chat,f"✅ طريقة الدفع: {pay}"); return "ok"
+
+    if text in ["/start","/help"]:
+        tg(chat,"🌹 <b>فيروز فلورز</b>\n\n🌸 <b>مبيعة:</b>\n<code>بعت باقة بـ 5.500</code>\n\n📦 <b>مشتريات:</b>\n<code>اشتريت زهور بـ 12.000</code>\n\n🧾 <b>فاتورة:</b> أرسل صورة\n\n📊 <b>تقرير:</b> /report\n\n👤 <b>من دفع:</b> /من_دفع")
         return "ok"
 
-    # Handle pending state
-    if chat_id in pending:
-        state = pending[chat_id]
-
-        if state["waiting"] == "paid_by_photo":
-            paid_by = None if text.strip() == "-" else text.strip()
-            last = db_exec("UPDATE entries SET paid_by=? WHERE id=?", (paid_by, last["id"]), fetch="one")
-            if last:
-                db_exec("UPDATE entries SET paid_by=? WHERE id=?", (paid_by, last["id"]))
-            del pending[chat_id]
-            paid_line = f"👤 دفع: {paid_by}" if paid_by else ""
-            tg(chat_id, f"✅ تم التسجيل! {paid_line}")
-            return "ok"
-
-        if state["waiting"] == "sale_payment":
-            # User chose payment method after sale receipt read
-            pay = text.strip()
-            if pay in ["1", "كاش", "نقد"]:
-                payment = "كاش 💵"
-            elif pay in ["2", "فيزا", "بطاقة"]:
-                payment = "فيزا 💳"
-            elif pay in ["3", "تحويل"]:
-                payment = "تحويل 🏦"
-            else:
-                payment = pay or "غير محدد"
-            last = db_exec("UPDATE entries SET payment_method=? WHERE id=?", (payment, last["id"]), fetch="one")
-            if last:
-                db_exec("UPDATE entries SET payment_method=? WHERE id=?", (payment, last["id"]))
-            del pending[chat_id]
-            tg(chat_id, f"✅ تم تسجيل طريقة الدفع: {payment}")
-            return "ok"
-
-        if state.get("waiting_name"):
-            # User typing custom payer name
-            paid_by = text.strip()
-            del state["waiting_name"]
-            # Now handle as if payer was selected
-            if state.get("waiting") == "paid_by":
-                desc  = state.get("desc", "مشتريات")
-                amt   = state.get("amt", 0)
-                month_s = state.get("month", month)
-                dt    = state.get("date", date)
-                db_exec(                         "INSERT INTO entries (type,description,amt,date,month,paid_by) VALUES (?,?,?,?,?,?)",                         ("b", desc, amt, dt, month_s, paid_by)                     )
-                del pending[chat_id]
-                tg(chat_id,
-                   f"✅ <b>تم التسجيل!</b>\n\n"
-                   f"📦 مشتريات\n📝 {desc}\n💰 {fmt_omr(amt)}\n👤 دفع: <b>{paid_by}</b>")
-            else:
-                last = db_exec("UPDATE entries SET paid_by=? WHERE id=?", (paid_by, last["id"]), fetch="one")
-                if last:
-                    db_exec("UPDATE entries SET paid_by=? WHERE id=?", (paid_by, last["id"]))
-                if chat_id in pending:
-                    del pending[chat_id]
-                tg(chat_id, f"✅ تم تسجيل الدافع: <b>{paid_by}</b>")
-            return "ok"
-
-        if state["waiting"] == "paid_by":
-            paid_by = None if text.strip() == "-" else text.strip()
-            desc  = state["desc"]
-            amt   = state["amt"]
-            month_s = state["month"]
-            db_exec(                     "INSERT INTO entries (type,description,amt,date,month,paid_by) VALUES (?,?,?,?,?,?)",                     ("b", desc, amt, state["date"], month_s, paid_by)                 )
-            del pending[chat_id]
-            paid_line = f"\n👤 <b>دفع:</b> {paid_by}" if paid_by else ""
-            tg(chat_id,
-               f"✅ <b>تم التسجيل!</b>\n\n"
-               f"📦 مشتريات\n"
-               f"📝 {desc}\n"
-               f"💰 {fmt_omr(amt)}{paid_line}")
-            return "ok"
-
-        if state["waiting"] == "buy_amt":
-            try:
-                amt = float(text.replace(",", "."))
-                desc = state.get("desc", "مشتريات")
-                db_exec(                         "INSERT INTO entries (type,description,amt,date,month) VALUES (?,?,?,?,?)",                         ("b", desc, amt, date, month)                     )
-                del pending[chat_id]
-                tg(chat_id,
-                   f"✅ <b>تم التسجيل!</b>\n\n"
-                   f"📦 مشتريات\n"
-                   f"📝 {desc}\n"
-                   f"💰 {fmt_omr(amt)}")
-            except:
-                tg(chat_id, "⚠️ أرسل رقم صحيح مثل: <code>3.520</code>")
-            return "ok"
-
-    # Commands
-    if text in ["/start", "/help"]:
-        tg(chat_id,
-           "🌹 <b>أهلاً بك في فيروز فلورز!</b>\n\n"
-           "📌 <b>كيف تسجّل؟</b>\n\n"
-           "🌸 <b>مبيعة نصية:</b>\n"
-           "<code>بعت باقة ورد بـ 5.500</code>\n"
-           "<code>بعت عطر بـ 8.000 فيزا</code>\n\n"
-           "🧾 <b>إيصال مبيعة بالصورة:</b>\n"
-           "أرسل صورة + اكتب في التعليق: <code>بيع</code>\n\n"
-           "📦 <b>مشتريات:</b>\n"
-           "<code>اشتريت زهور بـ 12.000</code>\n\n"
-           "🧾 <b>فاتورة مشتريات:</b>\n"
-           "أرسل صورة الفاتورة بدون تعليق\n\n"
-           "📊 <b>تقارير:</b>\n"
-           "<code>/report</code> — ملخص الشهر\n"
-           "<code>/من_دفع</code> — تفصيل المشتريات")
+    if text=="/report":
+        ts,tb,tp,sc,bc=month_summary(month)
+        e="✅" if tp>=0 else "⚠️"
+        _,buys=get_month_data(month)
+        pd={}
+        for en in buys:
+            p=en.get("paid_by") or "غير محدد"
+            pd[p]=pd.get(p,0)+en["amt"]
+        pl="\n".join(f"  👤 {k}: {fmt_omr(v)}" for k,v in pd.items()) or "  غير محدد"
+        tg(chat,f"📊 <b>تقرير {month}</b>\n\n🌸 المبيعات: {fmt_omr(ts)} ({sc})\n📦 المشتريات: {fmt_omr(tb)} ({bc})\n━━━━━━\n{e} الربح: {fmt_omr(tp)}\n\n💳 من دفع:\n{pl}")
         return "ok"
 
-    if text == "/report":
-        ts, tb, tp, sc, bc = month_summary(month)
-        emoji = "✅" if tp >= 0 else "⚠️"
-        # Paid by breakdown
-        _, buys = get_month_data(month)
-        paid_summary = {}
-        for e in buys:
-            p = e.get("paid_by") or "غير محدد"
-            paid_summary[p] = paid_summary.get(p, 0) + e["amt"]
-        paid_lines = ""
-        for name, total in paid_summary.items():
-            paid_lines += f"  👤 {name}: {fmt_omr(total)}\n"
-        tg(chat_id,
-           f"📊 <b>تقرير {month}</b>\n\n"
-           f"🌸 <b>المبيعات:</b> {fmt_omr(ts)} ({sc} عملية)\n"
-           f"📦 <b>المشتريات:</b> {fmt_omr(tb)} ({bc} عملية)\n"
-           f"━━━━━━━━━━━━━\n"
-           f"{emoji} <b>صافي الربح:</b> {fmt_omr(tp)}\n\n"
-           f"💳 <b>من دفع المشتريات:</b>\n{paid_lines if paid_lines else '  غير محدد'}")
-        return "ok"
+    if text in ["/من_دفع","/mandafa3"]:
+        _,buys=get_month_data(month)
+        pd={}
+        for en in buys:
+            p=en.get("paid_by") or "غير محدد"
+            if p not in pd: pd[p]={"t":0,"c":0}
+            pd[p]["t"]+=en["amt"]; pd[p]["c"]+=1
+        lines="\n".join(f"👤 <b>{k}</b>: {fmt_omr(v['t'])} ({v['c']} عمليات)" for k,v in pd.items()) if pd else "لا يوجد"
+        tg(chat,f"💳 <b>من دفع — {month}</b>\n\n{lines}"); return "ok"
 
-    if text == "/من_دفع" or text == "/mandafa3":
-        _, buys = get_month_data(month)
-        paid_summary = {}
-        for e in buys:
-            p = e.get("paid_by") or "غير محدد"
-            if p not in paid_summary:
-                paid_summary[p] = {"total": 0, "count": 0}
-            paid_summary[p]["total"] += e["amt"]
-            paid_summary[p]["count"] += 1
-        if not paid_summary:
-            tg(chat_id, "📭 ما في مشتريات هذا الشهر")
-            return "ok"
-        lines = f"💳 <b>من دفع المشتريات — {month}</b>\n\n"
-        for name, info in paid_summary.items():
-            lines += f"👤 <b>{name}</b>\n"
-            lines += f"   المبلغ: {fmt_omr(info['total'])} ({info['count']} عملية)\n\n"
-        tg(chat_id, lines)
-        return "ok"
-
-    # Natural language
-    parsed = parse_text(text)
+    parsed=parse_text(text)
     if parsed["found"]:
-        etype   = parsed["type"]
-        desc    = parsed["desc"]
-        amt     = parsed["amt"]
-        paid_by = parsed.get("paid_by")
-
-        # For buys: ask who paid
-        if etype == "b" and not paid_by:
-            pending[chat_id] = {"waiting": "paid_by", "desc": desc, "amt": amt, "date": date, "month": month}
-            tg(chat_id,
-               f"📦 <b>مشتريات {fmt_omr(amt)}</b>\n\n"
-               f"👤 <b>من دفع؟</b>\n"
-               f"اكتب الاسم: <code>حسين</code> أو <code>شوق</code>\n"
-               f"أو <code>-</code> إذا ما تبي تحدد")
-            return "ok"
-
-        # For sales: ask payment method
-        if etype == "s":
-            # Check if payment method mentioned in text
-            pay_method = None
-            if any(w in text for w in ["كاش","نقد","كاشن"]):
-                pay_method = "كاش 💵"
-            elif any(w in text for w in ["فيزا","بطاقة","كارد"]):
-                pay_method = "فيزا 💳"
-            elif any(w in text for w in ["تحويل","تحويلة"]):
-                pay_method = "تحويل 🏦"
-
-            if not pay_method:
-                db_exec(                         "INSERT INTO entries (type,description,amt,date,month) VALUES (?,?,?,?,?)",                         ("s", desc, amt, date, month)                     )
-                pending[chat_id] = {"waiting": "sale_payment", "desc": desc, "amt": amt, "date": date, "month": month}
-                tg_buttons(chat_id,
-                   f"🌸 <b>مبيعة {fmt_omr(amt)}</b> — تم التسجيل!\n\n💳 <b>طريقة الدفع؟</b>",
-                   [[{"label": "💵 كاش",    "data": "pay:كاش 💵"},
-                     {"label": "💳 فيزا",   "data": "pay:فيزا 💳"},
-                     {"label": "🏦 تحويل",  "data": "pay:تحويل 🏦"}]])
-                return "ok"
+        etype=parsed["type"]; desc=parsed["desc"]; amt=parsed["amt"]
+        if etype=="b":
+            pending[chat]={"waiting":"paid_by","desc":desc,"amt":amt,"date":date,"month":month}
+            tg_buttons(chat,f"📦 <b>مشتريات {fmt_omr(amt)}</b>\n\n👤 من دفع؟",
+                [[{"label":"👤 حسين","data":"payer:حسين"},{"label":"👤 شوق","data":"payer:شوق"}],
+                 [{"label":"➕ شخص آخر","data":"payer:other"},{"label":"⏭ تخطي","data":"payer:skip"}]])
+        else:
+            pay=None
+            if any(w in text for w in ["كاش","نقد"]): pay="كاش 💵"
+            elif any(w in text for w in ["فيزا","بطاقة"]): pay="فيزا 💳"
+            elif "تحويل" in text: pay="تحويل 🏦"
+            db_run("INSERT INTO entries (type,desc,amt,date,month,payment_method) VALUES (?,?,?,?,?,?)",
+                (etype,desc,amt,date,month,pay))
+            if pay:
+                tg(chat,f"✅ مبيعة {fmt_omr(amt)} — {pay}")
             else:
-                db_exec(                         "INSERT INTO entries (type,description,amt,date,month,payment_method) VALUES (?,?,?,?,?,?)",                         ("s", desc, amt, date, month, pay_method)                     )
-                tg(chat_id,
-                   f"✅ <b>تم التسجيل!</b>\n\n"
-                   f"🌸 مبيعة\n📝 {desc}\n💰 {fmt_omr(amt)}\n💳 {pay_method}\n📅 {date}")
-                return "ok"
-
-        db_exec(                 "INSERT INTO entries (type,description,amt,date,month,paid_by) VALUES (?,?,?,?,?,?)",                 (etype, desc, amt, date, month, paid_by)             )
-        label = "مبيعة 🌸" if etype == "s" else "مشتريات 📦"
-        paid_line = f"\n👤 <b>دفع:</b> {paid_by}" if paid_by else ""
-        tg(chat_id,
-           f"✅ <b>تم التسجيل!</b>\n\n"
-           f"🏷 {label}\n"
-           f"📝 {desc}\n"
-           f"💰 {fmt_omr(amt)}\n"
-           f"📅 {date}{paid_line}")
+                pending[chat]={"waiting":"sale_payment"}
+                db_run("INSERT INTO entries (type,desc,amt,date,month) VALUES (?,?,?,?,?)",("s",desc,amt,date,month))
+                tg_buttons(chat,f"🌸 <b>مبيعة {fmt_omr(amt)}</b>\n\n💳 طريقة الدفع؟",
+                    [[{"label":"💵 كاش","data":"pay:كاش 💵"},{"label":"💳 فيزا","data":"pay:فيزا 💳"},{"label":"🏦 تحويل","data":"pay:تحويل 🏦"}]])
     else:
-        tg(chat_id,
-           "لم أفهم الرسالة 🤔\n\n"
-           "جرّب:\n"
-           "<code>بعت باقة بـ 4.500</code>\n"
-           "<code>اشتريت ورد بـ 8.000</code>\n\n"
-           "أو /help للمساعدة")
-
+        tg(chat,"لم أفهم 🤔\n\nجرّب:\n<code>بعت باقة بـ 4.500</code>\n<code>اشتريت ورد بـ 8.000</code>\n\n/help للمساعدة")
     return "ok"
 
 @app.route("/set_webhook")
 def set_webhook():
-    host = request.host_url.rstrip("/")
-    r = requests.get(
-        f"https://api.telegram.org/bot{BOT_TOKEN}/setWebhook",
-        params={"url": f"{host}/webhook"},
-        timeout=10
-    )
+    host=request.host_url.rstrip("/")
+    r=requests.get(f"https://api.telegram.org/bot{BOT_TOKEN}/setWebhook",params={"url":f"{host}/webhook"},timeout=10)
     return jsonify(r.json())
 
-if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 5000))
-    app.run(host="0.0.0.0", port=port, debug=False)
+if __name__=="__main__":
+    port=int(os.environ.get("PORT",5000))
+    app.run(host="0.0.0.0",port=port,debug=False)
