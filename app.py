@@ -501,15 +501,30 @@ header {
 <!-- HOME -->
 <div id="tab-home" class="page active">
   <div class="slbl">ملخص الشهر</div>
-  <div class="kpi-row">
+  <div class="kpi-row" style="grid-template-columns:repeat(2,1fr);margin-bottom:10px;">
     <div class="kpi ks gc"><div class="kpi-ico">💰</div><div class="kpi-lbl">إجمالي المبيعات</div>
       <div class="kpi-val" id="kS">0 ر.ع</div><div class="kpi-sub" id="kSc">0 عملية</div>
       <div class="chips" id="payChips"></div></div>
     <div class="kpi kb gc"><div class="kpi-ico">🛒</div><div class="kpi-lbl">إجمالي المشتريات</div>
       <div class="kpi-val" id="kB">0 ر.ع</div><div class="kpi-sub" id="kBc">0 عملية</div>
       <div class="chips" id="payerChips"></div></div>
-    <div class="kpi kp gc"><div class="kpi-ico">📊</div><div class="kpi-lbl">صافي الربح</div>
-      <div class="kpi-val" id="kP">0 ر.ع</div><div class="kpi-sub"><span id="kPb" class="badge">—</span></div></div>
+  </div>
+  <div class="kpi-row" style="grid-template-columns:repeat(3,1fr);margin-bottom:22px;">
+    <div class="kpi gc" style="border-right:3px solid rgba(232,121,138,.3);">
+      <div class="kpi-ico">💸</div><div class="kpi-lbl">المصاريف الثابتة</div>
+      <div class="kpi-val" id="kE" style="color:var(--rose-d)">0 ر.ع</div>
+      <div class="kpi-sub" id="kEd">راتب + إيجار + كهرباء</div>
+    </div>
+    <div class="kpi kp gc">
+      <div class="kpi-ico">📊</div><div class="kpi-lbl">ربح قبل المصاريف</div>
+      <div class="kpi-val" id="kP">0 ر.ع</div>
+      <div class="kpi-sub"><span id="kPb" class="badge">—</span></div>
+    </div>
+    <div class="kpi gc" style="border-right:3px solid rgba(122,171,138,.3);">
+      <div class="kpi-ico">🏆</div><div class="kpi-lbl">الربح الصافي النهائي</div>
+      <div class="kpi-val" id="kN">0 ر.ع</div>
+      <div class="kpi-sub"><span id="kNb" class="badge">—</span></div>
+    </div>
   </div>
 
   <div class="slbl">إضافة جديد</div>
@@ -673,8 +688,13 @@ document.getElementById('bPayer').addEventListener('change',function(){
 });
 
 async function load(){
-  const d=await api(`/api/entries?month=${month}`);
-  renderKPI(d.sales,d.buys);renderLists(d.sales,d.buys);loadCharts();
+  const [d, expD] = await Promise.all([
+    api(`/api/entries?month=${month}`),
+    api(`/api/expenses?month=${month}`)
+  ]);
+  renderKPI(d.sales, d.buys, expD);
+  renderLists(d.sales,d.buys);
+  loadCharts();
 }
 async function loadCharts(){
   const ms=['01','02','03','04','05','06','07','08','09','10','11','12'];
@@ -686,19 +706,39 @@ async function loadCharts(){
 }
 setInterval(()=>{load();if(document.getElementById('tab-shelves').classList.contains('active'))loadShelves();},15000);
 
-function renderKPI(sales,buys){
+function renderKPI(sales, buys, expD){
   const ts=sales.reduce((a,e)=>a+e.amt,0);
-  const tb=buys.reduce((a,e)=>a+e.amt,0);
+  const tb=buys.filter(e=>e.type!=='expense').reduce((a,e)=>a+e.amt,0);
   const tp=ts-tb;
+
+  // Fixed expenses: sum from paid entries this month
+  const paidExps=(expD&&expD.paid)||[];
+  const te=paidExps.reduce((a,e)=>a+e.amt,0);
+  // Also sum monthly expense amounts for display
+  const allExps=(expD&&expD.expenses)||[];
+  const expNames=allExps.map(e=>e.name).join(' + ');
+  const tn=tp-te; // net after expenses
+
   document.getElementById('kS').textContent=fmt(ts)+' ر.ع';
   document.getElementById('kSc').textContent=sales.length+' عملية';
   document.getElementById('kB').textContent=fmt(tb)+' ر.ع';
-  document.getElementById('kBc').textContent=buys.length+' عملية';
+  document.getElementById('kBc').textContent=buys.filter(e=>e.type!=='expense').length+' عملية';
+
+  document.getElementById('kE').textContent=fmt(te)+' ر.ع';
+  document.getElementById('kEd').textContent=te>0?`${paidExps.length} مصروف مدفوع`:'لم تُدفع بعد';
+
   document.getElementById('kP').textContent=(tp>=0?'+':'')+fmt(tp)+' ر.ع';
   document.getElementById('kP').style.color=tp>=0?'var(--gold)':'var(--rose-d)';
   const b=document.getElementById('kPb');
-  b.textContent=tp>0?'✅ في الربح':tp<0?'⚠️ في الخسارة':'—';
+  b.textContent=tp>0?'✅ ربح':tp<0?'⚠️ خسارة':'—';
   b.className='badge '+(tp>0?'bp':tp<0?'bn':'');
+
+  document.getElementById('kN').textContent=(tn>=0?'+':'')+fmt(tn)+' ر.ع';
+  document.getElementById('kN').style.color=tn>=0?'var(--green-d)':'var(--rose-d)';
+  const nb=document.getElementById('kNb');
+  nb.textContent=tn>0?'🏆 صافي الربح':tn<0?'⚠️ خسارة صافية':'—';
+  nb.className='badge '+(tn>0?'bp':tn<0?'bn':'');
+
   const pm={'كاش 💵':0,'فيزا 💳':0,'تحويل 🏦':0};
   sales.forEach(e=>{if(e.payment_method&&pm[e.payment_method]!==undefined)pm[e.payment_method]+=e.amt;});
   document.getElementById('payChips').innerHTML=Object.entries(pm).filter(([,v])=>v>0)
@@ -827,14 +867,14 @@ async function saveRent(){
 }
 
 document.querySelectorAll('.overlay').forEach(o=>o.addEventListener('click',function(e){if(e.target===this)this.classList.remove('open');}));
-function changeMonth(){month=document.getElementById('msel').value;load();loadExpenses();if(document.getElementById('tab-shelves').classList.contains('active'))loadShelves();}
+function changeMonth(){month=document.getElementById('msel').value;load();loadExpensesPanel();if(document.getElementById('tab-shelves').classList.contains('active'))loadShelves();}
 function showToast(msg){const el=document.getElementById('toast');el.textContent=msg;el.classList.add('show');setTimeout(()=>el.classList.remove('show'),3000);}
 
 load();
-loadExpenses();
+loadExpensesPanel();
 
 /* ── EXPENSES ── */
-async function loadExpenses(){
+async function loadExpensesPanel(){
   const month_val = month;
   const d = await api(`/api/expenses?month=${month_val}`);
   const expMap = {};
@@ -868,7 +908,7 @@ async function payExpense(id, name, defaultAmt){
   const a = parseFloat(amt);
   if(isNaN(a)||a<=0){showToast('⚠️ مبلغ غير صحيح');return;}
   await api(`/api/expenses/${id}/pay`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({month,amount:a})});
-  loadExpenses(); load();
+  loadExpensesPanel(); load();
   showToast(`✅ تم تسجيل دفع ${name} — ${fmt(a)} ر.ع`);
 }
 
@@ -1188,7 +1228,13 @@ def groq_read_invoice(file_id):
             headers={"Authorization":f"Bearer {GROQ_KEY}","Content-Type":"application/json"},
             json={"model":"meta-llama/llama-4-scout-17b-16e-instruct","messages":[{"role":"user","content":[
                 {"type":"image_url","image_url":{"url":f"data:image/jpeg;base64,{b64}"}},
-                {"type":"text","text":'هذه فاتورة. استخرج المبلغ الإجمالي والوصف. أجب فقط بـ JSON: {"amt":0,"desc":"وصف","found":true}'}
+                {"type":"text","text":"""هذه فاتورة أو إيصال. استخرج:
+1. المبلغ الإجمالي
+2. وصف المحتوى
+3. هل هي فاتورة كهرباء أو تعبئة رصيد كهرباء؟ (true/false)
+
+أجب فقط بـ JSON بدون أي نص إضافي:
+{"amt":0,"desc":"وصف","is_electricity":false,"found":true}"""}
             ]}],"max_tokens":200,"temperature":0.1},timeout=20)
         raw=res.json()["choices"][0]["message"]["content"].replace("```json","").replace("```","").strip()
         return json.loads(raw)
@@ -1332,11 +1378,23 @@ def webhook():
         result=groq_read_invoice(file_id)
         if result and result.get("found") and result.get("amt"):
             amt=float(result["amt"]); desc=result.get("desc","مشتريات")
-            db_run("INSERT INTO entries (type,desc,amt,date,month) VALUES (?,?,?,?,?)",("b",desc,amt,date,month))
-            pending[chat]={"waiting":"paid_by_photo","amt":amt}
-            tg_buttons(chat,f"✅ تم قراءة الفاتورة!\n📦 {desc}\n💰 {fmt_omr(amt)}\n\n👤 من دفع؟",
-                [[{"label":"👤 حسين","data":"payer:حسين"},{"label":"👤 شوق","data":"payer:شوق"}],
-                 [{"label":"➕ شخص آخر","data":"payer:other"},{"label":"⏭ تخطي","data":"payer:skip"}]])
+            is_elec=result.get("is_electricity",False)
+            # Auto-detect electricity from description
+            if not is_elec:
+                is_elec=any(w in (desc+caption).lower() for w in ["كهرب","تعبئ","prepaid","electric","kwh"])
+            if is_elec:
+                # Register as electricity expense automatically
+                db_run("INSERT INTO entries (type,desc,amt,date,month,category) VALUES (?,?,?,?,?,?)",
+                       ("expense","فاتورة الكهرباء",amt,date,month,"مصاريف ثابتة"))
+                exp=db_one("SELECT id FROM expenses WHERE name=?",("فاتورة الكهرباء",))
+                if exp: db_run("UPDATE expenses SET last_paid=?,month=?,amount=? WHERE id=?",(date,month,amt,exp["id"]))
+                tg(chat,f"⚡ <b>تم تسجيل فاتورة الكهرباء!</b>\n💰 {fmt_omr(amt)}\n📅 {date}")
+            else:
+                db_run("INSERT INTO entries (type,desc,amt,date,month) VALUES (?,?,?,?,?)",("b",desc,amt,date,month))
+                pending[chat]={"waiting":"paid_by_photo","amt":amt}
+                tg_buttons(chat,f"✅ تم قراءة الفاتورة!\n📦 {desc}\n💰 {fmt_omr(amt)}\n\n👤 من دفع؟",
+                    [[{"label":"👤 حسين","data":"payer:حسين"},{"label":"👤 شوق","data":"payer:شوق"}],
+                     [{"label":"➕ شخص آخر","data":"payer:other"},{"label":"⏭ تخطي","data":"payer:skip"}]])
         else:
             pending[chat]={"waiting":"buy_amt","desc":caption or "مشتريات"}
             tg(chat,"🧾 كم المبلغ الإجمالي؟\nأرسل الرقم فقط: <code>3.520</code>")
