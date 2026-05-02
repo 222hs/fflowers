@@ -892,16 +892,19 @@ async function loadExpensesPanel(){
     const isPaid = e.month === month;
     const icon = icons[e.name] || '💼';
     const lastPaid = e.last_paid ? `آخر دفع: ${e.last_paid}` : 'لم يُدفع بعد';
+    // Find paid entry id for this expense this month
+    const paidEntry = (d.paid||[]).find(p => p.desc === e.name);
     return `<div class="exp-row">
       <div class="exp-ico">${icon}</div>
       <div class="exp-info">
         <div class="exp-name">${e.name}</div>
-        <div class="exp-last">${lastPaid}</div>
+        <div class="exp-last">${isPaid ? '✅ ' + lastPaid : lastPaid}</div>
       </div>
-      <div class="exp-amt">${fmt(e.amount)} ر.ع</div>
-      <button class="exp-pay-btn ${isPaid?'paid':''}" onclick="payExpense(${e.id},'${e.name}',${e.amount})">
-        ${isPaid?'✅ مدفوع':'💳 دفع'}
-      </button>
+      <div class="exp-amt" style="color:${isPaid?'var(--green-d)':'var(--rose-d)'};">${isPaid ? fmt(paidEntry ? paidEntry.amt : e.amount) : fmt(e.amount)} ر.ع</div>
+      ${isPaid && paidEntry ?
+        `<button onclick="delExpenseEntry(${paidEntry.id},'${e.name}',${e.id})" style="background:rgba(232,121,138,.12);border:1px solid rgba(232,121,138,.3);border-radius:8px;color:var(--rose-d);font-size:11px;font-weight:700;padding:6px 10px;cursor:pointer;font-family:Tajawal,sans-serif;flex-shrink:0;">🗑 إلغاء</button>` :
+        `<button class="exp-pay-btn" onclick="payExpense(${e.id},'${e.name}',${e.amount})">💳 دفع</button>`
+      }
     </div>`;
   }).join('');
 
@@ -924,11 +927,16 @@ async function loadExpensesPanel(){
   <button onclick="addExpensePrompt()" style="width:100%;padding:9px;border:1px dashed rgba(212,165,87,.4);border-radius:10px;background:rgba(255,255,255,0.4);color:var(--text3);font-family:Tajawal,sans-serif;font-size:12px;font-weight:600;cursor:pointer;margin-top:8px;">+ إضافة مصروف ثابت</button>`;
 }
 
-async function delExpenseEntry(id){
-  if(!confirm('حذف هذه الفاتورة؟')) return;
-  await api(`/api/expense_entries/${id}`, {method:'DELETE'});
+async function delExpenseEntry(entryId, name, expId){
+  if(!confirm(`إلغاء دفع "${name}"؟\nسيتم حذف الفاتورة وإعادتها لحالة "غير مدفوع"`)) return;
+  // Delete the entry
+  await api(`/api/expense_entries/${entryId}`, {method:'DELETE'});
+  // Reset the expense last_paid
+  await api(`/api/expenses/${expId}/reset`, {method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({month})});
   loadExpensesPanel(); load();
-  showToast('🗑️ تم الحذف');
+  showToast('✅ تم إلغاء الدفع');
 }
 
 async function payExpense(id, name, defaultAmt){
@@ -1753,6 +1761,16 @@ def api_del_expense(eid):
 def api_del_expense_entry(eid):
     """Delete a specific expense entry."""
     db_run("DELETE FROM entries WHERE id=? AND type='expense'", (eid,))
+    return jsonify({"ok": True})
+
+@app.route("/api/expenses/<int:eid>/reset", methods=["POST"])
+def api_reset_expense(eid):
+    """Reset expense paid status."""
+    d = request.json or {}
+    month_val = d.get("month", cur_month())
+    exp = db_one("SELECT * FROM expenses WHERE id=?", (eid,))
+    if exp and exp.get("month") == month_val:
+        db_run("UPDATE expenses SET last_paid=NULL, month=NULL WHERE id=?", (eid,))
     return jsonify({"ok": True})
 
 @app.route("/api/report/pdf")
