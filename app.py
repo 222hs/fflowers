@@ -691,17 +691,18 @@ def init_db():
         try:
             conn.run("ALTER TABLE entries RENAME COLUMN desc TO description")
         except: pass
-        cur.execute("""
+        conn.run("""
             CREATE TABLE IF NOT EXISTS shelves (
                 id      SERIAL PRIMARY KEY,
                 name    TEXT NOT NULL UNIQUE,
-                color   TEXT DEFAULT '#e8547a'
+                color   TEXT DEFAULT '#e8547a',
+                rent    REAL DEFAULT 0
             )
         """)
-        cur.execute("""
+        conn.run("""
             CREATE TABLE IF NOT EXISTS shelf_products (
                 id       SERIAL PRIMARY KEY,
-                shelf_id INTEGER NOT NULL REFERENCES shelves(id) ON DELETE CASCADE,
+                shelf_id INTEGER NOT NULL,
                 name     TEXT NOT NULL,
                 price    REAL NOT NULL,
                 qty      INTEGER NOT NULL DEFAULT 0,
@@ -709,12 +710,10 @@ def init_db():
                 created  TIMESTAMP DEFAULT NOW()
             )
         """)
-        # Insert default shelves
-        # Add rent column if not exists
         try:
-            cur.execute("ALTER TABLE shelves ADD COLUMN IF NOT EXISTS rent REAL DEFAULT 0")
+            conn.run("ALTER TABLE shelves ADD COLUMN IF NOT EXISTS rent REAL DEFAULT 0")
         except: pass
-        cur.execute("""
+        conn.run("""
             INSERT INTO shelves (name, color, rent) VALUES
               ('ريحان',      '#f07090', 10),
               ('فتحية',      '#4ecdc4', 8),
@@ -722,14 +721,11 @@ def init_db():
               ('اكسسوارات', '#f5c842', 18)
             ON CONFLICT (name) DO UPDATE SET rent = EXCLUDED.rent
         """)
-        # Migrations
-        for col in ["paid_by","payment_method","sale_time"]:
+        for col in ["paid_by","payment_method","sale_time","shelf_id"]:
             try:
-                cur.execute(f"ALTER TABLE entries ADD COLUMN IF NOT EXISTS {col} TEXT DEFAULT NULL")
-            except:
-                pass
-        conn.commit()
-        cur.close()
+                conn.run(f"ALTER TABLE entries ADD COLUMN IF NOT EXISTS {col} TEXT DEFAULT NULL")
+            except: pass
+        conn.close()
         conn.close()
     else:
         import sqlite3 as _sq
@@ -1154,16 +1150,13 @@ def api_add():
             d.get("payment_method"), d.get("sale_time"))
     if USE_PG:
         conn = get_db()
-        cur = conn.cursor()
-        cur.execute(
-            "INSERT INTO entries (type,desc,amt,date,month,img,paid_by,payment_method,sale_time) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s)",
-            vals)
-        conn.commit(); cur.close(); conn.close()
+        conn.run("INSERT INTO entries (type,description,amt,date,month,img,paid_by,payment_method,sale_time) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s)", *vals)
+        conn.close()
     else:
         import sqlite3 as _sq
         conn = _sq.connect(DB_PATH)
         conn.execute(
-            "INSERT INTO entries (type,description,amt,date,month,img,paid_by,payment_method,sale_time) VALUES (?,?,?,?,?,?,?,?,?)",
+            "INSERT INTO entries (type,desc,amt,date,month,img,paid_by,payment_method,sale_time) VALUES (?,?,?,?,?,?,?,?,?)",
             vals)
         conn.commit(); conn.close()
     return jsonify({"ok": True})
@@ -1172,9 +1165,8 @@ def api_add():
 def api_del(eid):
     if USE_PG:
         conn = get_db()
-        cur = conn.cursor()
-        cur.execute("DELETE FROM entries WHERE id=%s", (eid,))
-        conn.commit(); cur.close(); conn.close()
+        conn.run("DELETE FROM entries WHERE id=%s", eid)
+        conn.close()
     else:
         import sqlite3 as _sq
         conn = _sq.connect(DB_PATH)
