@@ -1245,6 +1245,15 @@ def webhook():
         tg(chat,"لم أفهم 🤔\n\nجرّب:\n<code>بعت باقة بـ 4.500</code>\n<code>اشتريت ورد بـ 8.000</code>\n\n/help للمساعدة")
     return "ok"
 
+@app.route("/turso_debug")
+def turso_debug():
+    """Show raw Turso response for debugging."""
+    try:
+        res = turso_exec("SELECT * FROM shelves")
+        return jsonify({"raw": res})
+    except Exception as e:
+        return jsonify({"error": str(e)})
+
 @app.route("/init_shelves")
 def init_shelves():
     shelves = [
