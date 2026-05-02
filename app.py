@@ -511,7 +511,18 @@ header {
     <div id="form-s">
       <div class="fgrid fg2"><div class="fld"><label>اسم المنتج</label><input id="sDesc" type="text" placeholder="باقة ورد، عطر..."/></div>
         <div class="fld"><label>السعر (ر.ع)</label><input id="sAmt" type="number" placeholder="0.000" step="0.001"/></div></div>
-      <div class="fgrid fg2" style="margin-bottom:14px;">
+      <div class="fgrid fg3" style="margin-bottom:14px;">
+        <div class="fld"><label>🏷️ الفئة</label>
+          <select id="sCat"><option value="">— اختر —</option>
+            <option value="ورد وباقات">🌸 ورد وباقات</option>
+            <option value="طباعة">🖨️ طباعة 3D</option>
+            <option value="تاجات">👑 تاجات</option>
+            <option value="عطور">🌿 عطور</option>
+            <option value="اكسسوارات">💍 اكسسوارات</option>
+            <option value="هدايا">🎁 هدايا وتغليف</option>
+            <option value="تجفيف">🌾 ورد مجفف</option>
+            <option value="صناعي">🎨 صناعي وفوم</option>
+            <option value="أخرى">✨ أخرى</option></select></div>
         <div class="fld"><label>💳 طريقة الدفع</label>
           <select id="sPay"><option value="">— اختر —</option>
             <option value="كاش 💵">💵 كاش</option><option value="فيزا 💳">💳 فيزا</option><option value="تحويل 🏦">🏦 تحويل</option></select></div>
@@ -685,10 +696,11 @@ function renderKPI(sales,buys){
 
 function pb(pm){if(!pm)return'';const c=pm.includes('كاش')?'epb-c':pm.includes('فيزا')?'epb-v':'epb-t';return`<span class="epb ${c}">${pm}</span>`;}
 function renderLists(sales,buys){
+  const catIcons={"ورد وباقات":"🌸","طباعة":"🖨️","تاجات":"👑","عطور":"🌿","اكسسوارات":"💍","هدايا":"🎁","تجفيف":"🌾","صناعي":"🎨","أخرى":"✨"};
   document.getElementById('sl').innerHTML=sales.length?sales.map(e=>`
-    <div class="entry es"><div class="eph">🌸</div>
+    <div class="entry es"><div class="eph">${catIcons[e.category]||'🌸'}</div>
       <div class="einfo"><div class="edesc">${e.desc}</div>
-        <div class="emeta"><span class="edate">${e.date}</span>${pb(e.payment_method)}${e.shelf_id?`<span class="epb epb-s">🗄️رف</span>`:''}</div></div>
+        <div class="emeta"><span class="edate">${e.date}</span>${pb(e.payment_method)}${e.category?`<span class="epb" style="background:rgba(212,165,87,.12);color:#d4a557">${e.category}</span>`:''}${e.shelf_id?`<span class="epb epb-s">🗄️رف</span>`:''}</div></div>
       <div class="eamt inc">+${fmt(e.amt)} ر.ع</div>
       <button class="delbtn" onclick="del(${e.id})">🗑</button></div>`).join('')
     :`<div class="empty"><div class="ei">🌷</div><p>لا توجد مبيعات<br>أضف من هنا أو عبر التيليغرام</p></div>`;
@@ -713,10 +725,12 @@ async function addSale(){
   const desc=document.getElementById('sDesc').value.trim()||'مبيعة';
   const amt=parseFloat(document.getElementById('sAmt').value);
   const pay=document.getElementById('sPay').value;
+  const cat=document.getElementById('sCat').value;
   const note=document.getElementById('sNote').value.trim();
   if(!amt||amt<=0){showToast('⚠️ أدخل مبلغاً صحيحاً');return;}
-  await api('/api/entries',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({type:'s',desc:note?`${desc} — ${note}`:desc,amt,payment_method:pay||null,month})});
-  document.getElementById('sDesc').value='';document.getElementById('sAmt').value='';document.getElementById('sPay').value='';document.getElementById('sNote').value='';
+  await api('/api/entries',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({type:'s',desc:note?`${desc} — ${note}`:desc,amt,payment_method:pay||null,category:cat||null,month})});
+  document.getElementById('sDesc').value='';document.getElementById('sAmt').value='';
+  document.getElementById('sPay').value='';document.getElementById('sCat').value='';document.getElementById('sNote').value='';
   load();showToast('✅ تمت إضافة المبيعة');
 }
 async function addBuy(){
@@ -941,6 +955,7 @@ def init_db():
         "ALTER TABLE entries ADD COLUMN sale_time TEXT",
         "ALTER TABLE entries ADD COLUMN shelf_id INTEGER",
         "ALTER TABLE shelves ADD COLUMN rent REAL DEFAULT 0",
+        "ALTER TABLE entries ADD COLUMN category TEXT",
     ]
     if USE_TURSO:
         for sql in sqls:
@@ -1015,6 +1030,25 @@ def tg_buttons(chat_id, text, buttons):
 
 SALE_WORDS=["بعت","مبيعة","بيع","بعثت","باعت"]
 BUY_WORDS=["اشتريت","شريت","مشتريات","شراء","دفعت","فاتورة","طلبية"]
+
+CATEGORIES = {
+    "طباعة": ["طباعة","طابعة","3d","ثري دي","ثلاثية","طباعه"],
+    "تاجات": ["تاج","تاجات","كراون","crown"],
+    "ورد وباقات": ["ورد","باقة","باقه","وردة","زهور","زهرة","بوكيه","بوكيه"],
+    "عطور": ["عطر","عطور","برفان","perfume","بخور"],
+    "اكسسوارات": ["اكسسوار","اكسسوارات","خاتم","سوار","عقد","قلادة","حلق"],
+    "هدايا": ["هدية","هدايا","gift","تغليف","تغليفه"],
+    "تجفيف": ["مجفف","مجففة","dried","ورد مجفف"],
+    "صناعي": ["صناعي","اصطناعي","فوم","foam"],
+}
+
+def detect_category(text):
+    text_lower = text.lower()
+    for cat, keywords in CATEGORIES.items():
+        for kw in keywords:
+            if kw in text_lower:
+                return cat
+    return None
 
 def parse_text(text):
     text=text.strip()
@@ -1091,10 +1125,10 @@ def api_get():
 def api_add():
     d=request.json
     month=d.get("month",cur_month())
-    db_run("INSERT INTO entries (type,desc,amt,date,month,img,paid_by,payment_method,sale_time) VALUES (?,?,?,?,?,?,?,?,?)",
+    db_run("INSERT INTO entries (type,desc,amt,date,month,img,paid_by,payment_method,sale_time,category) VALUES (?,?,?,?,?,?,?,?,?,?)",
         (d["type"],d["desc"],float(d["amt"]),
          d.get("date",datetime.now().strftime("%d/%m/%Y")),
-         month,d.get("img"),d.get("paid_by"),d.get("payment_method"),d.get("sale_time")))
+         month,d.get("img"),d.get("paid_by"),d.get("payment_method"),d.get("sale_time"),d.get("category")))
     return jsonify({"ok":True})
 
 @app.route("/api/entries/<int:eid>",methods=["DELETE"])
@@ -1251,7 +1285,23 @@ def webhook():
         tg(chat,f"✅ طريقة الدفع: {pay}"); return "ok"
 
     if text in ["/start","/help"]:
-        tg(chat,"🌹 <b>فيروز فلورز</b>\n\n🌸 <b>مبيعة:</b>\n<code>بعت باقة بـ 5.500</code>\n\n📦 <b>مشتريات:</b>\n<code>اشتريت زهور بـ 12.000</code>\n\n🧾 <b>فاتورة:</b> أرسل صورة\n\n📊 <b>تقرير:</b> /report\n\n👤 <b>من دفع:</b> /من_دفع")
+        tg(chat,
+           "🌹 <b>فيروز فلورز</b>\n\n"
+           "🌸 <b>مبيعة:</b>\n"
+           "<code>بعت باقة بـ 5.500</code>\n"
+           "<code>بعت طباعة 3d بـ 8.000 كاش</code>\n"
+           "<code>بعت تاج بـ 3.000 فيزا</code>\n\n"
+           "📦 <b>مشتريات:</b>\n"
+           "<code>اشتريت زهور بـ 12.000</code>\n\n"
+           "🗄️ <b>بيع من الرف:</b>\n"
+           "<code>/رف ريحان</code> — عرض منتجات رف ريحان\n"
+           "<code>/رف فتحية</code>\n"
+           "<code>/رف فطوم</code>\n"
+           "<code>/رف اكسسوارات</code>\n\n"
+           "🧾 <b>فاتورة:</b> أرسل صورة\n\n"
+           "📊 /report — تقرير الشهر\n"
+           "👤 /من_دفع — تفصيل المشتريات\n"
+           "📈 /فئات — مبيعات حسب الفئة")
         return "ok"
 
     if text=="/report":
@@ -1264,6 +1314,39 @@ def webhook():
             pd[p]=pd.get(p,0)+en["amt"]
         pl="\n".join(f"  👤 {k}: {fmt_omr(v)}" for k,v in pd.items()) or "  غير محدد"
         tg(chat,f"📊 <b>تقرير {month}</b>\n\n🌸 المبيعات: {fmt_omr(ts)} ({sc})\n📦 المشتريات: {fmt_omr(tb)} ({bc})\n━━━━━━\n{e} الربح: {fmt_omr(tp)}\n\n💳 من دفع:\n{pl}")
+        return "ok"
+
+    if text == "/فئات":
+        s,_=get_month_data(month)
+        cats={}
+        for e in s:
+            c=e.get("category") or "أخرى"
+            if c not in cats: cats[c]={"t":0,"c":0}
+            cats[c]["t"]+=e["amt"]; cats[c]["c"]+=1
+        cats_sorted=sorted(cats.items(),key=lambda x:-x[1]["t"])
+        lines="\n".join(f"🏷️ <b>{k}</b>: {fmt_omr(v['t'])} ({v['c']} مبيعة)" for k,v in cats_sorted) if cats_sorted else "لا توجد مبيعات"
+        tg(chat,f"📈 <b>مبيعات حسب الفئة — {month}</b>\n\n{lines}")
+        return "ok"
+
+    # Shelf commands: /رف ريحان etc
+    if text.startswith("/رف"):
+        shelf_name=text.replace("/رف","").strip()
+        if not shelf_name:
+            shelves=db_get("SELECT * FROM shelves ORDER BY id")
+            lines="\n".join(f"🗄️ /رف {s['name']} — إيجار {fmt_omr(s.get('rent',0))}" for s in shelves)
+            tg(chat,f"🗄️ <b>الرفوف المتاحة:</b>\n\n{lines}"); return "ok"
+        shelf=db_one("SELECT * FROM shelves WHERE name=?",(shelf_name,))
+        if not shelf:
+            tg(chat,f"❌ ما وجدت رف اسمه '{shelf_name}'\n\nالرفوف: ريحان، فتحية، فطوم، اكسسوارات")
+            return "ok"
+        prods=db_get("SELECT * FROM shelf_products WHERE shelf_id=? AND qty>0 ORDER BY name",(shelf["id"],))
+        if not prods:
+            tg(chat,f"🗄️ رف <b>{shelf_name}</b> — لا توجد منتجات متاحة")
+            return "ok"
+        lines="\n".join(f"{'▫️'} {p['name']} — {fmt_omr(p['price'])} × {p['qty']} قطعة" for p in prods)
+        tg(chat,
+           f"🗄️ <b>رف {shelf_name}</b>\n\n{lines}\n\n"
+           f"للبيع أرسل مثلاً:\n<code>بعت {prods[0]['name']} من رف {shelf_name} بـ {prods[0]['price']}</code>")
         return "ok"
 
     if text in ["/من_دفع","/mandafa3"]:
@@ -1279,24 +1362,38 @@ def webhook():
     parsed=parse_text(text)
     if parsed["found"]:
         etype=parsed["type"]; desc=parsed["desc"]; amt=parsed["amt"]
+        # Detect if sale is from a shelf
+        shelf_id_detected=None
+        for sname in ["ريحان","فتحية","فطوم","اكسسوارات"]:
+            if sname in text:
+                shelf=db_one("SELECT id FROM shelves WHERE name=?",(sname,))
+                if shelf:
+                    shelf_id_detected=shelf["id"]
+                    # Auto-decrease qty if product name matches
+                    prod=db_one("SELECT * FROM shelf_products WHERE shelf_id=? AND name LIKE ? AND qty>0",
+                               (shelf["id"],f"%{desc}%"))
+                    if prod and etype=="s":
+                        db_run("UPDATE shelf_products SET qty=qty-1 WHERE id=? AND qty>0",(prod["id"],))
+                    break
         if etype=="b":
             pending[chat]={"waiting":"paid_by","desc":desc,"amt":amt,"date":date,"month":month}
             tg_buttons(chat,f"📦 <b>مشتريات {fmt_omr(amt)}</b>\n\n👤 من دفع؟",
                 [[{"label":"👤 حسين","data":"payer:حسين"},{"label":"👤 شوق","data":"payer:شوق"}],
                  [{"label":"➕ شخص آخر","data":"payer:other"},{"label":"⏭ تخطي","data":"payer:skip"}]])
         else:
+            cat=detect_category(text) or detect_category(desc)
             pay=None
             if any(w in text for w in ["كاش","نقد"]): pay="كاش 💵"
             elif any(w in text for w in ["فيزا","بطاقة"]): pay="فيزا 💳"
             elif "تحويل" in text: pay="تحويل 🏦"
-            db_run("INSERT INTO entries (type,desc,amt,date,month,payment_method) VALUES (?,?,?,?,?,?)",
-                (etype,desc,amt,date,month,pay))
+            db_run("INSERT INTO entries (type,desc,amt,date,month,payment_method,category,shelf_id) VALUES (?,?,?,?,?,?,?,?)",
+                (etype,desc,amt,date,month,pay,cat,shelf_id_detected))
+            cat_line=f"\n🏷️ {cat}" if cat else ""
             if pay:
-                tg(chat,f"✅ مبيعة {fmt_omr(amt)} — {pay}")
+                tg(chat,f"✅ مبيعة {fmt_omr(amt)} — {pay}{cat_line}")
             else:
                 pending[chat]={"waiting":"sale_payment"}
-                db_run("INSERT INTO entries (type,desc,amt,date,month) VALUES (?,?,?,?,?)",("s",desc,amt,date,month))
-                tg_buttons(chat,f"🌸 <b>مبيعة {fmt_omr(amt)}</b>\n\n💳 طريقة الدفع؟",
+                tg_buttons(chat,f"🌸 <b>مبيعة {fmt_omr(amt)}</b>{cat_line}\n\n💳 طريقة الدفع؟",
                     [[{"label":"💵 كاش","data":"pay:كاش 💵"},{"label":"💳 فيزا","data":"pay:فيزا 💳"},{"label":"🏦 تحويل","data":"pay:تحويل 🏦"}]])
     else:
         tg(chat,"لم أفهم 🤔\n\nجرّب:\n<code>بعت باقة بـ 4.500</code>\n<code>اشتريت ورد بـ 8.000</code>\n\n/help للمساعدة")
