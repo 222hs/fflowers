@@ -892,17 +892,18 @@ async function loadExpensesPanel(){
     const isPaid = e.month === month;
     const icon = icons[e.name] || '💼';
     const lastPaid = e.last_paid ? `آخر دفع: ${e.last_paid}` : 'لم يُدفع بعد';
-    // Find paid entry id for this expense this month
-    const paidEntry = (d.paid||[]).find(p => p.desc === e.name);
+    // Find paid entry - match by desc containing expense name
+    const paidEntry = (d.paid||[]).find(p => p.desc && p.desc.includes(e.name.split(' ')[0]));
+    const displayAmt = isPaid && paidEntry ? paidEntry.amt : e.amount;
     return `<div class="exp-row">
       <div class="exp-ico">${icon}</div>
       <div class="exp-info">
         <div class="exp-name">${e.name}</div>
         <div class="exp-last">${isPaid ? '✅ ' + lastPaid : lastPaid}</div>
       </div>
-      <div class="exp-amt" style="color:${isPaid?'var(--green-d)':'var(--rose-d)'};">${isPaid ? fmt(paidEntry ? paidEntry.amt : e.amount) : fmt(e.amount)} ر.ع</div>
-      ${isPaid && paidEntry ?
-        `<button onclick="delExpenseEntry(${paidEntry.id},'${e.name}',${e.id})" style="background:rgba(232,121,138,.12);border:1px solid rgba(232,121,138,.3);border-radius:8px;color:var(--rose-d);font-size:11px;font-weight:700;padding:6px 10px;cursor:pointer;font-family:Tajawal,sans-serif;flex-shrink:0;">🗑 إلغاء</button>` :
+      <div class="exp-amt" style="color:${isPaid?'var(--green-d)':'var(--rose-d)'};">${fmt(displayAmt)} ر.ع</div>
+      ${isPaid ?
+        `<button onclick="cancelExpense(${e.id},'${e.name}')" style="background:rgba(232,121,138,.12);border:1px solid rgba(232,121,138,.3);border-radius:8px;color:var(--rose-d);font-size:11px;font-weight:700;padding:6px 10px;cursor:pointer;font-family:Tajawal,sans-serif;flex-shrink:0;white-space:nowrap;">🗑 إلغاء</button>` :
         `<button class="exp-pay-btn" onclick="payExpense(${e.id},'${e.name}',${e.amount})">💳 دفع</button>`
       }
     </div>`;
@@ -928,13 +929,24 @@ async function loadExpensesPanel(){
 }
 
 async function delExpenseEntry(entryId, name, expId){
-  if(!confirm(`إلغاء دفع "${name}"؟\nسيتم حذف الفاتورة وإعادتها لحالة "غير مدفوع"`)) return;
-  // Delete the entry
+  if(!confirm(`إلغاء دفع "${name}"؟`)) return;
   await api(`/api/expense_entries/${entryId}`, {method:'DELETE'});
-  // Reset the expense last_paid
   await api(`/api/expenses/${expId}/reset`, {method:'POST',
-    headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({month})});
+    headers:{'Content-Type':'application/json'},body:JSON.stringify({month})});
+  loadExpensesPanel(); load();
+  showToast('✅ تم إلغاء الدفع');
+}
+
+async function cancelExpense(expId, name){
+  if(!confirm(`إلغاء دفع "${name}"؟\nسيتم حذف الفاتورة وإعادتها لغير مدفوع`)) return;
+  // Find and delete all expense entries for this name this month
+  const d = await api(`/api/expenses?month=${month}`);
+  const entries = (d.paid||[]).filter(p => p.desc && p.desc.includes(name.split(' ')[0]));
+  for(const e of entries){
+    await api(`/api/expense_entries/${e.id}`, {method:'DELETE'});
+  }
+  await api(`/api/expenses/${expId}/reset`, {method:'POST',
+    headers:{'Content-Type':'application/json'},body:JSON.stringify({month})});
   loadExpensesPanel(); load();
   showToast('✅ تم إلغاء الدفع');
 }
