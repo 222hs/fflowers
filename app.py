@@ -1245,6 +1245,26 @@ def webhook():
         tg(chat,"لم أفهم 🤔\n\nجرّب:\n<code>بعت باقة بـ 4.500</code>\n<code>اشتريت ورد بـ 8.000</code>\n\n/help للمساعدة")
     return "ok"
 
+@app.route("/init_shelves")
+def init_shelves():
+    shelves = [
+        ('ريحان','#f07090',10),
+        ('فتحية','#4ecdc4',8),
+        ('فطوم','#b794f4',8),
+        ('اكسسوارات','#f5c842',18),
+    ]
+    results = []
+    for name, color, rent in shelves:
+        existing = db_one("SELECT id FROM shelves WHERE name=?", (name,))
+        if existing:
+            db_run("UPDATE shelves SET color=?, rent=? WHERE name=?", (color, rent, name))
+            results.append(f"updated: {name}")
+        else:
+            db_run("INSERT INTO shelves (name,color,rent) VALUES (?,?,?)", (name, color, rent))
+            results.append(f"inserted: {name}")
+    all_shelves = db_get("SELECT * FROM shelves")
+    return jsonify({"ok": True, "results": results, "shelves": all_shelves})
+
 @app.route("/set_webhook")
 def set_webhook():
     host=request.host_url.rstrip("/")
