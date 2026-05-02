@@ -883,7 +883,7 @@ loadExpensesPanel();
 /* ── EXPENSES ── */
 async function loadExpensesPanel(){
   const d = await api(`/api/expenses?month=${month}`);
-  const icons = {"راتب العامل":"👷","إيجار المحل":"🏪","فاتورة الكهرباء":"⚡"};
+  const icons = {"راتب العامل":"👷","إيجار المحل":"🏪","تعبئة كهرباء":"⚡"};
   const wrap = document.getElementById('expensesWrap');
   if(!wrap) return;
 
@@ -1188,7 +1188,7 @@ def init_db():
     defaults = [
         ("راتب العامل", 220, "monthly"),
         ("إيجار المحل", 100, "monthly"),
-        ("فاتورة الكهرباء", 0, "variable"),
+        ("تعبئة كهرباء", 0, "variable"),
     ]
     for name, amt, typ in defaults:
         if USE_TURSO:
@@ -1512,11 +1512,11 @@ def webhook():
                     entry_date = date; entry_month = month
                 # Save as expense (NOT as buy)
                 db_run("INSERT INTO entries (type,desc,amt,date,month,category) VALUES (?,?,?,?,?,?)",
-                       ("expense","فاتورة الكهرباء",amt,entry_date,entry_month,"مصاريف ثابتة"))
-                exp=db_one("SELECT id FROM expenses WHERE name=?",("فاتورة الكهرباء",))
+                       ("expense","تعبئة كهرباء",amt,entry_date,entry_month,"مصاريف ثابتة"))
+                exp=db_one("SELECT id FROM expenses WHERE name=?",("تعبئة كهرباء",))
                 if exp: db_run("UPDATE expenses SET last_paid=?,month=?,amount=? WHERE id=?",(entry_date,entry_month,amt,exp["id"]))
                 tg(chat,
-                   f"⚡ <b>تم تسجيل فاتورة الكهرباء!</b>\n"
+                   f"⚡ <b>تم تسجيل تعبئة كهرباء!</b>\n"
                    f"💰 {fmt_omr(amt)}\n"
                    f"📅 {entry_date}\n"
                    f"✅ أُضيفت في المصاريف الثابتة (ليس المشتريات)")
@@ -1529,7 +1529,7 @@ def webhook():
         else:
             if caption_is_elec:
                 pending[chat]={"waiting":"elec_amt"}
-                tg(chat,"⚡ ما قدرت أقرأ الفاتورة بوضوح\nكم مبلغ فاتورة الكهرباء؟\nأرسل الرقم فقط: <code>45.500</code>")
+                tg(chat,"⚡ ما قدرت أقرأ الفاتورة بوضوح\nكم مبلغ تعبئة كهرباء؟\nأرسل الرقم فقط: <code>45.500</code>")
             else:
                 pending[chat]={"waiting":"buy_amt","desc":caption or "مشتريات"}
                 tg(chat,"🧾 ما قدرت أقرأ الفاتورة بوضوح\nكم المبلغ الإجمالي؟\nأرسل الرقم فقط: <code>3.520</code>")
@@ -1544,11 +1544,11 @@ def webhook():
             amt = float(text.replace(",","."))
             date_now = datetime.now().strftime("%d/%m/%Y")
             db_run("INSERT INTO entries (type,desc,amt,date,month,category) VALUES (?,?,?,?,?,?)",
-                   ("expense","فاتورة الكهرباء",amt,date_now,month,"مصاريف ثابتة"))
-            exp=db_one("SELECT id FROM expenses WHERE name=?",("فاتورة الكهرباء",))
+                   ("expense","تعبئة كهرباء",amt,date_now,month,"مصاريف ثابتة"))
+            exp=db_one("SELECT id FROM expenses WHERE name=?",("تعبئة كهرباء",))
             if exp: db_run("UPDATE expenses SET last_paid=?,month=?,amount=? WHERE id=?",(date_now,month,amt,exp["id"]))
             del pending[chat]
-            tg(chat,f"⚡ <b>تم تسجيل فاتورة الكهرباء!</b>\n💰 {fmt_omr(amt)}\n📅 {date_now}")
+            tg(chat,f"⚡ <b>تم تسجيل تعبئة كهرباء!</b>\n💰 {fmt_omr(amt)}\n📅 {date_now}")
         except:
             tg(chat,"⚠️ أرسل رقم صحيح مثل: <code>45.500</code>")
         return "ok"
@@ -1695,9 +1695,9 @@ def webhook():
         "راتب": ("راتب العامل", 220),
         "إيجار المحل": ("إيجار المحل", 100),
         "إيجار": ("إيجار المحل", 100),
-        "كهرباء": ("فاتورة الكهرباء", 0),
-        "كهربا": ("فاتورة الكهرباء", 0),
-        "تعبئة": ("فاتورة الكهرباء", 0),
+        "كهرباء": ("تعبئة كهرباء", 0),
+        "كهربا": ("تعبئة كهرباء", 0),
+        "تعبئة": ("تعبئة كهرباء", 0),
     }
     for kw, (exp_name, default_amt) in exp_keywords.items():
         if kw in text and any(w in text for w in ["دفعت","دفع","سددت","سديت"]):
@@ -2017,6 +2017,18 @@ def api_list_expense_entries():
     else:
         entries = db_get("SELECT * FROM entries WHERE type='expense' ORDER BY created DESC LIMIT 50")
     return jsonify(entries)
+
+@app.route("/fix_elec")
+def fix_elec():
+    """Rename فاتورة الكهرباء to تعبئة كهرباء and reset amount."""
+    try:
+        db_run("UPDATE expenses SET name='تعبئة كهرباء', amount=0 WHERE name='فاتورة الكهرباء'")
+        db_run("UPDATE expenses SET amount=0 WHERE name='تعبئة كهرباء'")
+        db_run("UPDATE entries SET desc='تعبئة كهرباء' WHERE desc='فاتورة الكهرباء'")
+        result = db_get("SELECT * FROM expenses WHERE name='تعبئة كهرباء'")
+        return jsonify({"ok": True, "expense": result})
+    except Exception as e:
+        return jsonify({"error": str(e)})
 
 @app.route("/fix_expenses")
 def fix_expenses():
