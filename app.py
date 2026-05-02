@@ -1256,7 +1256,9 @@ def debug():
         "database": "Turso ✅" if USE_TURSO else "SQLite (local)",
         "total_entries": cnt,
         "turso": USE_TURSO,
-        "bot": bool(BOT_TOKEN)
+        "bot": bool(BOT_TOKEN),
+        "groq": bool(GROQ_KEY),
+        "groq_key_prefix": GROQ_KEY[:8]+"..." if GROQ_KEY else "NOT SET"
     })
 
 @app.route("/api/entries")
