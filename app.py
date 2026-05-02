@@ -1,8 +1,18 @@
 import os
-import sqlite3
 import requests
 from datetime import datetime
 from flask import Flask, request, jsonify, Response
+
+# PostgreSQL support
+try:
+    import psycopg2
+    import psycopg2.extras
+    USE_PG = bool(os.environ.get("DATABASE_URL"))
+except ImportError:
+    USE_PG = False
+
+if not USE_PG:
+    import sqlite3
 
 app = Flask(__name__)
 
@@ -12,198 +22,256 @@ HTML_PAGE = """<!DOCTYPE html>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>فيروز فلورز</title>
-<link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@300;400;500;700;900&family=Playfair+Display:ital,wght@0,700;1,400&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@300;400;500;700;900&family=Playfair+Display:wght@700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
 <style>
-:root {
+:root{
   --ink:#0d0a0e;--deep:#130f18;--surface:#1a1424;--card:#211932;--card2:#261d38;
-  --border:rgba(255,255,255,0.07);--border2:rgba(255,255,255,0.12);
-  --rose:#e8547a;--rose2:#f07090;--rose-glow:rgba(232,84,122,0.25);
-  --mint:#4ecdc4;--mint-glow:rgba(78,205,196,0.2);
-  --gold:#f5c842;--gold-glow:rgba(245,200,66,0.2);
-  --lavender:#b794f4;--text:#f0eaf8;--text2:#a89bc2;--text3:#6b5f85;
-  --pos:#4ade80;--neg:#fb7185;
+  --border:rgba(255,255,255,.07);--border2:rgba(255,255,255,.13);
+  --rose:#e8547a;--rose2:#f07090;--rglow:rgba(232,84,122,.25);
+  --mint:#4ecdc4;--mglow:rgba(78,205,196,.2);
+  --gold:#f5c842;--gglow:rgba(245,200,66,.2);
+  --lav:#b794f4;--text:#f0eaf8;--text2:#a89bc2;--text3:#6b5f85;
+  --pos:#4ade80;--neg:#fb7185;--cash:#34d399;--visa:#60a5fa;--transfer:#a78bfa;
 }
 *,*::before,*::after{margin:0;padding:0;box-sizing:border-box;}
-body{font-family:'Tajawal',sans-serif;background:var(--ink);color:var(--text);min-height:100vh;overflow-x:hidden;}
-.bg{position:fixed;inset:0;z-index:0;overflow:hidden;pointer-events:none;}
-.orb{position:absolute;border-radius:50%;filter:blur(80px);opacity:.18;animation:drift 18s ease-in-out infinite alternate;}
-.orb:nth-child(1){width:520px;height:520px;background:radial-gradient(circle,#e8547a,transparent);top:-10%;right:-8%;animation-duration:20s;}
-.orb:nth-child(2){width:400px;height:400px;background:radial-gradient(circle,#4ecdc4,transparent);bottom:10%;left:-5%;animation-duration:25s;animation-delay:-8s;}
-.orb:nth-child(3){width:300px;height:300px;background:radial-gradient(circle,#b794f4,transparent);top:40%;left:30%;animation-duration:30s;animation-delay:-15s;}
-@keyframes drift{0%{transform:translate(0,0) scale(1);}100%{transform:translate(40px,60px) scale(1.1);}}
-.petal{position:fixed;pointer-events:none;z-index:0;opacity:0;animation:fall linear infinite;}
-@keyframes fall{0%{transform:translateY(-30px) rotate(0deg);opacity:0;}10%{opacity:.35;}90%{opacity:.15;}100%{transform:translateY(100vh) rotate(400deg);opacity:0;}}
+body{font-family:'Tajawal',sans-serif;background:var(--ink);color:var(--text);min-height:100vh;}
+.bg{position:fixed;inset:0;z-index:0;pointer-events:none;overflow:hidden;}
+.orb{position:absolute;border-radius:50%;filter:blur(80px);opacity:.15;animation:drift 20s ease-in-out infinite alternate;}
+.orb:nth-child(1){width:500px;height:500px;background:radial-gradient(circle,#e8547a,transparent);top:-10%;right:-5%;}
+.orb:nth-child(2){width:400px;height:400px;background:radial-gradient(circle,#4ecdc4,transparent);bottom:5%;left:-5%;animation-delay:-10s;}
+.orb:nth-child(3){width:280px;height:280px;background:radial-gradient(circle,#b794f4,transparent);top:45%;left:35%;animation-delay:-18s;}
+@keyframes drift{to{transform:translate(30px,40px) scale(1.08);}}
 #app{position:relative;z-index:1;}
-header{padding:0 40px;height:76px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--border);background:rgba(13,10,14,.75);backdrop-filter:blur(24px);position:sticky;top:0;z-index:100;}
-.brand{display:flex;align-items:center;gap:14px;}
-.emblem{width:46px;height:46px;background:linear-gradient(135deg,var(--rose),var(--lavender));border-radius:13px;display:flex;align-items:center;justify-content:center;font-size:22px;box-shadow:0 0 28px var(--rose-glow);animation:pulse 3s ease-in-out infinite;}
-@keyframes pulse{0%,100%{box-shadow:0 0 24px var(--rose-glow);}50%{box-shadow:0 0 44px rgba(232,84,122,.5);}}
-.bname{font-family:'Playfair Display',serif;font-size:19px;font-weight:700;background:linear-gradient(90deg,#fff,var(--rose2),var(--lavender));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;}
-.bsub{font-size:11px;color:var(--text3);letter-spacing:1px;}
-.mpill{display:flex;align-items:center;gap:9px;background:var(--card);border:1px solid var(--border2);padding:8px 15px;border-radius:40px;transition:.2s;}
-.mpill:hover{border-color:var(--rose);box-shadow:0 0 16px var(--rose-glow);}
-.mpill label{font-size:12px;color:var(--text3);}
-.mpill select{background:transparent;border:none;color:var(--text);font-family:'Tajawal',sans-serif;font-size:14px;font-weight:600;cursor:pointer;outline:none;}
+
+/* HEADER */
+header{padding:0 32px;height:70px;display:flex;align-items:center;justify-content:space-between;
+  border-bottom:1px solid var(--border);background:rgba(13,10,14,.8);backdrop-filter:blur(20px);
+  position:sticky;top:0;z-index:100;}
+.brand{display:flex;align-items:center;gap:12px;}
+.emblem{width:42px;height:42px;background:linear-gradient(135deg,var(--rose),var(--lav));border-radius:12px;
+  display:flex;align-items:center;justify-content:center;font-size:20px;
+  box-shadow:0 0 24px var(--rglow);animation:glow 3s ease-in-out infinite;}
+@keyframes glow{0%,100%{box-shadow:0 0 24px var(--rglow);}50%{box-shadow:0 0 44px rgba(232,84,122,.5);}}
+.bname{font-family:'Playfair Display',serif;font-size:18px;font-weight:700;
+  background:linear-gradient(90deg,#fff,var(--rose2),var(--lav));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;}
+.bsub{font-size:10px;color:var(--text3);letter-spacing:1px;}
+.mpill{display:flex;align-items:center;gap:8px;background:var(--card);border:1px solid var(--border2);
+  padding:7px 14px;border-radius:40px;transition:.2s;cursor:pointer;}
+.mpill:hover{border-color:var(--rose);box-shadow:0 0 14px var(--rglow);}
+.mpill label{font-size:11px;color:var(--text3);cursor:pointer;}
+.mpill select{background:transparent;border:none;color:var(--text);font-family:'Tajawal',sans-serif;
+  font-size:13px;font-weight:700;cursor:pointer;outline:none;}
 .mpill select option{background:var(--deep);}
-main{max-width:1180px;margin:0 auto;padding:36px 22px 64px;}
-.sec-lbl{font-size:11px;font-weight:700;color:var(--text3);letter-spacing:2.5px;text-transform:uppercase;margin-bottom:14px;display:flex;align-items:center;gap:12px;}
-.sec-lbl::after{content:'';flex:1;height:1px;background:var(--border);}
-.kpi-row{display:grid;grid-template-columns:repeat(3,1fr);gap:18px;margin-bottom:34px;}
-.kpi{background:var(--card);border:1px solid var(--border);border-radius:22px;padding:26px 22px;position:relative;overflow:hidden;cursor:default;transition:transform .3s cubic-bezier(.34,1.56,.64,1),border-color .3s,box-shadow .3s;animation:fadeUp .6s ease both;}
-.kpi:nth-child(1){animation-delay:.05s;}.kpi:nth-child(2){animation-delay:.12s;}.kpi:nth-child(3){animation-delay:.2s;}
-@keyframes fadeUp{from{opacity:0;transform:translateY(22px);}to{opacity:1;transform:translateY(0);}}
-.kpi:hover{transform:translateY(-5px) scale(1.01);}
-.kpi-s:hover{border-color:var(--mint);box-shadow:0 10px 44px var(--mint-glow);}
-.kpi-b:hover{border-color:var(--rose);box-shadow:0 10px 44px var(--rose-glow);}
-.kpi-p:hover{border-color:var(--gold);box-shadow:0 10px 44px var(--gold-glow);}
-.kpi-shine{position:absolute;inset:0;border-radius:22px;opacity:0;transition:opacity .4s;}
-.kpi:hover .kpi-shine{opacity:1;}
-.kpi-s .kpi-shine{background:radial-gradient(circle at 80% 10%,rgba(78,205,196,.08),transparent 60%);}
-.kpi-b .kpi-shine{background:radial-gradient(circle at 80% 10%,rgba(232,84,122,.08),transparent 60%);}
-.kpi-p .kpi-shine{background:radial-gradient(circle at 80% 10%,rgba(245,200,66,.08),transparent 60%);}
-.kpi-ico{width:50px;height:50px;border-radius:13px;display:flex;align-items:center;justify-content:center;font-size:24px;margin-bottom:16px;}
-.kpi-s .kpi-ico{background:rgba(78,205,196,.12);box-shadow:0 0 0 1px rgba(78,205,196,.2);}
-.kpi-b .kpi-ico{background:rgba(232,84,122,.12);box-shadow:0 0 0 1px rgba(232,84,122,.2);}
-.kpi-p .kpi-ico{background:rgba(245,200,66,.12);box-shadow:0 0 0 1px rgba(245,200,66,.2);}
-.kpi-lbl{font-size:12px;color:var(--text3);margin-bottom:6px;}
-.kpi-val{font-size:30px;font-weight:900;letter-spacing:-1px;line-height:1;margin-bottom:10px;}
-.kpi-s .kpi-val{color:var(--mint);}.kpi-b .kpi-val{color:var(--rose2);}.kpi-p .kpi-val{color:var(--gold);}
-.kpi-sub{font-size:12px;color:var(--text3);}
-.badge{padding:2px 9px;border-radius:20px;font-size:11px;font-weight:700;}
-.bp{background:rgba(74,222,128,.12);color:var(--pos);}.bn{background:rgba(251,113,133,.12);color:var(--neg);}
-.upload-card{background:var(--card);border:1px solid var(--border);border-radius:26px;padding:30px;margin-bottom:32px;animation:fadeUp .6s .28s ease both;}
-.tabs{display:flex;gap:8px;background:var(--deep);border:1px solid var(--border);border-radius:14px;padding:5px;margin-bottom:26px;}
-.tbtn{flex:1;padding:11px 18px;border:none;border-radius:10px;font-family:'Tajawal',sans-serif;font-size:15px;font-weight:700;cursor:pointer;transition:all .3s cubic-bezier(.34,1.56,.64,1);background:transparent;color:var(--text3);display:flex;align-items:center;justify-content:center;gap:8px;}
-.ts{background:linear-gradient(135deg,rgba(78,205,196,.18),rgba(78,205,196,.08));color:var(--mint);box-shadow:0 0 20px rgba(78,205,196,.12),inset 0 0 0 1px rgba(78,205,196,.25);}
-.tb{background:linear-gradient(135deg,rgba(232,84,122,.18),rgba(232,84,122,.08));color:var(--rose2);box-shadow:0 0 20px rgba(232,84,122,.12),inset 0 0 0 1px rgba(232,84,122,.25);}
-.sale-upload-row{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:18px;}
-.img-pick-zone{border:2px dashed var(--border2);border-radius:14px;padding:18px 12px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;cursor:pointer;position:relative;transition:.3s;text-align:center;min-height:90px;}
-.img-pick-zone input[type=file]{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%;}
-.img-pick-zone:hover{border-color:var(--mint);background:rgba(78,205,196,.04);}
-.img-pick-zone .ipz-icon{font-size:26px;transition:transform .3s cubic-bezier(.34,1.56,.64,1);}
-.img-pick-zone:hover .ipz-icon{transform:scale(1.2);}
-.img-pick-zone .ipz-txt{font-size:12px;color:var(--text2);}
-.img-preview-wrap{position:relative;}
-.img-preview-wrap img{width:100%;height:90px;object-fit:cover;border-radius:12px;border:1px solid var(--mint);display:block;}
-.img-clear-btn{position:absolute;top:5px;left:5px;background:rgba(13,10,14,.8);border:none;border-radius:6px;color:#fff;font-size:13px;width:24px;height:24px;cursor:pointer;display:flex;align-items:center;justify-content:center;}
-.dzone{border:2px dashed var(--border2);border-radius:18px;padding:30px 20px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:9px;cursor:pointer;position:relative;transition:.3s;text-align:center;margin-bottom:18px;background:rgba(255,255,255,.01);}
-.dzone input[type=file]{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%;}
-.dzone:hover,.dzone.drag{border-color:var(--rose);background:rgba(232,84,122,.04);box-shadow:0 0 30px var(--rose-glow);}
-.dz-ico{font-size:34px;transition:transform .3s cubic-bezier(.34,1.56,.64,1);}
-.dzone:hover .dz-ico{transform:scale(1.2) rotate(-6deg);}
-.dz-txt{font-size:13px;color:var(--text2);line-height:1.7;}
-.dz-txt strong{color:var(--text);}
-.dz-hint{font-size:11px;color:var(--text3);}
-.divor{display:flex;align-items:center;gap:10px;font-size:12px;color:var(--text3);margin-bottom:18px;}
-.divor::before,.divor::after{content:'';flex:1;height:1px;background:var(--border);}
-.mrow{display:grid;grid-template-columns:1fr 190px auto;gap:11px;align-items:end;}
+
+main{max-width:1200px;margin:0 auto;padding:32px 20px 64px;}
+
+/* SECTION LABEL */
+.slbl{font-size:10px;font-weight:700;color:var(--text3);letter-spacing:2.5px;text-transform:uppercase;
+  margin-bottom:12px;display:flex;align-items:center;gap:10px;}
+.slbl::after{content:'';flex:1;height:1px;background:var(--border);}
+
+/* KPI */
+.kpi-row{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-bottom:28px;}
+.kpi{background:var(--card);border:1px solid var(--border);border-radius:20px;padding:22px 20px;
+  position:relative;overflow:hidden;cursor:default;
+  transition:transform .3s cubic-bezier(.34,1.56,.64,1),border-color .3s,box-shadow .3s;
+  animation:fadeUp .5s ease both;}
+.kpi:nth-child(2){animation-delay:.08s;}.kpi:nth-child(3){animation-delay:.16s;}
+@keyframes fadeUp{from{opacity:0;transform:translateY(18px);}to{opacity:1;transform:translateY(0);}}
+.kpi:hover{transform:translateY(-4px) scale(1.01);}
+.ks:hover{border-color:var(--mint);box-shadow:0 8px 36px var(--mglow);}
+.kb:hover{border-color:var(--rose);box-shadow:0 8px 36px var(--rglow);}
+.kp:hover{border-color:var(--gold);box-shadow:0 8px 36px var(--gglow);}
+.kpi-ico{width:46px;height:46px;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:22px;margin-bottom:14px;}
+.ks .kpi-ico{background:rgba(78,205,196,.12);}
+.kb .kpi-ico{background:rgba(232,84,122,.12);}
+.kp .kpi-ico{background:rgba(245,200,66,.12);}
+.kpi-lbl{font-size:11px;color:var(--text3);margin-bottom:5px;}
+.kpi-val{font-size:28px;font-weight:900;letter-spacing:-1px;line-height:1;margin-bottom:8px;}
+.ks .kpi-val{color:var(--mint);}
+.kb .kpi-val{color:var(--rose2);}
+.kp .kpi-val{color:var(--gold);}
+.kpi-sub{font-size:11px;color:var(--text3);}
+.badge{padding:2px 8px;border-radius:20px;font-size:10px;font-weight:700;}
+.bp{background:rgba(74,222,128,.12);color:var(--pos);}
+.bn{background:rgba(251,113,133,.12);color:var(--neg);}
+
+/* PAY METHOD MINI STATS */
+.pay-stats{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;}
+.pay-chip{display:flex;align-items:center;gap:5px;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:600;}
+.pc-cash{background:rgba(52,211,153,.12);color:var(--cash);}
+.pc-visa{background:rgba(96,165,250,.12);color:var(--visa);}
+.pc-trans{background:rgba(167,139,250,.12);color:var(--transfer);}
+
+/* PAYER STATS */
+.payer-stats{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;}
+.payer-chip{display:flex;align-items:center;gap:5px;padding:3px 10px;border-radius:20px;
+  font-size:11px;font-weight:600;background:rgba(232,84,122,.1);color:var(--rose2);}
+
+/* ADD CARD */
+.add-card{background:var(--card);border:1px solid var(--border);border-radius:22px;padding:26px;
+  margin-bottom:28px;animation:fadeUp .5s .2s ease both;}
+.tabs{display:flex;gap:8px;background:var(--deep);border:1px solid var(--border);
+  border-radius:12px;padding:4px;margin-bottom:22px;}
+.tbtn{flex:1;padding:10px 16px;border:none;border-radius:9px;font-family:'Tajawal',sans-serif;
+  font-size:14px;font-weight:700;cursor:pointer;transition:all .3s cubic-bezier(.34,1.56,.64,1);
+  background:transparent;color:var(--text3);display:flex;align-items:center;justify-content:center;gap:7px;}
+.ts{background:linear-gradient(135deg,rgba(78,205,196,.18),rgba(78,205,196,.08));color:var(--mint);
+  box-shadow:inset 0 0 0 1px rgba(78,205,196,.25);}
+.tb{background:linear-gradient(135deg,rgba(232,84,122,.18),rgba(232,84,122,.08));color:var(--rose2);
+  box-shadow:inset 0 0 0 1px rgba(232,84,122,.25);}
+
+/* FORM FIELDS */
+.form-grid{display:grid;gap:12px;}
+.fgs{grid-template-columns:1fr 1fr;}
+.fg3{grid-template-columns:1fr 140px 160px;}
+.fg4{grid-template-columns:1fr 140px 160px 160px;}
 .fld{display:flex;flex-direction:column;gap:5px;}
 .fld label{font-size:10px;font-weight:700;color:var(--text3);letter-spacing:1px;text-transform:uppercase;}
-.fld input{background:var(--deep);border:1px solid var(--border2);border-radius:11px;padding:11px 15px;font-family:'Tajawal',sans-serif;font-size:14px;color:var(--text);outline:none;transition:.2s;width:100%;}
-.fld input:focus{border-color:var(--rose);box-shadow:0 0 0 3px var(--rose-glow);}
+.fld input,.fld select{background:var(--deep);border:1px solid var(--border2);border-radius:10px;
+  padding:10px 14px;font-family:'Tajawal',sans-serif;font-size:14px;color:var(--text);
+  outline:none;transition:.2s;width:100%;}
+.fld input:focus,.fld select:focus{border-color:var(--rose);box-shadow:0 0 0 3px var(--rglow);}
 .fld input::placeholder{color:var(--text3);}
-.abtn{height:46px;padding:0 26px;border:none;border-radius:11px;font-family:'Tajawal',sans-serif;font-size:15px;font-weight:700;cursor:pointer;transition:all .3s cubic-bezier(.34,1.56,.64,1);white-space:nowrap;display:flex;align-items:center;gap:7px;}
-.as{background:linear-gradient(135deg,var(--mint),#2ba8a0);color:#0d0a0e;box-shadow:0 4px 18px rgba(78,205,196,.3);}
-.as:hover{transform:translateY(-2px) scale(1.04);box-shadow:0 8px 28px rgba(78,205,196,.5);}
-.ab{background:linear-gradient(135deg,var(--rose),#c03060);color:#fff;box-shadow:0 4px 18px var(--rose-glow);}
-.ab:hover{transform:translateY(-2px) scale(1.04);}
-.panels{display:grid;grid-template-columns:1fr 1fr;gap:22px;margin-bottom:32px;}
-.panel{background:var(--card);border:1px solid var(--border);border-radius:22px;overflow:hidden;animation:fadeUp .6s .38s ease both;display:flex;flex-direction:column;}
-.ph{padding:18px 22px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--border);}
-.ph-l{display:flex;align-items:center;gap:11px;}
-.pico{width:36px;height:36px;border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:17px;}
-.ps .pico{background:rgba(78,205,196,.14);}.pb .pico{background:rgba(232,84,122,.14);}
-.ptitle{font-size:14px;font-weight:700;}
-.ps .ptitle{color:var(--mint);}.pb .ptitle{color:var(--rose2);}
-.pcnt{font-size:11px;font-weight:800;padding:3px 10px;border-radius:20px;}
-.ps .pcnt{background:rgba(78,205,196,.14);color:var(--mint);}.pb .pcnt{background:rgba(232,84,122,.14);color:var(--rose2);}
-.pbody{padding:10px;flex:1;overflow-y:auto;max-height:310px;scrollbar-width:thin;scrollbar-color:var(--border2) transparent;}
-.pbody::-webkit-scrollbar{width:3px;}.pbody::-webkit-scrollbar-thumb{background:var(--border2);border-radius:4px;}
-.empty{padding:36px 18px;text-align:center;color:var(--text3);}
-.empty .ei{font-size:36px;margin-bottom:9px;opacity:.35;}.empty p{font-size:13px;line-height:1.8;}
-.entry{display:flex;align-items:center;gap:10px;padding:11px 8px;border-radius:12px;margin-bottom:3px;transition:background .2s;animation:ei .35s cubic-bezier(.34,1.56,.64,1) both;}
-@keyframes ei{from{opacity:0;transform:scale(.9) translateY(-5px);}to{opacity:1;transform:scale(1) translateY(0);}}
+.fld select option{background:var(--deep);}
+
+/* IMG UPLOAD */
+.img-zone{border:2px dashed var(--border2);border-radius:12px;padding:14px;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;
+  cursor:pointer;position:relative;transition:.3s;text-align:center;min-height:80px;}
+.img-zone input{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%;}
+.img-zone:hover{border-color:var(--mint);background:rgba(78,205,196,.04);}
+.img-zone .iz-ico{font-size:22px;}
+.img-zone .iz-txt{font-size:11px;color:var(--text2);}
+.img-prev{position:relative;}
+.img-prev img{width:100%;height:80px;object-fit:cover;border-radius:10px;border:1px solid var(--mint);}
+.img-prev button{position:absolute;top:4px;left:4px;background:rgba(13,10,14,.85);border:none;
+  border-radius:5px;color:#fff;font-size:12px;width:22px;height:22px;cursor:pointer;}
+
+/* SUBMIT BTN */
+.sbtn{height:44px;padding:0 24px;border:none;border-radius:10px;font-family:'Tajawal',sans-serif;
+  font-size:14px;font-weight:700;cursor:pointer;transition:all .3s cubic-bezier(.34,1.56,.64,1);
+  white-space:nowrap;display:flex;align-items:center;gap:6px;align-self:end;}
+.sbs{background:linear-gradient(135deg,var(--mint),#2ba8a0);color:#0d0a0e;
+  box-shadow:0 4px 16px var(--mglow);}
+.sbs:hover{transform:translateY(-2px) scale(1.03);box-shadow:0 8px 24px rgba(78,205,196,.5);}
+.sbb{background:linear-gradient(135deg,var(--rose),#c03060);color:#fff;
+  box-shadow:0 4px 16px var(--rglow);}
+.sbb:hover{transform:translateY(-2px) scale(1.03);box-shadow:0 8px 24px rgba(232,84,122,.5);}
+
+/* PANELS */
+.panels{display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:28px;}
+.panel{background:var(--card);border:1px solid var(--border);border-radius:20px;
+  overflow:hidden;animation:fadeUp .5s .35s ease both;display:flex;flex-direction:column;}
+.ph{padding:16px 20px;display:flex;align-items:center;justify-content:space-between;
+  border-bottom:1px solid var(--border);}
+.ph-l{display:flex;align-items:center;gap:10px;}
+.pico{width:34px;height:34px;border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:16px;}
+.ps .pico{background:rgba(78,205,196,.14);}
+.pb .pico{background:rgba(232,84,122,.14);}
+.ptitle{font-size:13px;font-weight:700;}
+.ps .ptitle{color:var(--mint);}
+.pb .ptitle{color:var(--rose2);}
+.pcnt{font-size:10px;font-weight:800;padding:2px 9px;border-radius:20px;}
+.ps .pcnt{background:rgba(78,205,196,.14);color:var(--mint);}
+.pb .pcnt{background:rgba(232,84,122,.14);color:var(--rose2);}
+.pbody{padding:8px;flex:1;overflow-y:auto;max-height:300px;
+  scrollbar-width:thin;scrollbar-color:var(--border2) transparent;}
+.pbody::-webkit-scrollbar{width:3px;}
+.pbody::-webkit-scrollbar-thumb{background:var(--border2);border-radius:3px;}
+.empty{padding:32px 16px;text-align:center;color:var(--text3);}
+.empty .ei{font-size:32px;margin-bottom:8px;opacity:.3;}
+.empty p{font-size:12px;line-height:1.8;}
+
+/* ENTRY ROW */
+.entry{display:flex;align-items:center;gap:9px;padding:10px 8px;border-radius:10px;
+  margin-bottom:2px;transition:background .2s;animation:ei .3s cubic-bezier(.34,1.56,.64,1) both;}
+@keyframes ei{from{opacity:0;transform:scale(.9) translateY(-4px);}to{opacity:1;transform:scale(1) translateY(0);}}
 .entry:hover{background:rgba(255,255,255,.03);}
-.edot{width:7px;height:7px;border-radius:50%;flex-shrink:0;}
-.es .edot{background:var(--mint);box-shadow:0 0 7px var(--mint);}
-.eb .edot{background:var(--rose2);box-shadow:0 0 7px var(--rose2);}
-.entry-img{width:44px;height:44px;border-radius:10px;object-fit:cover;flex-shrink:0;border:1px solid var(--border2);cursor:pointer;transition:transform .2s;}
-.entry-img:hover{transform:scale(1.08);}
-.entry-img-ph{width:44px;height:44px;border-radius:10px;background:var(--surface);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0;}
+.edot{width:6px;height:6px;border-radius:50%;flex-shrink:0;}
+.es .edot{background:var(--mint);box-shadow:0 0 6px var(--mint);}
+.eb .edot{background:var(--rose2);box-shadow:0 0 6px var(--rose2);}
+.eimg{width:38px;height:38px;border-radius:8px;object-fit:cover;flex-shrink:0;
+  border:1px solid var(--border2);cursor:pointer;transition:transform .2s;}
+.eimg:hover{transform:scale(1.1);}
+.eph{width:38px;height:38px;border-radius:8px;background:var(--surface);
+  border:1px solid var(--border);display:flex;align-items:center;justify-content:center;
+  font-size:16px;flex-shrink:0;}
 .einfo{flex:1;min-width:0;}
-.edesc{font-size:13px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-.edate{font-size:11px;color:var(--text3);margin-top:2px;}
-.eamt{font-size:14px;font-weight:800;white-space:nowrap;flex-shrink:0;}
-.eamt.inc{color:var(--mint);}.eamt.exp{color:var(--rose2);}
-.delbtn{background:none;border:none;cursor:pointer;color:var(--text3);font-size:14px;width:28px;height:28px;border-radius:7px;display:flex;align-items:center;justify-content:center;transition:.2s;flex-shrink:0;}
+.edesc{font-size:12px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.emeta{display:flex;gap:6px;align-items:center;margin-top:3px;flex-wrap:wrap;}
+.edate{font-size:10px;color:var(--text3);}
+.epay-badge{font-size:9px;font-weight:700;padding:1px 6px;border-radius:10px;}
+.epb-cash{background:rgba(52,211,153,.15);color:var(--cash);}
+.epb-visa{background:rgba(96,165,250,.15);color:var(--visa);}
+.epb-trans{background:rgba(167,139,250,.15);color:var(--transfer);}
+.epb-payer{background:rgba(232,84,122,.12);color:var(--rose2);}
+.eamt{font-size:13px;font-weight:800;white-space:nowrap;flex-shrink:0;}
+.eamt.inc{color:var(--mint);}
+.eamt.exp{color:var(--rose2);}
+.delbtn{background:none;border:none;cursor:pointer;color:var(--text3);font-size:13px;
+  width:26px;height:26px;border-radius:6px;display:flex;align-items:center;justify-content:center;
+  transition:.2s;flex-shrink:0;}
 .delbtn:hover{background:rgba(251,113,133,.14);color:var(--neg);}
-.chart-card{background:var(--card);border:1px solid var(--border);border-radius:22px;padding:30px;animation:fadeUp .6s .46s ease both;}
-.chart-card h2{font-size:15px;font-weight:700;margin-bottom:26px;display:flex;align-items:center;gap:9px;}
-.cwrap{display:flex;align-items:flex-end;gap:8px;height:190px;padding-bottom:26px;position:relative;border-bottom:1px solid var(--border);}
-.cgrid{position:absolute;inset:0;pointer-events:none;}
-.cgl{position:absolute;left:0;right:0;height:1px;background:var(--border);}
-.bgrp{flex:1;display:flex;flex-direction:column;align-items:center;height:100%;position:relative;justify-content:flex-end;}
-.bpair{display:flex;gap:3px;align-items:flex-end;height:155px;justify-content:center;width:100%;}
-.bar{flex:1;max-width:13px;border-radius:4px 4px 0 0;min-height:3px;transition:height .8s cubic-bezier(.34,1.56,.64,1);cursor:pointer;position:relative;}
-.bar-s{background:linear-gradient(180deg,var(--mint),rgba(78,205,196,.25));}
-.bar-p{background:linear-gradient(180deg,var(--rose2),rgba(232,84,122,.25));}
-.bar:hover{opacity:.75;}
-.bar::after{content:attr(data-tip);position:absolute;bottom:calc(100% + 5px);left:50%;transform:translateX(-50%);background:var(--deep);border:1px solid var(--border2);color:var(--text);font-family:'Tajawal',sans-serif;font-size:11px;white-space:nowrap;padding:4px 8px;border-radius:6px;opacity:0;pointer-events:none;transition:opacity .2s;z-index:10;}
-.bar:hover::after{opacity:1;}
-.bm{font-size:10px;color:var(--text3);text-align:center;position:absolute;bottom:-19px;width:100%;}
-.cleg{display:flex;gap:22px;margin-top:34px;}
-.cli{display:flex;align-items:center;gap:7px;font-size:13px;color:var(--text2);}
-.csw{width:26px;height:3px;border-radius:2px;}
-/* MODAL */
-.overlay{display:none;position:fixed;inset:0;background:rgba(13,10,14,.88);backdrop-filter:blur(14px);z-index:500;align-items:center;justify-content:center;overflow-y:auto;padding:20px 0;}
+
+/* CHARTS ROW */
+.charts-row{display:grid;grid-template-columns:2fr 1fr 1fr;gap:20px;margin-bottom:28px;}
+.chart-card{background:var(--card);border:1px solid var(--border);border-radius:20px;
+  padding:24px;animation:fadeUp .5s .45s ease both;}
+.chart-card h3{font-size:13px;font-weight:700;margin-bottom:20px;display:flex;align-items:center;gap:8px;}
+.chart-wrap{position:relative;}
+
+/* LIGHTBOX */
+.lb{display:none;position:fixed;inset:0;background:rgba(0,0,0,.92);z-index:9000;
+  align-items:center;justify-content:center;cursor:zoom-out;}
+.lb.open{display:flex;}
+.lb img{max-width:90vw;max-height:88vh;border-radius:14px;}
+
+/* OVERLAY */
+.overlay{display:none;position:fixed;inset:0;background:rgba(13,10,14,.88);
+  backdrop-filter:blur(14px);z-index:500;align-items:center;justify-content:center;padding:20px;}
 .overlay.open{display:flex;}
-.modal{background:var(--card2);border:1px solid var(--border2);border-radius:26px;padding:38px;max-width:430px;width:92%;text-align:center;box-shadow:0 40px 100px rgba(0,0,0,.65);animation:min .4s cubic-bezier(.34,1.56,.64,1);}
-.modal-wide{max-width:700px;}
-@keyframes min{from{opacity:0;transform:scale(.82) translateY(24px);}to{opacity:1;transform:scale(1) translateY(0);}}
-.mico{font-size:50px;margin-bottom:15px;}
-.modal h3{font-size:19px;font-weight:800;margin-bottom:9px;}
-.modal p{font-size:13px;color:var(--text2);margin-bottom:22px;line-height:1.75;}
-.inv-layout{display:grid;grid-template-columns:1fr 1fr;gap:20px;text-align:right;margin-bottom:20px;}
-.inv-img-panel img{width:100%;border-radius:14px;border:1px solid var(--border2);max-height:360px;object-fit:contain;background:var(--surface);}
-.inv-fields{display:flex;flex-direction:column;gap:12px;}
-.inv-fields label{font-size:10px;font-weight:700;color:var(--text3);letter-spacing:1px;text-transform:uppercase;display:block;margin-bottom:4px;}
-.inv-fields input{background:var(--deep);border:1px solid var(--border2);border-radius:11px;padding:11px 15px;font-family:'Tajawal',sans-serif;font-size:14px;color:var(--text);outline:none;transition:.2s;width:100%;}
-.inv-fields input:focus{border-color:var(--rose);box-shadow:0 0 0 3px var(--rose-glow);}
-.inv-fields input::placeholder{color:var(--text3);}
-.inv-amt-input{font-size:22px!important;font-weight:900!important;text-align:center!important;}
-.inv-hint{font-size:12px;color:var(--text3);background:rgba(78,205,196,.06);border:1px solid rgba(78,205,196,.12);border-radius:10px;padding:8px 12px;line-height:1.6;}
-.minput{width:100%;background:var(--surface);border:1px solid var(--border2);border-radius:12px;padding:13px 16px;font-family:'Tajawal',sans-serif;font-size:19px;font-weight:800;text-align:center;color:var(--text);outline:none;margin-bottom:18px;transition:.2s;}
-.minput:focus{border-color:var(--rose);box-shadow:0 0 0 4px var(--rose-glow);}
-.minput.sm{font-size:14px;font-weight:500;margin-bottom:12px;}
+.modal{background:var(--card2);border:1px solid var(--border2);border-radius:22px;padding:32px;
+  max-width:400px;width:100%;text-align:center;box-shadow:0 40px 100px rgba(0,0,0,.6);
+  animation:mi .4s cubic-bezier(.34,1.56,.64,1);}
+@keyframes mi{from{opacity:0;transform:scale(.82) translateY(20px);}to{opacity:1;transform:scale(1) translateY(0);}}
+.mico{font-size:46px;margin-bottom:12px;}
+.modal h3{font-size:18px;font-weight:800;margin-bottom:8px;}
+.modal p{font-size:13px;color:var(--text2);margin-bottom:20px;line-height:1.7;}
+.minput{width:100%;background:var(--surface);border:1px solid var(--border2);border-radius:10px;
+  padding:12px 14px;font-family:'Tajawal',sans-serif;font-size:18px;font-weight:800;
+  text-align:center;color:var(--text);outline:none;margin-bottom:16px;transition:.2s;}
+.minput:focus{border-color:var(--rose);box-shadow:0 0 0 3px var(--rglow);}
 .mbtns{display:flex;gap:10px;}
-.mbtns button{flex:1;padding:12px;border:none;border-radius:12px;font-family:'Tajawal',sans-serif;font-size:14px;font-weight:700;cursor:pointer;transition:all .25s cubic-bezier(.34,1.56,.64,1);}
+.mbtns button{flex:1;padding:11px;border:none;border-radius:10px;font-family:'Tajawal',sans-serif;
+  font-size:14px;font-weight:700;cursor:pointer;transition:all .25s cubic-bezier(.34,1.56,.64,1);}
 .bc{background:var(--surface);border:1px solid var(--border2)!important;color:var(--text2);}
-.bc:hover{background:var(--deep);}
-.bos{background:linear-gradient(135deg,var(--mint),#2ba8a0);color:#0d0a0e;}
-.bos:hover{transform:scale(1.03);}
-.bop{background:linear-gradient(135deg,var(--rose),#c03060);color:#fff;}
-.bop:hover{transform:scale(1.03);}
-.spin{width:42px;height:42px;border:3px solid var(--border2);border-top-color:var(--rose2);border-radius:50%;animation:sp .7s linear infinite;margin:0 auto 15px;}
-@keyframes sp{to{transform:rotate(360deg);}}
-.lightbox{display:none;position:fixed;inset:0;background:rgba(0,0,0,.92);z-index:9000;align-items:center;justify-content:center;cursor:zoom-out;}
-.lightbox.open{display:flex;}
-.lightbox img{max-width:90vw;max-height:88vh;border-radius:16px;}
-.toast{position:fixed;bottom:30px;left:50%;transform:translateX(-50%) translateY(90px);background:var(--card2);border:1px solid var(--border2);color:var(--text);padding:11px 26px;border-radius:40px;font-size:14px;font-weight:600;box-shadow:0 14px 44px rgba(0,0,0,.5);transition:transform .4s cubic-bezier(.34,1.56,.64,1);z-index:9999;white-space:nowrap;}
+.bcs{background:linear-gradient(135deg,var(--mint),#2ba8a0);color:#0d0a0e;}
+.bcp{background:linear-gradient(135deg,var(--rose),#c03060);color:#fff;}
+
+/* TOAST */
+.toast{position:fixed;bottom:28px;left:50%;transform:translateX(-50%) translateY(80px);
+  background:var(--card2);border:1px solid var(--border2);color:var(--text);
+  padding:10px 24px;border-radius:40px;font-size:13px;font-weight:600;
+  box-shadow:0 12px 40px rgba(0,0,0,.5);transition:transform .4s cubic-bezier(.34,1.56,.64,1);
+  z-index:9999;white-space:nowrap;}
 .toast.show{transform:translateX(-50%) translateY(0);}
-/* Telegram badge */
-.tg-badge{display:flex;align-items:center;gap:8px;background:rgba(37,211,102,.08);border:1px solid rgba(37,211,102,.2);border-radius:10px;padding:8px 14px;font-size:12px;color:#4ade80;margin-bottom:20px;}
-.tg-badge span{font-size:16px;}
-@media(max-width:760px){
-  header{padding:0 14px;}main{padding:22px 12px 52px;}
-  .kpi-row,.panels{grid-template-columns:1fr;gap:10px;}
-  .mrow,.sale-upload-row,.inv-layout{grid-template-columns:1fr;}
-  .kpi-val{font-size:24px;}.upload-card{padding:18px;}
+
+@media(max-width:768px){
+  header{padding:0 14px;}
+  main{padding:20px 12px 52px;}
+  .kpi-row,.panels,.charts-row{grid-template-columns:1fr;gap:12px;}
+  .fg3,.fg4,.fgs{grid-template-columns:1fr;}
+  .kpi-val{font-size:22px;}
+  .add-card{padding:18px;}
 }
 </style>
 </head>
 <body>
 <div class="bg"><div class="orb"></div><div class="orb"></div><div class="orb"></div></div>
 <div id="app">
+
 <header>
   <div class="brand">
     <div class="emblem">🌹</div>
@@ -221,143 +289,204 @@ main{max-width:1180px;margin:0 auto;padding:36px 22px 64px;}
     </select>
   </div>
 </header>
+
 <main>
-  <div class="sec-lbl">ملخص الشهر</div>
+  <!-- KPI -->
+  <div class="slbl">ملخص الشهر</div>
   <div class="kpi-row">
-    <div class="kpi kpi-s"><div class="kpi-shine"></div><div class="kpi-ico">💰</div><div class="kpi-lbl">إجمالي المبيعات</div><div class="kpi-val" id="kS">0 ر.ع</div><div class="kpi-sub" id="kSc">0 عملية</div></div>
-    <div class="kpi kpi-b"><div class="kpi-shine"></div><div class="kpi-ico">🛒</div><div class="kpi-lbl">إجمالي المشتريات</div><div class="kpi-val" id="kB">0 ر.ع</div><div class="kpi-sub" id="kBc">0 عملية</div></div>
-    <div class="kpi kpi-p"><div class="kpi-shine"></div><div class="kpi-ico">📊</div><div class="kpi-lbl">صافي الربح</div><div class="kpi-val" id="kP">0 ر.ع</div><div class="kpi-sub"><span id="kPb" class="badge">—</span></div></div>
+    <div class="kpi ks">
+      <div class="kpi-ico">💰</div>
+      <div class="kpi-lbl">إجمالي المبيعات</div>
+      <div class="kpi-val" id="kS">0 ر.ع</div>
+      <div class="kpi-sub" id="kSc">0 عملية</div>
+      <div class="pay-stats" id="payStats"></div>
+    </div>
+    <div class="kpi kb">
+      <div class="kpi-ico">🛒</div>
+      <div class="kpi-lbl">إجمالي المشتريات</div>
+      <div class="kpi-val" id="kB">0 ر.ع</div>
+      <div class="kpi-sub" id="kBc">0 عملية</div>
+      <div class="payer-stats" id="payerStats"></div>
+    </div>
+    <div class="kpi kp">
+      <div class="kpi-ico">📊</div>
+      <div class="kpi-lbl">صافي الربح</div>
+      <div class="kpi-val" id="kP">0 ر.ع</div>
+      <div class="kpi-sub"><span id="kPb" class="badge">—</span></div>
+    </div>
   </div>
-  <div class="sec-lbl">إضافة إيصال</div>
-  <div class="upload-card">
-    <div class="tg-badge"><span>✈️</span> متصل مع بوت تيليغرام — أرسل فواتيرك ومبيعاتك مباشرة من الجوال!</div>
+
+  <!-- ADD -->
+  <div class="slbl">إضافة جديد</div>
+  <div class="add-card">
     <div class="tabs">
       <button class="tbtn ts" id="ts" onclick="setTab('s')">🌸 مبيعات</button>
       <button class="tbtn" id="tb" onclick="setTab('b')">📦 مشتريات</button>
     </div>
-    <div id="sales-section">
-      <div class="sale-upload-row">
-        <div class="img-pick-zone" id="saleImgZone">
-          <input type="file" accept="image/*" onchange="onSaleImg(event)"/>
-          <div class="ipz-icon">📸</div>
-          <div class="ipz-txt"><strong>صورة المنتج</strong><br>باقة، عطر، هدية...</div>
+
+    <!-- SALES FORM -->
+    <div id="sf">
+      <div class="form-grid fgs" style="margin-bottom:12px;">
+        <div class="fld">
+          <label>صورة المنتج</label>
+          <div class="img-zone" id="siz">
+            <input type="file" accept="image/*" onchange="onSaleImg(event)"/>
+            <div class="iz-ico">📸</div>
+            <div class="iz-txt">صورة اختيارية</div>
+          </div>
         </div>
         <div style="display:flex;flex-direction:column;gap:10px;">
-          <div class="fld"><label>اسم المنتج</label><input type="text" id="descIn" placeholder="مثال: باقة ورد حمراء..."/></div>
-          <div class="fld"><label>السعر (ر.ع)</label><input type="number" id="amtIn" placeholder="0.000" min="0" step="0.001"/></div>
+          <div class="fld">
+            <label>اسم المنتج</label>
+            <input id="sDesc" type="text" placeholder="باقة ورد، عطر..."/>
+          </div>
+          <div class="fld">
+            <label>السعر (ر.ع)</label>
+            <input id="sAmt" type="number" placeholder="0.000" step="0.001"/>
+          </div>
         </div>
       </div>
-      <button class="abtn as" onclick="addSale()" style="width:100%;justify-content:center;">🌸 إضافة مبيعة</button>
+      <div class="form-grid fgs" style="margin-bottom:16px;">
+        <div class="fld">
+          <label>💳 طريقة الدفع</label>
+          <select id="sPay">
+            <option value="">— اختر —</option>
+            <option value="كاش 💵">💵 كاش</option>
+            <option value="فيزا 💳">💳 فيزا</option>
+            <option value="تحويل 🏦">🏦 تحويل</option>
+          </select>
+        </div>
+        <div class="fld">
+          <label>📝 ملاحظة</label>
+          <input id="sNote" type="text" placeholder="اختياري"/>
+        </div>
+      </div>
+      <button class="sbtn sbs" onclick="addSale()" style="width:100%;justify-content:center;">🌸 إضافة مبيعة</button>
     </div>
-    <div id="buys-section" style="display:none;">
-      <div class="dzone" id="dz">
-        <input type="file" accept="image/*,.pdf" onchange="pickFile(event)"/>
-        <div class="dz-ico">🧾</div>
-        <div class="dz-txt"><strong>ارفع صورة الفاتورة</strong><br>اعرضها وأدخل التفاصيل</div>
-        <div class="dz-hint">PNG · JPG · PDF</div>
+
+    <!-- BUYS FORM -->
+    <div id="bf" style="display:none;">
+      <div class="form-grid fg3" style="margin-bottom:12px;">
+        <div class="fld">
+          <label>الوصف / المورد</label>
+          <input id="bDesc" type="text" placeholder="نانا هايبر، زهور..."/>
+        </div>
+        <div class="fld">
+          <label>المبلغ (ر.ع)</label>
+          <input id="bAmt" type="number" placeholder="0.000" step="0.001"/>
+        </div>
+        <div class="fld">
+          <label>👤 من دفع؟</label>
+          <select id="bPayer">
+            <option value="">— اختر —</option>
+            <option value="حسين">👤 حسين</option>
+            <option value="شوق">👤 شوق</option>
+            <option value="أخرى">➕ أخرى</option>
+          </select>
+        </div>
       </div>
-      <div class="divor">— أو أدخل يدوياً —</div>
-      <div class="mrow">
-        <div class="fld"><label>الوصف</label><input type="text" id="descInB" placeholder="مثال: شراء زهور، فازات..."/></div>
-        <div class="fld"><label>المبلغ (ر.ع)</label><input type="number" id="amtInB" placeholder="0.000" min="0" step="0.001"/></div>
-        <button class="abtn ab" onclick="addBuy()"><span>+</span> إضافة</button>
+      <div id="bOtherWrap" style="display:none;margin-bottom:12px;">
+        <div class="fld">
+          <label>اسم الشخص</label>
+          <input id="bOther" type="text" placeholder="اكتب الاسم"/>
+        </div>
       </div>
+      <div class="form-grid fgs" style="margin-bottom:16px;">
+        <div class="fld">
+          <label>🧾 ارفع الفاتورة</label>
+          <div style="border:2px dashed var(--border2);border-radius:10px;padding:10px;
+            position:relative;text-align:center;font-size:12px;color:var(--text2);cursor:pointer;
+            transition:.3s;" onmouseover="this.style.borderColor='var(--rose)'" onmouseout="this.style.borderColor='var(--border2)'">
+            <input type="file" accept="image/*,.pdf" onchange="pickFile(event)"
+              style="position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%;"/>
+            🧾 اختر صورة الفاتورة
+          </div>
+        </div>
+        <div class="fld">
+          <label>📝 ملاحظة</label>
+          <input id="bNote" type="text" placeholder="اختياري"/>
+        </div>
+      </div>
+      <button class="sbtn sbb" onclick="addBuy()" style="width:100%;justify-content:center;">📦 إضافة مشتريات</button>
     </div>
   </div>
-  <div class="sec-lbl">السجلات</div>
+
+  <!-- LISTS -->
+  <div class="slbl">السجلات</div>
   <div class="panels">
     <div class="panel ps">
-      <div class="ph"><div class="ph-l"><div class="pico">🌸</div><div class="ptitle">المبيعات</div></div><div class="pcnt" id="sb">0</div></div>
+      <div class="ph">
+        <div class="ph-l"><div class="pico">🌸</div><div class="ptitle">المبيعات</div></div>
+        <div class="pcnt" id="sbadge">0</div>
+      </div>
       <div class="pbody" id="sl"></div>
     </div>
     <div class="panel pb">
-      <div class="ph"><div class="ph-l"><div class="pico">📦</div><div class="ptitle">المشتريات</div></div><div class="pcnt" id="bb">0</div></div>
+      <div class="ph">
+        <div class="ph-l"><div class="pico">📦</div><div class="ptitle">المشتريات</div></div>
+        <div class="pcnt" id="bbadge">0</div>
+      </div>
       <div class="pbody" id="bl"></div>
     </div>
   </div>
-  <div class="sec-lbl">الرسم البياني</div>
-  <div class="chart-card">
-    <h2>📈 مبيعات ومشتريات 2026</h2>
-    <div class="cwrap" id="cw"><div class="cgrid" id="cg"></div></div>
-    <div class="cleg">
-      <div class="cli"><div class="csw" style="background:var(--mint)"></div> مبيعات</div>
-      <div class="cli"><div class="csw" style="background:var(--rose2)"></div> مشتريات</div>
+
+  <!-- CHARTS -->
+  <div class="slbl">الإحصائيات</div>
+  <div class="charts-row">
+    <div class="chart-card">
+      <h3>📈 المبيعات والمشتريات — 2026</h3>
+      <div class="chart-wrap"><canvas id="barChart" height="180"></canvas></div>
+    </div>
+    <div class="chart-card">
+      <h3>💳 طريقة الدفع</h3>
+      <div class="chart-wrap"><canvas id="payChart" height="180"></canvas></div>
+    </div>
+    <div class="chart-card">
+      <h3>👤 من دفع المشتريات</h3>
+      <div class="chart-wrap"><canvas id="payerChart" height="180"></canvas></div>
     </div>
   </div>
 </main>
 </div>
-<div class="lightbox" id="lightbox" onclick="this.classList.remove('open')"><img id="lbImg" src=""/></div>
+
+<div class="lb" id="lb" onclick="this.classList.remove('open')"><img id="lbImg" src=""/></div>
 <div class="overlay" id="ov"><div class="modal" id="mb"></div></div>
 <div class="toast" id="toast"></div>
 
 <script>
 let tab='s', month='2026-05';
-let chartData={s:{},b:{}};
+let barChartInst=null, payChartInst=null, payerChartInst=null;
 
-// ── API ──────────────────────────────────────────────────
-async function apiFetch(url,opts){
-  const r=await fetch(url,opts);
-  return r.json();
+/* ── API ── */
+async function api(url,opts){const r=await fetch(url,opts);return r.json();}
+
+async function load(){
+  const d=await api(`/api/entries?month=${month}`);
+  renderKPI(d.sales,d.buys);
+  renderLists(d.sales,d.buys);
+  loadCharts();
 }
 
-async function loadEntries(){
-  const data=await apiFetch(`/api/entries?month=${month}`);
-  renderLists(data.sales, data.buys);
-  updateKPI(data.sales, data.buys);
-}
-
-async function loadAllMonths(){
-  const months=['01','02','03','04','05','06','07','08','09','10','11','12'];
+async function loadCharts(){
+  const ms=['01','02','03','04','05','06','07','08','09','10','11','12'];
   const yr=month.split('-')[0];
-  const results=await Promise.all(
-    months.map(m=>apiFetch(`/api/entries?month=${yr}-${m}`))
-  );
-  chartData={
-    s:Object.fromEntries(results.map((r,i)=>[months[i],r.sales.reduce((a,e)=>a+e.amt,0)])),
-    b:Object.fromEntries(results.map((r,i)=>[months[i],r.buys.reduce((a,e)=>a+e.amt,0)]))
-  };
-  renderChart();
+  const all=await Promise.all(ms.map(m=>api(`/api/entries?month=${yr}-${m}`)));
+  const aS=all.map(d=>d.sales.reduce((a,e)=>a+e.amt,0));
+  const aB=all.map(d=>d.buys.reduce((a,e)=>a+e.amt,0));
+  renderBarChart(aS,aB);
+
+  // Pay method breakdown for current month
+  const cur=all[parseInt(month.split('-')[1])-1];
+  renderPayChart(cur.sales);
+  renderPayerChart(cur.buys);
 }
 
-async function addEntryAPI(type,desc,amt,img){
-  await apiFetch('/api/entries',{
-    method:'POST',
-    headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({type,desc,amt,img,month})
-  });
-  await loadEntries();
-  await loadAllMonths();
-  showToast(type==='s'?'✅ تمت إضافة المبيعة':'✅ تمت إضافة المشتريات');
-}
+setInterval(load,15000);
 
-async function delEntry(id){
-  await apiFetch(`/api/entries/${id}`,{method:'DELETE'});
-  await loadEntries();
-  await loadAllMonths();
-  showToast('🗑️ تم الحذف');
-}
-
-// Auto-refresh every 15 seconds (picks up Telegram entries)
-setInterval(()=>{ loadEntries(); loadAllMonths(); }, 15000);
-
-// ── UI ───────────────────────────────────────────────────
+/* ── KPI ── */
 function fmt(n){return (+n).toLocaleString('ar-OM',{minimumFractionDigits:3,maximumFractionDigits:3});}
 
-function setTab(t){
-  tab=t;
-  document.getElementById('ts').className='tbtn'+(t==='s'?' ts':'');
-  document.getElementById('tb').className='tbtn'+(t==='b'?' tb':'');
-  document.getElementById('sales-section').style.display=t==='s'?'block':'none';
-  document.getElementById('buys-section').style.display=t==='b'?'block':'none';
-}
-
-function changeMonth(){
-  month=document.getElementById('msel').value;
-  loadEntries();
-  loadAllMonths();
-}
-
-function updateKPI(sales,buys){
+function renderKPI(sales,buys){
   const ts=sales.reduce((a,e)=>a+e.amt,0);
   const tb=buys.reduce((a,e)=>a+e.amt,0);
   const tp=ts-tb;
@@ -367,92 +496,189 @@ function updateKPI(sales,buys){
   document.getElementById('kBc').textContent=buys.length+' عملية';
   document.getElementById('kP').textContent=(tp>=0?'+':'')+fmt(tp)+' ر.ع';
   document.getElementById('kP').style.color=tp>=0?'var(--gold)':'var(--neg)';
-  const badge=document.getElementById('kPb');
-  badge.textContent=tp>0?'✅ في الربح':tp<0?'⚠️ في الخسارة':'—';
-  badge.className='badge '+(tp>0?'bp':tp<0?'bn':'');
+  const b=document.getElementById('kPb');
+  b.textContent=tp>0?'✅ في الربح':tp<0?'⚠️ في الخسارة':'—';
+  b.className='badge '+(tp>0?'bp':tp<0?'bn':'');
+
+  // Pay method chips
+  const pm={};
+  sales.forEach(e=>{const k=e.payment_method||'غير محدد';pm[k]=(pm[k]||0)+e.amt;});
+  const psCls={'كاش 💵':'pc-cash','فيزا 💳':'pc-visa','تحويل 🏦':'pc-trans'};
+  document.getElementById('payStats').innerHTML=Object.entries(pm)
+    .filter(([k])=>k!=='غير محدد')
+    .map(([k,v])=>`<div class="pay-chip ${psCls[k]||'pc-cash'}">${k} ${fmt(v)}</div>`).join('');
+
+  // Payer chips
+  const py={};
+  buys.forEach(e=>{const k=e.paid_by||'غير محدد';py[k]=(py[k]||0)+e.amt;});
+  document.getElementById('payerStats').innerHTML=Object.entries(py)
+    .filter(([k])=>k!=='غير محدد')
+    .map(([k,v])=>`<div class="payer-chip">👤 ${k}: ${fmt(v)}</div>`).join('');
+}
+
+/* ── LISTS ── */
+function payBadge(pm){
+  if(!pm) return '';
+  const cls=pm.includes('كاش')?'epb-cash':pm.includes('فيزا')?'epb-visa':pm.includes('تحويل')?'epb-trans':'epb-cash';
+  return `<span class="epay-badge ${cls}">${pm}</span>`;
 }
 
 function renderLists(sales,buys){
   document.getElementById('sl').innerHTML=sales.length?sales.map(e=>`
     <div class="entry es">
-      ${e.img?`<img class="entry-img" src="${e.img}" onclick="openLightbox('${e.img}')" />`:`<div class="entry-img-ph">🌸</div>`}
-      <div class="einfo"><div class="edesc">${e.desc}</div><div class="edate">${e.date}</div></div>
+      ${e.img?`<img class="eimg" src="${e.img}" onclick="openLB('${e.img}')"/>`:`<div class="eph">🌸</div>`}
+      <div class="einfo">
+        <div class="edesc">${e.desc}</div>
+        <div class="emeta">
+          <span class="edate">${e.date}</span>
+          ${payBadge(e.payment_method)}
+          ${e.sale_time?`<span class="edate">🕐${e.sale_time}</span>`:''}
+        </div>
+      </div>
       <div class="eamt inc">+${fmt(e.amt)} ر.ع</div>
-      <button class="delbtn" onclick="delEntry(${e.id})">🗑</button>
-    </div>`).join(''):`<div class="empty"><div class="ei">🌷</div><p>لا توجد مبيعات<br>أضف من هنا أو عبر التيليغرام</p></div>`;
+      <button class="delbtn" onclick="del(${e.id})">🗑</button>
+    </div>`).join('')
+    :`<div class="empty"><div class="ei">🌷</div><p>لا توجد مبيعات<br>أضف من هنا أو عبر التيليغرام</p></div>`;
 
   document.getElementById('bl').innerHTML=buys.length?buys.map(e=>`
     <div class="entry eb">
       <div class="edot"></div>
-      <div class="einfo"><div class="edesc">${e.desc}</div><div class="edate">${e.date}</div></div>
+      <div class="einfo">
+        <div class="edesc">${e.desc}</div>
+        <div class="emeta">
+          <span class="edate">${e.date}</span>
+          ${e.paid_by?`<span class="epay-badge epb-payer">👤 ${e.paid_by}</span>`:''}
+        </div>
+      </div>
       <div class="eamt exp">-${fmt(e.amt)} ر.ع</div>
-      <button class="delbtn" onclick="delEntry(${e.id})">🗑</button>
-    </div>`).join(''):`<div class="empty"><div class="ei">🌿</div><p>لا توجد مشتريات<br>أضف من هنا أو عبر التيليغرام</p></div>`;
+      <button class="delbtn" onclick="del(${e.id})">🗑</button>
+    </div>`).join('')
+    :`<div class="empty"><div class="ei">🌿</div><p>لا توجد مشتريات<br>أضف من هنا أو عبر التيليغرام</p></div>`;
 
-  document.getElementById('sb').textContent=sales.length;
-  document.getElementById('bb').textContent=buys.length;
+  document.getElementById('sbadge').textContent=sales.length;
+  document.getElementById('bbadge').textContent=buys.length;
 }
 
-function renderChart(){
-  const ms=['01','02','03','04','05','06','07','08','09','10','11','12'];
-  const ns=['يناير','فبراير','مارس','أبريل','مايو','يونيو','يوليو','أغسطس','سبتمبر','أكتوبر','نوفمبر','ديسمبر'];
-  const aS=ms.map(m=>chartData.s[m]||0);
-  const aB=ms.map(m=>chartData.b[m]||0);
-  const max=Math.max(...aS,...aB,1);
-  const cw=document.getElementById('cw');
-  cw.querySelectorAll('.bgrp').forEach(e=>e.remove());
-  document.getElementById('cg').innerHTML=[.25,.5,.75,1].map(f=>`<div class="cgl" style="bottom:${f*150+26}px"></div>`).join('');
-  ms.forEach((m,i)=>{
-    const g=document.createElement('div');g.className='bgrp';
-    g.innerHTML=`<div class="bpair">
-      <div class="bar bar-s" style="height:${aS[i]/max*140}px" data-tip="مبيعات: ${fmt(aS[i])} ر.ع"></div>
-      <div class="bar bar-p" style="height:${aB[i]/max*140}px" data-tip="مشتريات: ${fmt(aB[i])} ر.ع"></div>
-    </div><div class="bm">${ns[i].slice(0,3)}</div>`;
-    cw.appendChild(g);
+/* ── CHARTS ── */
+const months=['يناير','فبراير','مارس','أبريل','مايو','يونيو','يوليو','أغسطس','سبتمبر','أكتوبر','نوفمبر','ديسمبر'];
+const chartOpts={responsive:true,plugins:{legend:{display:false}},scales:{x:{grid:{color:'rgba(255,255,255,.05)'},ticks:{color:'#6b5f85',font:{family:'Tajawal',size:10}}},y:{grid:{color:'rgba(255,255,255,.05)'},ticks:{color:'#6b5f85',font:{family:'Tajawal',size:10}}}}};
+
+function renderBarChart(aS,aB){
+  if(barChartInst) barChartInst.destroy();
+  barChartInst=new Chart(document.getElementById('barChart'),{
+    type:'bar',
+    data:{
+      labels:months.map(m=>m.slice(0,3)),
+      datasets:[
+        {label:'مبيعات',data:aS,backgroundColor:'rgba(78,205,196,.7)',borderRadius:4,borderSkipped:false},
+        {label:'مشتريات',data:aB,backgroundColor:'rgba(232,84,122,.7)',borderRadius:4,borderSkipped:false}
+      ]
+    },
+    options:{...chartOpts,plugins:{legend:{display:true,labels:{color:'#a89bc2',font:{family:'Tajawal',size:11}}}}}
   });
 }
 
-// ── Add entries ──────────────────────────────────────────
+function renderPayChart(sales){
+  const pm={'كاش 💵':0,'فيزا 💳':0,'تحويل 🏦':0};
+  sales.forEach(e=>{const k=e.payment_method;if(k&&pm[k]!==undefined)pm[k]+=e.amt;});
+  if(payChartInst) payChartInst.destroy();
+  payChartInst=new Chart(document.getElementById('payChart'),{
+    type:'doughnut',
+    data:{
+      labels:Object.keys(pm),
+      datasets:[{data:Object.values(pm),backgroundColor:['rgba(52,211,153,.8)','rgba(96,165,250,.8)','rgba(167,139,250,.8)'],borderWidth:0,hoverOffset:6}]
+    },
+    options:{responsive:true,cutout:'65%',plugins:{legend:{position:'bottom',labels:{color:'#a89bc2',font:{family:'Tajawal',size:10},padding:8}}}}
+  });
+}
+
+function renderPayerChart(buys){
+  const py={};
+  buys.forEach(e=>{if(e.paid_by){py[e.paid_by]=(py[e.paid_by]||0)+e.amt;}});
+  const colors=['rgba(232,84,122,.8)','rgba(78,205,196,.8)','rgba(245,200,66,.8)','rgba(183,148,244,.8)'];
+  if(payerChartInst) payerChartInst.destroy();
+  payerChartInst=new Chart(document.getElementById('payerChart'),{
+    type:'doughnut',
+    data:{
+      labels:Object.keys(py).length?Object.keys(py):['لا يوجد'],
+      datasets:[{data:Object.keys(py).length?Object.values(py):[1],backgroundColor:Object.keys(py).length?colors.slice(0,Object.keys(py).length):['rgba(107,95,133,.3)'],borderWidth:0,hoverOffset:6}]
+    },
+    options:{responsive:true,cutout:'65%',plugins:{legend:{position:'bottom',labels:{color:'#a89bc2',font:{family:'Tajawal',size:10},padding:8}}}}
+  });
+}
+
+/* ── ADD ── */
+function setTab(t){
+  tab=t;
+  document.getElementById('ts').className='tbtn'+(t==='s'?' ts':'');
+  document.getElementById('tb').className='tbtn'+(t==='b'?' tb':'');
+  document.getElementById('sf').style.display=t==='s'?'block':'none';
+  document.getElementById('bf').style.display=t==='b'?'block':'none';
+}
+
+document.getElementById('bPayer').addEventListener('change',function(){
+  document.getElementById('bOtherWrap').style.display=this.value==='أخرى'?'block':'none';
+});
+
 async function addSale(){
-  const desc=document.getElementById('descIn').value.trim()||'مبيعة';
-  const amt=parseFloat(document.getElementById('amtIn').value);
+  const desc=document.getElementById('sDesc').value.trim()||'مبيعة';
+  const amt=parseFloat(document.getElementById('sAmt').value);
+  const pay=document.getElementById('sPay').value;
+  const note=document.getElementById('sNote').value.trim();
   if(!amt||amt<=0){showToast('⚠️ أدخل مبلغاً صحيحاً');return;}
-  await addEntryAPI('s',desc,amt,window._saleImgData||null);
-  document.getElementById('descIn').value='';
-  document.getElementById('amtIn').value='';
-  window._saleImgData=null;
-  resetImgZone();
+  await api('/api/entries',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({type:'s',desc:note?`${desc} — ${note}`:desc,amt,payment_method:pay||null,month})});
+  document.getElementById('sDesc').value='';
+  document.getElementById('sAmt').value='';
+  document.getElementById('sPay').value='';
+  document.getElementById('sNote').value='';
+  window._sImg=null;
+  resetSaleImg();
+  load();showToast('✅ تمت إضافة المبيعة');
 }
 
 async function addBuy(){
-  const desc=document.getElementById('descInB').value.trim()||'مشتريات';
-  const amt=parseFloat(document.getElementById('amtInB').value);
+  const desc=document.getElementById('bDesc').value.trim()||'مشتريات';
+  const amt=parseFloat(document.getElementById('bAmt').value);
+  let payer=document.getElementById('bPayer').value;
+  if(payer==='أخرى') payer=document.getElementById('bOther').value.trim()||null;
+  const note=document.getElementById('bNote').value.trim();
   if(!amt||amt<=0){showToast('⚠️ أدخل مبلغاً صحيحاً');return;}
-  await addEntryAPI('b',desc,amt,null);
-  document.getElementById('descInB').value='';
-  document.getElementById('amtInB').value='';
+  await api('/api/entries',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({type:'b',desc:note?`${desc} — ${note}`:desc,amt,paid_by:payer||null,month})});
+  document.getElementById('bDesc').value='';
+  document.getElementById('bAmt').value='';
+  document.getElementById('bPayer').value='';
+  document.getElementById('bNote').value='';
+  load();showToast('✅ تمت إضافة المشتريات');
 }
 
+async function del(id){
+  await api(`/api/entries/${id}`,{method:'DELETE'});
+  load();showToast('🗑️ تم الحذف');
+}
+
+/* ── IMAGE ── */
 function onSaleImg(ev){
   const file=ev.target.files[0];if(!file)return;
-  const reader=new FileReader();
-  reader.onload=e=>{
-    window._saleImgData=e.target.result;
-    document.getElementById('saleImgZone').innerHTML=`
-      <div class="img-preview-wrap" style="width:100%;">
-        <img src="${e.target.result}" />
-        <button class="img-clear-btn" onclick="clearSaleImg(event)">✕</button>
+  const r=new FileReader();
+  r.onload=e=>{
+    window._sImg=e.target.result;
+    document.getElementById('siz').innerHTML=`
+      <div class="img-prev" style="width:100%">
+        <img src="${e.target.result}"/>
+        <button onclick="resetSaleImg(event)">✕</button>
       </div>`;
   };
-  reader.readAsDataURL(file);
+  r.readAsDataURL(file);
 }
 
-function clearSaleImg(ev){ev.stopPropagation();window._saleImgData=null;resetImgZone();}
-function resetImgZone(){
-  document.getElementById('saleImgZone').innerHTML=`
+function resetSaleImg(ev){
+  if(ev)ev.stopPropagation();
+  window._sImg=null;
+  document.getElementById('siz').innerHTML=`
     <input type="file" accept="image/*" onchange="onSaleImg(event)"/>
-    <div class="ipz-icon">📸</div>
-    <div class="ipz-txt"><strong>صورة المنتج</strong><br>باقة، عطر، هدية...</div>`;
+    <div class="iz-ico">📸</div><div class="iz-txt">صورة اختيارية</div>`;
 }
 
 async function pickFile(ev){
@@ -460,60 +686,44 @@ async function pickFile(ev){
   const isImg=file.type.startsWith('image/');
   const isPdf=file.type==='application/pdf';
   if(!isImg&&!isPdf){showToast('⚠️ نوع الملف غير مدعوم');return;}
-  let mediaPanel=isPdf
-    ?`<div style="padding:24px;background:var(--surface);border-radius:14px;border:1px solid var(--border2);display:flex;flex-direction:column;align-items:center;gap:8px;"><span style="font-size:42px">📄</span><div style="font-weight:700">${file.name}</div></div>`
-    :`<div><img src="${URL.createObjectURL(file)}" style="width:100%;border-radius:14px;border:1px solid var(--border2);max-height:340px;object-fit:contain;"/></div>`;
+  let mediaHtml=isPdf
+    ?`<div style="padding:20px;text-align:center;font-size:13px;color:var(--text2)">📄 ${file.name}</div>`
+    :`<img src="${URL.createObjectURL(file)}" style="width:100%;border-radius:12px;max-height:300px;object-fit:contain;"/>`;
   openModal(`
-    <div style="display:flex;align-items:center;gap:10px;margin-bottom:20px;">
-      <span style="font-size:26px">🧾</span>
-      <div style="text-align:right;"><div style="font-size:17px;font-weight:800;">أضف تفاصيل الفاتورة</div><div style="font-size:12px;color:var(--text3);">اطّلع على الفاتورة وأدخل البيانات</div></div>
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:18px;text-align:right">
+      <span style="font-size:24px">🧾</span>
+      <div><div style="font-size:16px;font-weight:800">تفاصيل الفاتورة</div>
+      <div style="font-size:11px;color:var(--text3)">اطّلع على الفاتورة وأدخل البيانات</div></div>
     </div>
-    <div class="inv-layout">
-      ${mediaPanel}
-      <div class="inv-fields">
-        <div><label>المورد / الوصف</label><input id="md2" type="text" placeholder="مثال: نانا هايبر، بذور..." /></div>
-        <div><label>المبلغ الإجمالي (ر.ع)</label><input id="ma" type="number" placeholder="0.000" step="0.001" class="inv-amt-input" /></div>
-        <div class="inv-hint">💡 شوف الفاتورة وأدخل المبلغ الإجمالي شامل الضريبة</div>
-        <div class="mbtns" style="margin-top:4px;">
-          <button class="bc" onclick="closeModal()">إلغاء</button>
-          <button class="bop" onclick="confirmBuyModal()">➕ إضافة</button>
-        </div>
-      </div>
-    </div>`,true);
+    <div style="margin-bottom:14px">${mediaHtml}</div>
+    <input class="minput" style="font-size:14px;margin-bottom:10px;text-align:right" id="mDesc" type="text" placeholder="اسم المورد / الوصف"/>
+    <input class="minput" id="mAmt" type="number" placeholder="المبلغ الإجمالي (ر.ع)" step="0.001"/>
+    <div class="mbtns">
+      <button class="bc" onclick="closeModal()">إلغاء</button>
+      <button class="bcp" onclick="confirmBuy()">➕ إضافة</button>
+    </div>`);
 }
 
-async function confirmBuyModal(){
-  const amt=parseFloat(document.getElementById('ma').value);
-  const desc=document.getElementById('md2').value.trim()||'مشتريات';
+async function confirmBuy(){
+  const amt=parseFloat(document.getElementById('mAmt').value);
+  const desc=document.getElementById('mDesc').value.trim()||'مشتريات';
   if(!amt||amt<=0){showToast('⚠️ أدخل مبلغاً صحيحاً');return;}
-  await addEntryAPI('b',desc,amt,null);
-  closeModal();
+  let payer=document.getElementById('bPayer').value;
+  if(payer==='أخرى') payer=document.getElementById('bOther').value.trim()||null;
+  await api('/api/entries',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({type:'b',desc,amt,paid_by:payer||null,month})});
+  closeModal();load();showToast('✅ تمت إضافة الفاتورة');
 }
 
-function openLightbox(src){document.getElementById('lbImg').src=src;document.getElementById('lightbox').classList.add('open');}
-function openModal(html,wide){const mb=document.getElementById('mb');mb.innerHTML=html;mb.className='modal'+(wide?' modal-wide':'');document.getElementById('ov').classList.add('open');}
+/* ── MISC ── */
+function changeMonth(){month=document.getElementById('msel').value;load();}
+function openLB(src){document.getElementById('lbImg').src=src;document.getElementById('lb').classList.add('open');}
+function openModal(html){document.getElementById('mb').innerHTML=html;document.getElementById('ov').classList.add('open');}
 function closeModal(){document.getElementById('ov').classList.remove('open');}
 document.getElementById('ov').addEventListener('click',function(e){if(e.target===this)closeModal();});
 function showToast(msg){const el=document.getElementById('toast');el.textContent=msg;el.classList.add('show');setTimeout(()=>el.classList.remove('show'),3000);}
 
-// petals
-['🌸','🌺','🌹','🌷'].forEach(p=>{
-  for(let i=0;i<3;i++){
-    const el=document.createElement('div');el.className='petal';el.textContent=p;
-    el.style.cssText=`left:${Math.random()*100}vw;font-size:${12+Math.random()*12}px;animation-duration:${14+Math.random()*16}s;animation-delay:${Math.random()*22}s;`;
-    document.body.appendChild(el);
-  }
-});
-
-// drag-drop
-const dz=document.getElementById('dz');
-dz.addEventListener('dragover',e=>{e.preventDefault();dz.classList.add('drag');});
-dz.addEventListener('dragleave',()=>dz.classList.remove('drag'));
-dz.addEventListener('drop',e=>{e.preventDefault();dz.classList.remove('drag');const f=e.dataTransfer.files[0];if(f)pickFile({target:{files:[f],value:''}});});
-
-// Init
-loadEntries();
-loadAllMonths();
+load();
 </script>
 </body>
 </html>
@@ -527,13 +737,47 @@ GROQ_KEY    = os.environ.get("GROQ_API_KEY", "")
 
 # ── Database ──────────────────────────────────────────────
 def get_db():
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
-    return conn
+    if USE_PG:
+        conn = psycopg2.connect(os.environ["DATABASE_URL"], sslmode="require")
+        return conn
+    else:
+        import sqlite3 as _sq
+        conn = _sq.connect(DB_PATH)
+        conn.row_factory = _sq.Row
+        return conn
 
 def init_db():
-    with get_db() as db:
-        db.execute("""
+    if USE_PG:
+        conn = get_db()
+        cur = conn.cursor()
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS entries (
+                id             SERIAL PRIMARY KEY,
+                type           TEXT NOT NULL,
+                desc           TEXT NOT NULL,
+                amt            REAL NOT NULL,
+                date           TEXT NOT NULL,
+                month          TEXT NOT NULL,
+                img            TEXT,
+                paid_by        TEXT DEFAULT NULL,
+                payment_method TEXT DEFAULT NULL,
+                sale_time      TEXT DEFAULT NULL,
+                created        TIMESTAMP DEFAULT NOW()
+            )
+        """)
+        # Migrations
+        for col in ["paid_by","payment_method","sale_time"]:
+            try:
+                cur.execute(f"ALTER TABLE entries ADD COLUMN IF NOT EXISTS {col} TEXT DEFAULT NULL")
+            except:
+                pass
+        conn.commit()
+        cur.close()
+        conn.close()
+    else:
+        import sqlite3 as _sq
+        conn = _sq.connect(DB_PATH)
+        conn.execute("""
             CREATE TABLE IF NOT EXISTS entries (
                 id             INTEGER PRIMARY KEY AUTOINCREMENT,
                 type           TEXT NOT NULL,
@@ -548,19 +792,44 @@ def init_db():
                 created        TEXT DEFAULT (datetime('now'))
             )
         """)
-        # Migrations
-        for col, default in [
-            ("paid_by", "NULL"),
-            ("payment_method", "NULL"),
-            ("sale_time", "NULL"),
-        ]:
+        for col in ["paid_by","payment_method","sale_time"]:
             try:
-                db.execute(f"ALTER TABLE entries ADD COLUMN {col} TEXT DEFAULT {default}")
+                conn.execute(f"ALTER TABLE entries ADD COLUMN {col} TEXT DEFAULT NULL")
             except:
                 pass
-        db.commit()
+        conn.commit()
+        conn.close()
 
 init_db()
+
+# ── DB query helper ──────────────────────────────────────
+def db_exec(sql, params=(), fetch=None):
+    """Unified DB execute — handles both PG and SQLite."""
+    if USE_PG:
+        sql_pg = sql.replace("?", "%s")
+        conn = get_db()
+        cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        cur.execute(sql_pg, params)
+        result = None
+        if fetch == "one":
+            result = dict(cur.fetchone()) if cur.rowcount or cur.description else None
+        elif fetch == "all":
+            result = [dict(r) for r in cur.fetchall()]
+        conn.commit(); cur.close(); conn.close()
+        return result
+    else:
+        import sqlite3 as _sq
+        conn = _sq.connect(DB_PATH)
+        conn.row_factory = _sq.Row
+        cur = conn.execute(sql, params)
+        result = None
+        if fetch == "one":
+            row = cur.fetchone()
+            result = dict(row) if row else None
+        elif fetch == "all":
+            result = [dict(r) for r in cur.fetchall()]
+        conn.commit(); conn.close()
+        return result
 
 # ── Helpers ───────────────────────────────────────────────
 def fmt_omr(n):
@@ -570,10 +839,20 @@ def cur_month():
     return datetime.now().strftime("%Y-%m")
 
 def get_month_data(month):
-    with get_db() as db:
-        rows = db.execute(
+    if USE_PG:
+        conn = get_db()
+        cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        cur.execute("SELECT * FROM entries WHERE month=%s ORDER BY created DESC", (month,))
+        rows = cur.fetchall()
+        cur.close(); conn.close()
+    else:
+        import sqlite3 as _sq
+        conn = _sq.connect(DB_PATH)
+        conn.row_factory = _sq.Row
+        rows = conn.execute(
             "SELECT * FROM entries WHERE month=? ORDER BY created DESC", (month,)
         ).fetchall()
+        conn.close()
     sales = [dict(r) for r in rows if r["type"] == "s"]
     buys  = [dict(r) for r in rows if r["type"] == "b"]
     return sales, buys
@@ -865,22 +1144,38 @@ def api_get():
 def api_add():
     d = request.json
     month = d.get("month", cur_month())
-    with get_db() as db:
-        db.execute(
+    vals = (d["type"], d["desc"], float(d["amt"]),
+            d.get("date", datetime.now().strftime("%d/%m/%Y")),
+            month, d.get("img"), d.get("paid_by"),
+            d.get("payment_method"), d.get("sale_time"))
+    if USE_PG:
+        conn = get_db()
+        cur = conn.cursor()
+        cur.execute(
+            "INSERT INTO entries (type,desc,amt,date,month,img,paid_by,payment_method,sale_time) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s)",
+            vals)
+        conn.commit(); cur.close(); conn.close()
+    else:
+        import sqlite3 as _sq
+        conn = _sq.connect(DB_PATH)
+        conn.execute(
             "INSERT INTO entries (type,desc,amt,date,month,img,paid_by,payment_method,sale_time) VALUES (?,?,?,?,?,?,?,?,?)",
-            (d["type"], d["desc"], float(d["amt"]),
-             d.get("date", datetime.now().strftime("%d/%m/%Y")),
-             month, d.get("img"), d.get("paid_by"),
-             d.get("payment_method"), d.get("sale_time"))
-        )
-        db.commit()
+            vals)
+        conn.commit(); conn.close()
     return jsonify({"ok": True})
 
 @app.route("/api/entries/<int:eid>", methods=["DELETE"])
 def api_del(eid):
-    with get_db() as db:
-        db.execute("DELETE FROM entries WHERE id=?", (eid,))
-        db.commit()
+    if USE_PG:
+        conn = get_db()
+        cur = conn.cursor()
+        cur.execute("DELETE FROM entries WHERE id=%s", (eid,))
+        conn.commit(); cur.close(); conn.close()
+    else:
+        import sqlite3 as _sq
+        conn = _sq.connect(DB_PATH)
+        conn.execute("DELETE FROM entries WHERE id=?", (eid,))
+        conn.commit(); conn.close()
     return jsonify({"ok": True})
 
 # ── Telegram Webhook ──────────────────────────────────────
@@ -906,14 +1201,9 @@ def webhook():
         # Payment method button
         if cb_data.startswith("pay:"):
             payment = cb_data.split("pay:", 1)[1]
-            with get_db() as db:
-                last = db.execute(
-                    "SELECT id FROM entries WHERE type='s' AND month=? ORDER BY created DESC LIMIT 1",
-                    (cb_month,)
-                ).fetchone()
-                if last:
-                    db.execute("UPDATE entries SET payment_method=? WHERE id=?", (payment, last["id"]))
-                    db.commit()
+            last = db_exec("SELECT id FROM entries WHERE type='s' AND month=?  ORDER BY created DESC LIMIT 1", (cb_month,), fetch="one")
+            if last:
+                db_exec("UPDATE entries SET payment_method=? WHERE id=?", (payment, last["id"]))
             # Remove buttons by editing message
             requests.post(
                 f"https://api.telegram.org/bot{BOT_TOKEN}/editMessageReplyMarkup",
@@ -965,12 +1255,7 @@ def webhook():
                     amt   = state.get("amt", 0)
                     month_s = state.get("month", cb_month)
                     dt    = state.get("date", cb_date)
-                    with get_db() as db:
-                        db.execute(
-                            "INSERT INTO entries (type,desc,amt,date,month,paid_by) VALUES (?,?,?,?,?,?)",
-                            ("b", desc, amt, dt, month_s, paid_by)
-                        )
-                        db.commit()
+                    db_exec(                             "INSERT INTO entries (type,desc,amt,date,month,paid_by) VALUES (?,?,?,?,?,?)",                             ("b", desc, amt, dt, month_s, paid_by)                         )
                     del pending[cb_chat]
                     paid_line = f"\n👤 دفع: <b>{paid_by}</b>" if paid_by else ""
                     tg(cb_chat,
@@ -978,14 +1263,9 @@ def webhook():
                        f"📦 مشتريات\n📝 {desc}\n💰 {fmt_omr(amt)}{paid_line}")
                 else:
                     # paid_by_photo — update last entry
-                    with get_db() as db:
-                        last = db.execute(
-                            "SELECT id FROM entries WHERE month=? ORDER BY created DESC LIMIT 1",
-                            (cb_month,)
-                        ).fetchone()
-                        if last:
-                            db.execute("UPDATE entries SET paid_by=? WHERE id=?", (paid_by, last["id"]))
-                            db.commit()
+                    last = db_exec("SELECT id FROM entries WHERE month=? ORDER BY created DESC LIMIT 1", (cb_month,), fetch="one")
+                    if last:
+                        db_exec("UPDATE entries SET paid_by=? WHERE id=?", (paid_by, last["id"]))
                     if cb_chat in pending:
                         del pending[cb_chat]
                     paid_line = f"👤 دفع: <b>{paid_by}</b>" if paid_by else "⏭ بدون دافع محدد"
@@ -1024,12 +1304,7 @@ def webhook():
                     smonth = d_obj.strftime("%Y-%m")
                 except:
                     smonth = month
-                with get_db() as db:
-                    db.execute(
-                        "INSERT INTO entries (type,desc,amt,date,month,payment_method,sale_time) VALUES (?,?,?,?,?,?,?)",
-                        ("s", desc, amt, sdate, smonth, payment, stime)
-                    )
-                    db.commit()
+                db_exec(                         "INSERT INTO entries (type,desc,amt,date,month,payment_method,sale_time) VALUES (?,?,?,?,?,?,?)",                         ("s", desc, amt, sdate, smonth, payment, stime)                     )
                 pay_icon = "💵" if "كاش" in payment else "💳" if "فيزا" in payment else "🏦" if "تحويل" in payment else "💰"
                 tg(chat_id,
                    f"✅ <b>تم تسجيل المبيعة!</b>\n\n"
@@ -1055,12 +1330,7 @@ def webhook():
             if result and result.get("found") and result.get("amt"):
                 amt  = float(result["amt"])
                 desc = result.get("desc", caption or "مشتريات")
-                with get_db() as db:
-                    db.execute(
-                        "INSERT INTO entries (type,desc,amt,date,month) VALUES (?,?,?,?,?)",
-                        ("b", desc, amt, date, month)
-                    )
-                    db.commit()
+                db_exec(                         "INSERT INTO entries (type,desc,amt,date,month) VALUES (?,?,?,?,?)",                         ("b", desc, amt, date, month)                     )
                 # Ask who paid
                 pending[chat_id] = {"waiting": "paid_by_photo", "last_id": None, "amt": amt}
                 tg_buttons(chat_id,
@@ -1097,16 +1367,9 @@ def webhook():
         try:
             amt = float(corr.group(1).replace(",","."))
             # Update last entry
-            with get_db() as db:
-                last = db.execute(
-                    "SELECT id FROM entries WHERE month=? ORDER BY created DESC LIMIT 1", (month,)
-                ).fetchone()
-                if last:
-                    db.execute("UPDATE entries SET amt=? WHERE id=?", (amt, last["id"]))
-                    db.commit()
-                    tg(chat_id, f"✅ تم تصحيح المبلغ إلى {fmt_omr(amt)}")
-                else:
-                    tg(chat_id, "⚠️ ما في إدخال سابق للتصحيح")
+            last = db_exec("UPDATE entries SET amt=? WHERE id=?", (amt, last["id"]), fetch="one")
+            if last:
+                db_exec("UPDATE entries SET amt=? WHERE id=?", (amt, last["id"]))
         except:
             tg(chat_id, "⚠️ تنسيق خاطئ، مثال: <code>تصحيح 3.500</code>")
         return "ok"
@@ -1117,13 +1380,9 @@ def webhook():
 
         if state["waiting"] == "paid_by_photo":
             paid_by = None if text.strip() == "-" else text.strip()
-            with get_db() as db:
-                last = db.execute(
-                    "SELECT id FROM entries WHERE month=? ORDER BY created DESC LIMIT 1", (month,)
-                ).fetchone()
-                if last:
-                    db.execute("UPDATE entries SET paid_by=? WHERE id=?", (paid_by, last["id"]))
-                    db.commit()
+            last = db_exec("UPDATE entries SET paid_by=? WHERE id=?", (paid_by, last["id"]), fetch="one")
+            if last:
+                db_exec("UPDATE entries SET paid_by=? WHERE id=?", (paid_by, last["id"]))
             del pending[chat_id]
             paid_line = f"👤 دفع: {paid_by}" if paid_by else ""
             tg(chat_id, f"✅ تم التسجيل! {paid_line}")
@@ -1140,13 +1399,9 @@ def webhook():
                 payment = "تحويل 🏦"
             else:
                 payment = pay or "غير محدد"
-            with get_db() as db:
-                last = db.execute(
-                    "SELECT id FROM entries WHERE type='s' AND month=? ORDER BY created DESC LIMIT 1", (month,)
-                ).fetchone()
-                if last:
-                    db.execute("UPDATE entries SET payment_method=? WHERE id=?", (payment, last["id"]))
-                    db.commit()
+            last = db_exec("UPDATE entries SET payment_method=? WHERE id=?", (payment, last["id"]), fetch="one")
+            if last:
+                db_exec("UPDATE entries SET payment_method=? WHERE id=?", (payment, last["id"]))
             del pending[chat_id]
             tg(chat_id, f"✅ تم تسجيل طريقة الدفع: {payment}")
             return "ok"
@@ -1161,24 +1416,15 @@ def webhook():
                 amt   = state.get("amt", 0)
                 month_s = state.get("month", month)
                 dt    = state.get("date", date)
-                with get_db() as db:
-                    db.execute(
-                        "INSERT INTO entries (type,desc,amt,date,month,paid_by) VALUES (?,?,?,?,?,?)",
-                        ("b", desc, amt, dt, month_s, paid_by)
-                    )
-                    db.commit()
+                db_exec(                         "INSERT INTO entries (type,desc,amt,date,month,paid_by) VALUES (?,?,?,?,?,?)",                         ("b", desc, amt, dt, month_s, paid_by)                     )
                 del pending[chat_id]
                 tg(chat_id,
                    f"✅ <b>تم التسجيل!</b>\n\n"
                    f"📦 مشتريات\n📝 {desc}\n💰 {fmt_omr(amt)}\n👤 دفع: <b>{paid_by}</b>")
             else:
-                with get_db() as db:
-                    last = db.execute(
-                        "SELECT id FROM entries WHERE month=? ORDER BY created DESC LIMIT 1", (month,)
-                    ).fetchone()
-                    if last:
-                        db.execute("UPDATE entries SET paid_by=? WHERE id=?", (paid_by, last["id"]))
-                        db.commit()
+                last = db_exec("UPDATE entries SET paid_by=? WHERE id=?", (paid_by, last["id"]), fetch="one")
+                if last:
+                    db_exec("UPDATE entries SET paid_by=? WHERE id=?", (paid_by, last["id"]))
                 if chat_id in pending:
                     del pending[chat_id]
                 tg(chat_id, f"✅ تم تسجيل الدافع: <b>{paid_by}</b>")
@@ -1189,12 +1435,7 @@ def webhook():
             desc  = state["desc"]
             amt   = state["amt"]
             month_s = state["month"]
-            with get_db() as db:
-                db.execute(
-                    "INSERT INTO entries (type,desc,amt,date,month,paid_by) VALUES (?,?,?,?,?,?)",
-                    ("b", desc, amt, state["date"], month_s, paid_by)
-                )
-                db.commit()
+            db_exec(                     "INSERT INTO entries (type,desc,amt,date,month,paid_by) VALUES (?,?,?,?,?,?)",                     ("b", desc, amt, state["date"], month_s, paid_by)                 )
             del pending[chat_id]
             paid_line = f"\n👤 <b>دفع:</b> {paid_by}" if paid_by else ""
             tg(chat_id,
@@ -1208,12 +1449,7 @@ def webhook():
             try:
                 amt = float(text.replace(",", "."))
                 desc = state.get("desc", "مشتريات")
-                with get_db() as db:
-                    db.execute(
-                        "INSERT INTO entries (type,desc,amt,date,month) VALUES (?,?,?,?,?)",
-                        ("b", desc, amt, date, month)
-                    )
-                    db.commit()
+                db_exec(                         "INSERT INTO entries (type,desc,amt,date,month) VALUES (?,?,?,?,?)",                         ("b", desc, amt, date, month)                     )
                 del pending[chat_id]
                 tg(chat_id,
                    f"✅ <b>تم التسجيل!</b>\n\n"
@@ -1313,12 +1549,7 @@ def webhook():
                 pay_method = "تحويل 🏦"
 
             if not pay_method:
-                with get_db() as db:
-                    db.execute(
-                        "INSERT INTO entries (type,desc,amt,date,month) VALUES (?,?,?,?,?)",
-                        ("s", desc, amt, date, month)
-                    )
-                    db.commit()
+                db_exec(                         "INSERT INTO entries (type,desc,amt,date,month) VALUES (?,?,?,?,?)",                         ("s", desc, amt, date, month)                     )
                 pending[chat_id] = {"waiting": "sale_payment", "desc": desc, "amt": amt, "date": date, "month": month}
                 tg_buttons(chat_id,
                    f"🌸 <b>مبيعة {fmt_omr(amt)}</b> — تم التسجيل!\n\n💳 <b>طريقة الدفع؟</b>",
@@ -1327,23 +1558,13 @@ def webhook():
                      {"label": "🏦 تحويل",  "data": "pay:تحويل 🏦"}]])
                 return "ok"
             else:
-                with get_db() as db:
-                    db.execute(
-                        "INSERT INTO entries (type,desc,amt,date,month,payment_method) VALUES (?,?,?,?,?,?)",
-                        ("s", desc, amt, date, month, pay_method)
-                    )
-                    db.commit()
+                db_exec(                         "INSERT INTO entries (type,desc,amt,date,month,payment_method) VALUES (?,?,?,?,?,?)",                         ("s", desc, amt, date, month, pay_method)                     )
                 tg(chat_id,
                    f"✅ <b>تم التسجيل!</b>\n\n"
                    f"🌸 مبيعة\n📝 {desc}\n💰 {fmt_omr(amt)}\n💳 {pay_method}\n📅 {date}")
                 return "ok"
 
-        with get_db() as db:
-            db.execute(
-                "INSERT INTO entries (type,desc,amt,date,month,paid_by) VALUES (?,?,?,?,?,?)",
-                (etype, desc, amt, date, month, paid_by)
-            )
-            db.commit()
+        db_exec(                 "INSERT INTO entries (type,desc,amt,date,month,paid_by) VALUES (?,?,?,?,?,?)",                 (etype, desc, amt, date, month, paid_by)             )
         label = "مبيعة 🌸" if etype == "s" else "مشتريات 📦"
         paid_line = f"\n👤 <b>دفع:</b> {paid_by}" if paid_by else ""
         tg(chat_id,
