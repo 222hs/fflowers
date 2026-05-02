@@ -1392,21 +1392,37 @@ def webhook():
 
     if "photo" in msg:
         file_id=msg["photo"][-1]["file_id"]; caption=msg.get("caption","").strip()
+        # Pre-detect electricity from caption
+        caption_is_elec = any(w in caption for w in ["كهرباء","كهربا","تعبئة","تعبئه","⚡","electric","kwh","prepaid"])
         tg(chat,"⏳ جاري قراءة الفاتورة...")
         result=groq_read_invoice(file_id)
         if result and result.get("found") and result.get("amt"):
             amt=float(result["amt"]); desc=result.get("desc","مشتريات")
-            is_elec=result.get("is_electricity",False)
+            is_elec=result.get("is_electricity",False) or caption_is_elec
             # Auto-detect electricity from description
             if not is_elec:
-                is_elec=any(w in (desc+caption).lower() for w in ["كهرب","تعبئ","prepaid","electric","kwh"])
+                is_elec=any(w in (desc+caption).lower() for w in ["كهرب","تعبئ","prepaid","electric","kwh","electricity","power"])
             if is_elec:
-                # Register as electricity expense automatically
+                # Use date from receipt if available, else today
+                receipt_date = result.get("date","").strip()
+                if receipt_date and len(receipt_date) >= 8:
+                    entry_date = receipt_date
+                    try:
+                        entry_month = datetime.strptime(receipt_date, "%d/%m/%Y").strftime("%Y-%m")
+                    except:
+                        entry_date = date; entry_month = month
+                else:
+                    entry_date = date; entry_month = month
+                # Save as expense (NOT as buy)
                 db_run("INSERT INTO entries (type,desc,amt,date,month,category) VALUES (?,?,?,?,?,?)",
-                       ("expense","فاتورة الكهرباء",amt,date,month,"مصاريف ثابتة"))
+                       ("expense","فاتورة الكهرباء",amt,entry_date,entry_month,"مصاريف ثابتة"))
                 exp=db_one("SELECT id FROM expenses WHERE name=?",("فاتورة الكهرباء",))
-                if exp: db_run("UPDATE expenses SET last_paid=?,month=?,amount=? WHERE id=?",(date,month,amt,exp["id"]))
-                tg(chat,f"⚡ <b>تم تسجيل فاتورة الكهرباء!</b>\n💰 {fmt_omr(amt)}\n📅 {date}")
+                if exp: db_run("UPDATE expenses SET last_paid=?,month=?,amount=? WHERE id=?",(entry_date,entry_month,amt,exp["id"]))
+                tg(chat,
+                   f"⚡ <b>تم تسجيل فاتورة الكهرباء!</b>\n"
+                   f"💰 {fmt_omr(amt)}\n"
+                   f"📅 {entry_date}\n"
+                   f"✅ أُضيفت في المصاريف الثابتة (ليس المشتريات)")
             else:
                 db_run("INSERT INTO entries (type,desc,amt,date,month) VALUES (?,?,?,?,?)",("b",desc,amt,date,month))
                 pending[chat]={"waiting":"paid_by_photo","amt":amt}
@@ -1414,12 +1430,31 @@ def webhook():
                     [[{"label":"👤 حسين","data":"payer:حسين"},{"label":"👤 شوق","data":"payer:شوق"}],
                      [{"label":"➕ شخص آخر","data":"payer:other"},{"label":"⏭ تخطي","data":"payer:skip"}]])
         else:
-            pending[chat]={"waiting":"buy_amt","desc":caption or "مشتريات"}
-            tg(chat,"🧾 كم المبلغ الإجمالي؟\nأرسل الرقم فقط: <code>3.520</code>")
+            if caption_is_elec:
+                pending[chat]={"waiting":"elec_amt"}
+                tg(chat,"⚡ ما قدرت أقرأ الفاتورة بوضوح\nكم مبلغ فاتورة الكهرباء؟\nأرسل الرقم فقط: <code>45.500</code>")
+            else:
+                pending[chat]={"waiting":"buy_amt","desc":caption or "مشتريات"}
+                tg(chat,"🧾 ما قدرت أقرأ الفاتورة بوضوح\nكم المبلغ الإجمالي؟\nأرسل الرقم فقط: <code>3.520</code>")
         return "ok"
 
     text=msg.get("text","").strip()
     if not text: return "ok"
+
+    # Handle electricity manual amount
+    if pending.get(chat,{}).get("waiting") == "elec_amt":
+        try:
+            amt = float(text.replace(",","."))
+            date_now = datetime.now().strftime("%d/%m/%Y")
+            db_run("INSERT INTO entries (type,desc,amt,date,month,category) VALUES (?,?,?,?,?,?)",
+                   ("expense","فاتورة الكهرباء",amt,date_now,month,"مصاريف ثابتة"))
+            exp=db_one("SELECT id FROM expenses WHERE name=?",("فاتورة الكهرباء",))
+            if exp: db_run("UPDATE expenses SET last_paid=?,month=?,amount=? WHERE id=?",(date_now,month,amt,exp["id"]))
+            del pending[chat]
+            tg(chat,f"⚡ <b>تم تسجيل فاتورة الكهرباء!</b>\n💰 {fmt_omr(amt)}\n📅 {date_now}")
+        except:
+            tg(chat,"⚠️ أرسل رقم صحيح مثل: <code>45.500</code>")
+        return "ok"
 
     if pending.get(chat,{}).get("waiting_name"):
         paid_by=text.strip(); state=pending[chat]; del state["waiting_name"]
