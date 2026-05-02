@@ -2008,6 +2008,16 @@ def api_report_pdf():
         import traceback
         return jsonify({"error": str(e), "trace": traceback.format_exc()}), 500
 
+@app.route("/api/expense_entries")
+def api_list_expense_entries():
+    """List all expense entries."""
+    month_val = request.args.get("month", "")
+    if month_val:
+        entries = db_get("SELECT * FROM entries WHERE type='expense' AND month=? ORDER BY created DESC", (month_val,))
+    else:
+        entries = db_get("SELECT * FROM entries WHERE type='expense' ORDER BY created DESC LIMIT 50")
+    return jsonify(entries)
+
 @app.route("/fix_expenses")
 def fix_expenses():
     """Remove duplicate expenses keeping only latest per name."""
