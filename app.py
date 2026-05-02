@@ -1,21 +1,16 @@
 import os
-import sys
-import subprocess
+import re
 import requests
 from datetime import datetime
 from flask import Flask, request, jsonify, Response
 
-# Auto-install psycopg2 if DATABASE_URL is set but psycopg2 missing
+# PostgreSQL via pg8000 (pure Python, works with any Python version)
 if os.environ.get("DATABASE_URL"):
     try:
-        import psycopg2
-        import psycopg2.extras
+        import pg8000.native as pg
         USE_PG = True
     except ImportError:
-        subprocess.check_call([sys.executable, "-m", "pip", "install", "psycopg2-binary", "-q"])
-        import psycopg2
-        import psycopg2.extras
-        USE_PG = True
+        USE_PG = False
 else:
     USE_PG = False
 
@@ -648,13 +643,25 @@ GEMINI_KEY  = os.environ.get("GEMINI_API_KEY", "")
 GROQ_KEY    = os.environ.get("GROQ_API_KEY", "")
 
 # ── Database ──────────────────────────────────────────────
+def parse_pg_url(url):
+    """Parse postgres:// URL into pg8000 connection params."""
+    m = re.match(r'postgres(?:ql)?://([^:]+):([^@]+)@([^:/]+):?(\d*)/(.+)', url)
+    if not m:
+        raise ValueError("Invalid DATABASE_URL")
+    user, password, host, port, database = m.groups()
+    return {
+        "user": user,
+        "password": password,
+        "host": host,
+        "port": int(port) if port else 5432,
+        "database": database.split("?")[0],
+        "ssl_context": True
+    }
+
 def get_db():
     if USE_PG:
-        db_url = os.environ["DATABASE_URL"]
-        # Fix: psycopg2 needs postgresql:// not postgres://
-        if db_url.startswith("postgres://"):
-            db_url = db_url.replace("postgres://", "postgresql://", 1)
-        conn = psycopg2.connect(db_url)
+        params = parse_pg_url(os.environ["DATABASE_URL"])
+        conn = pg.Connection(**params)
         return conn
     else:
         import sqlite3 as _sq
@@ -665,8 +672,7 @@ def get_db():
 def init_db():
     if USE_PG:
         conn = get_db()
-        cur = conn.cursor()
-        cur.execute("""
+        conn.run("""
             CREATE TABLE IF NOT EXISTS entries (
                 id             SERIAL PRIMARY KEY,
                 type           TEXT NOT NULL,
@@ -779,19 +785,26 @@ init_db()
 
 # ── DB query helper ──────────────────────────────────────
 def db_exec(sql, params=(), fetch=None):
-    """Unified DB execute — handles both PG and SQLite."""
+    """Unified DB execute — handles both pg8000 and SQLite."""
     if USE_PG:
         sql_pg = sql.replace("?", "%s")
         conn = get_db()
-        cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
-        cur.execute(sql_pg, params)
-        result = None
-        if fetch == "one":
-            result = dict(cur.fetchone()) if cur.rowcount or cur.description else None
-        elif fetch == "all":
-            result = [dict(r) for r in cur.fetchall()]
-        conn.commit(); cur.close(); conn.close()
-        return result
+        try:
+            if fetch == "one":
+                rows = conn.run(sql_pg, *params)
+                cols = [c["name"] for c in conn.columns]
+                if rows:
+                    return dict(zip(cols, rows[0]))
+                return None
+            elif fetch == "all":
+                rows = conn.run(sql_pg, *params)
+                cols = [c["name"] for c in conn.columns]
+                return [dict(zip(cols, r)) for r in rows]
+            else:
+                conn.run(sql_pg, *params)
+                return None
+        finally:
+            conn.close()
     else:
         import sqlite3 as _sq
         conn = _sq.connect(DB_PATH)
