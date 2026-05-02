@@ -899,6 +899,8 @@ async function loadExpensesPanel(){
     const isPaid = myPaid.length > 0;
     const lastDate = myPaid.length ? myPaid[myPaid.length-1].date : null;
 
+    const defaultNames = ['راتب العامل','إيجار المحل','تعبئة كهرباء'];
+    const canDelete = !defaultNames.includes(e.name);
     html += `<div class="exp-row" style="${isPaid?'border-color:rgba(122,171,138,.3);':''}" >
       <div class="exp-ico">${icon}</div>
       <div class="exp-info">
@@ -906,9 +908,12 @@ async function loadExpensesPanel(){
         <div class="exp-last">${isPaid ? '✅ آخر دفع: '+lastDate : (e.last_paid ? 'آخر تعبئة: '+e.last_paid : 'لم يُدفع بعد')}</div>
       </div>
       <div class="exp-amt" style="color:${isPaid?'var(--green-d)':'var(--rose-d)'};">${isPaid?fmt(totalPaid):fmt(e.amount)} ر.ع</div>
-      <button class="exp-pay-btn" onclick="${isElec?`addElecBill(${e.id})`:`payExpense(${e.id},'${e.name}',${e.amount})`}">
-        ${isElec?'⚡ إضافة تعبئة':'💳 دفع'}
-      </button>
+      <div style="display:flex;gap:5px;flex-shrink:0;">
+        <button class="exp-pay-btn" onclick="${isElec?`addElecBill(${e.id})`:`payExpense(${e.id},'${e.name}',${e.amount})`}">
+          ${isElec?'⚡ تعبئة':'💳 دفع'}
+        </button>
+        ${canDelete ? `<button onclick="delExpenseDef(${e.id},'${e.name}')" style="background:rgba(232,121,138,.1);border:1px solid rgba(232,121,138,.25);border-radius:8px;color:var(--rose-d);font-size:11px;padding:5px 8px;cursor:pointer;font-family:Tajawal,sans-serif;">🗑</button>` : ''}
+      </div>
     </div>`;
 
     // Show all paid entries for this expense with delete button
@@ -997,6 +1002,13 @@ async function payExpense(id, name, defaultAmt){
   await api(`/api/expenses/${id}/pay`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({month,amount:a})});
   loadExpensesPanel(); load();
   showToast(`✅ تم تسجيل دفع ${name} — ${fmt(a)} ر.ع`);
+}
+
+async function delExpenseDef(id, name){
+  if(!confirm(`حذف مصروف "${name}" نهائياً؟`)) return;
+  await api(`/api/expenses/${id}`, {method:'DELETE'});
+  loadExpensesPanel();
+  showToast(`✅ تم حذف ${name}`);
 }
 
 async function addExpensePrompt(){
@@ -1822,6 +1834,12 @@ def api_reset_expense(eid):
         db_run("UPDATE expenses SET last_paid=NULL, month=NULL WHERE id=?", (eid,))
     return jsonify({"ok": True})
 
+@app.route("/api/expenses/<int:eid>", methods=["DELETE"])
+def api_delete_expense_def(eid):
+    """Delete an expense definition entirely."""
+    db_run("DELETE FROM expenses WHERE id=?", (eid,))
+    return jsonify({"ok": True})
+
 @app.route("/api/report/pdf")
 def api_report_pdf():
     """Generate PDF report."""
@@ -2020,13 +2038,17 @@ def api_list_expense_entries():
 
 @app.route("/fix_elec")
 def fix_elec():
-    """Rename فاتورة الكهرباء to تعبئة كهرباء and reset amount."""
+    """Fix duplicate electricity expenses."""
     try:
         db_run("UPDATE expenses SET name='تعبئة كهرباء', amount=0 WHERE name='فاتورة الكهرباء'")
-        db_run("UPDATE expenses SET amount=0 WHERE name='تعبئة كهرباء'")
         db_run("UPDATE entries SET desc='تعبئة كهرباء' WHERE desc='فاتورة الكهرباء'")
-        result = db_get("SELECT * FROM expenses WHERE name='تعبئة كهرباء'")
-        return jsonify({"ok": True, "expense": result})
+        # Remove duplicates - keep only first one
+        all_elec = db_get("SELECT * FROM expenses WHERE name='تعبئة كهرباء' ORDER BY id")
+        if len(all_elec) > 1:
+            for dup in all_elec[1:]:
+                db_run("DELETE FROM expenses WHERE id=?", (dup["id"],))
+        result = db_get("SELECT * FROM expenses ORDER BY id")
+        return jsonify({"ok": True, "expenses": result})
     except Exception as e:
         return jsonify({"error": str(e)})
 
