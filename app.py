@@ -44,6 +44,57 @@ body{font-family:'Tajawal',sans-serif;background:var(--ink);color:var(--text);mi
 @keyframes drift{to{transform:translate(30px,40px) scale(1.08);}}
 #app{position:relative;z-index:1;}
 
+/* NAV */
+.nav-btn{padding:7px 14px;border:1px solid var(--border2);border-radius:20px;
+  background:transparent;color:var(--text2);font-family:"Tajawal",sans-serif;
+  font-size:13px;font-weight:600;cursor:pointer;transition:.2s;}
+.nav-btn:hover{border-color:var(--rose);color:var(--text);}
+.nav-active{background:linear-gradient(135deg,rgba(232,84,122,.15),rgba(232,84,122,.05));
+  border-color:rgba(232,84,122,.4)!important;color:var(--rose2)!important;}
+.page{display:none;}.page.active{display:block;}
+
+/* SHELVES */
+.shelf-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:20px;margin-bottom:28px;}
+.shelf-card{background:var(--card);border:1px solid var(--border);border-radius:20px;overflow:hidden;
+  animation:fadeUp .5s ease both;}
+.shelf-head{padding:16px 20px;display:flex;align-items:center;justify-content:space-between;}
+.shelf-name{font-size:16px;font-weight:800;display:flex;align-items:center;gap:10px;}
+.shelf-dot{width:10px;height:10px;border-radius:50%;}
+.shelf-stats{display:flex;gap:12px;}
+.shelf-stat{text-align:center;}
+.shelf-stat .sv{font-size:18px;font-weight:800;}
+.shelf-stat .sl{font-size:10px;color:var(--text3);}
+.shelf-products{padding:8px 12px;max-height:320px;overflow-y:auto;
+  scrollbar-width:thin;scrollbar-color:var(--border2) transparent;}
+.shelf-products::-webkit-scrollbar{width:3px;}
+.prod-row{display:flex;align-items:center;gap:10px;padding:10px 8px;
+  border-radius:10px;transition:.2s;border-bottom:1px solid var(--border);}
+.prod-row:last-child{border-bottom:none;}
+.prod-row:hover{background:rgba(255,255,255,.03);}
+.prod-img{width:38px;height:38px;border-radius:8px;object-fit:cover;flex-shrink:0;border:1px solid var(--border2);}
+.prod-img-ph{width:38px;height:38px;border-radius:8px;background:var(--surface);
+  border:1px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0;}
+.prod-info{flex:1;min-width:0;}
+.prod-name{font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.prod-price{font-size:11px;color:var(--text3);margin-top:2px;}
+.prod-qty{display:flex;align-items:center;gap:6px;flex-shrink:0;}
+.qty-badge{min-width:32px;padding:3px 8px;border-radius:8px;font-size:12px;font-weight:800;
+  text-align:center;background:rgba(78,205,196,.12);color:var(--mint);}
+.qty-badge.zero{background:rgba(251,113,133,.12);color:var(--neg);}
+.sell-btn{background:linear-gradient(135deg,var(--mint),#2ba8a0);border:none;border-radius:8px;
+  color:#0d0a0e;font-size:12px;font-weight:700;padding:5px 10px;cursor:pointer;
+  font-family:"Tajawal",sans-serif;transition:.2s;white-space:nowrap;}
+.sell-btn:hover{transform:scale(1.05);}
+.sell-btn:disabled{opacity:.4;cursor:not-allowed;}
+.prod-del{background:none;border:none;cursor:pointer;color:var(--text3);font-size:13px;
+  width:24px;height:24px;border-radius:6px;display:flex;align-items:center;justify-content:center;transition:.2s;}
+.prod-del:hover{background:rgba(251,113,133,.14);color:var(--neg);}
+.shelf-footer{padding:12px 16px;border-top:1px solid var(--border);background:rgba(255,255,255,.01);}
+.add-prod-btn{width:100%;padding:9px;border:1px dashed var(--border2);border-radius:10px;
+  background:transparent;color:var(--text3);font-family:"Tajawal",sans-serif;font-size:13px;
+  font-weight:600;cursor:pointer;transition:.2s;}
+.add-prod-btn:hover{border-color:var(--mint);color:var(--mint);}
+
 /* HEADER */
 header{padding:0 32px;height:70px;display:flex;align-items:center;justify-content:space-between;
   border-bottom:1px solid var(--border);background:rgba(13,10,14,.8);backdrop-filter:blur(20px);
@@ -277,6 +328,10 @@ main{max-width:1200px;margin:0 auto;padding:32px 20px 64px;}
     <div class="emblem">🌹</div>
     <div><div class="bname">فيروز فلورز</div><div class="bsub">إدارة المشتريات والمبيعات</div></div>
   </div>
+  <nav style="display:flex;gap:6px;">
+    <button onclick="showPage('main')" id="nav-main" class="nav-btn nav-active">📊 الرئيسية</button>
+    <button onclick="showPage('shelves')" id="nav-shelves" class="nav-btn">🗄️ الرفوف</button>
+  </nav>
   <div class="mpill">
     <label>📅</label>
     <select id="msel" onchange="changeMonth()">
@@ -447,6 +502,57 @@ main{max-width:1200px;margin:0 auto;padding:32px 20px 64px;}
     </div>
   </div>
 </main>
+
+<!-- SHELVES PAGE -->
+<div id="page-shelves" class="page" style="max-width:1200px;margin:0 auto;padding:32px 20px 64px;">
+  <div class="slbl">الرفوف المؤجرة</div>
+  <div class="shelf-grid" id="shelfGrid"></div>
+</div>
+</div>
+
+<!-- ADD PRODUCT MODAL -->
+<div class="overlay" id="addProdOv">
+  <div class="modal">
+    <div class="mico">📦</div>
+    <h3 id="addProdTitle">إضافة منتج</h3>
+    <input class="minput" style="font-size:14px;margin-bottom:10px;text-align:right"
+      id="pName" type="text" placeholder="اسم المنتج"/>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px;">
+      <div class="fld"><label>السعر (ر.ع)</label>
+        <input id="pPrice" type="number" placeholder="0.000" step="0.001"/></div>
+      <div class="fld"><label>الكمية</label>
+        <input id="pQty" type="number" placeholder="0" min="0"/></div>
+    </div>
+    <div class="mbtns">
+      <button class="bc" onclick="closeProdModal()">إلغاء</button>
+      <button class="bcs" onclick="saveProduct()">✅ إضافة</button>
+    </div>
+  </div>
+</div>
+
+<!-- SELL MODAL -->
+<div class="overlay" id="sellOv">
+  <div class="modal">
+    <div class="mico">🌸</div>
+    <h3>تسجيل مبيعة</h3>
+    <p id="sellDesc" style="font-size:15px;font-weight:700;color:var(--text);margin-bottom:6px;"></p>
+    <p id="sellInfo" style="margin-bottom:20px;"></p>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px;">
+      <div class="fld"><label>الكمية المباعة</label>
+        <input id="sellQty" type="number" value="1" min="1"/></div>
+      <div class="fld"><label>💳 طريقة الدفع</label>
+        <select id="sellPay">
+          <option value="">— اختر —</option>
+          <option value="كاش 💵">💵 كاش</option>
+          <option value="فيزا 💳">💳 فيزا</option>
+          <option value="تحويل 🏦">🏦 تحويل</option>
+        </select></div>
+    </div>
+    <div class="mbtns">
+      <button class="bc" onclick="closeSellModal()">إلغاء</button>
+      <button class="bcs" onclick="confirmSell()">💰 تأكيد البيع</button>
+    </div>
+  </div>
 </div>
 
 <div class="lb" id="lb" onclick="this.classList.remove('open')"><img id="lbImg" src=""/></div>
@@ -724,6 +830,126 @@ document.getElementById('ov').addEventListener('click',function(e){if(e.target==
 function showToast(msg){const el=document.getElementById('toast');el.textContent=msg;el.classList.add('show');setTimeout(()=>el.classList.remove('show'),3000);}
 
 load();
+
+/* ── PAGE NAV ── */
+function showPage(p){
+  document.getElementById('page-shelves').className='page'+(p==='shelves'?' active':'');
+  document.querySelector('main').style.display=p==='main'?'block':'none';
+  document.getElementById('nav-main').className='nav-btn'+(p==='main'?' nav-active':'');
+  document.getElementById('nav-shelves').className='nav-btn'+(p==='shelves'?' nav-active':'');
+  if(p==='shelves') loadShelves();
+}
+
+/* ── SHELVES ── */
+let activeProdShelf=null, activeSellProd=null;
+
+async function loadShelves(){
+  const shelves=await api('/api/shelves');
+  const grid=document.getElementById('shelfGrid');
+  grid.innerHTML=shelves.map(s=>{
+    const totalVal=s.products.reduce((a,p)=>a+(p.price*p.qty),0);
+    const totalQty=s.products.reduce((a,p)=>a+p.qty,0);
+    return `
+    <div class="shelf-card" id="shelf-${s.id}">
+      <div class="shelf-head" style="border-bottom:2px solid ${s.color}22;background:${s.color}10;">
+        <div class="shelf-name">
+          <div class="shelf-dot" style="background:${s.color};box-shadow:0 0 8px ${s.color}"></div>
+          رف ${s.name}
+        </div>
+        <div class="shelf-stats">
+          <div class="shelf-stat">
+            <div class="sv" style="color:${s.color}">${totalQty}</div>
+            <div class="sl">منتج</div>
+          </div>
+          <div class="shelf-stat">
+            <div class="sv" style="color:var(--gold)">${fmt(totalVal)}</div>
+            <div class="sl">ر.ع قيمة</div>
+          </div>
+        </div>
+      </div>
+      <div class="shelf-products">
+        ${s.products.length?s.products.map(p=>`
+          <div class="prod-row" id="prod-${p.id}">
+            <div class="prod-img-ph">🌸</div>
+            <div class="prod-info">
+              <div class="prod-name">${p.name}</div>
+              <div class="prod-price">${fmt(p.price)} ر.ع للقطعة</div>
+            </div>
+            <div class="prod-qty">
+              <div class="qty-badge ${p.qty===0?'zero':''}">${p.qty}</div>
+              <button class="sell-btn" ${p.qty===0?'disabled':''} onclick="openSell(${p.id},'${p.name.replace(/'/g,"\'")}',${p.price},${p.qty})">بيع</button>
+              <button class="prod-del" onclick="delProduct(${p.id})">🗑</button>
+            </div>
+          </div>`).join('')
+          :`<div style="padding:24px;text-align:center;color:var(--text3);font-size:13px;">لا توجد منتجات بعد</div>`}
+      </div>
+      <div class="shelf-footer">
+        <button class="add-prod-btn" onclick="openAddProd(${s.id},'${s.name}')">+ إضافة منتج لرف ${s.name}</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function openAddProd(sid,sname){
+  activeProdShelf=sid;
+  document.getElementById('addProdTitle').textContent=`إضافة منتج — رف ${sname}`;
+  document.getElementById('pName').value='';
+  document.getElementById('pPrice').value='';
+  document.getElementById('pQty').value='';
+  document.getElementById('addProdOv').classList.add('open');
+}
+function closeProdModal(){document.getElementById('addProdOv').classList.remove('open');}
+
+async function saveProduct(){
+  const name=document.getElementById('pName').value.trim();
+  const price=parseFloat(document.getElementById('pPrice').value);
+  const qty=parseInt(document.getElementById('pQty').value)||0;
+  if(!name||!price){showToast('⚠️ أدخل الاسم والسعر');return;}
+  await api(`/api/shelves/${activeProdShelf}/products`,{
+    method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({name,price,qty})
+  });
+  closeProdModal();
+  loadShelves();
+  showToast('✅ تم إضافة المنتج');
+}
+
+async function delProduct(pid){
+  await api(`/api/shelf_products/${pid}`,{method:'DELETE'});
+  loadShelves();
+  showToast('🗑️ تم الحذف');
+}
+
+function openSell(pid,name,price,qty){
+  activeSellProd={pid,name,price,qty};
+  document.getElementById('sellDesc').textContent=name;
+  document.getElementById('sellInfo').textContent=`السعر: ${fmt(price)} ر.ع | المتاح: ${qty} قطعة`;
+  document.getElementById('sellQty').value=1;
+  document.getElementById('sellQty').max=qty;
+  document.getElementById('sellPay').value='';
+  document.getElementById('sellOv').classList.add('open');
+}
+function closeSellModal(){document.getElementById('sellOv').classList.remove('open');}
+
+async function confirmSell(){
+  const qty=parseInt(document.getElementById('sellQty').value)||1;
+  const pay=document.getElementById('sellPay').value;
+  if(!activeSellProd)return;
+  if(qty>activeSellProd.qty){showToast('⚠️ الكمية أكبر من المتاح');return;}
+  const r=await api(`/api/shelf_products/${activeSellProd.pid}/sell`,{
+    method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({qty,payment_method:pay})
+  });
+  closeSellModal();
+  const total=activeSellProd.price*qty;
+  showToast(`✅ تم بيع ${qty} × ${activeSellProd.name} بـ ${fmt(total)} ر.ع`);
+  loadShelves();
+  load(); // refresh main stats too
+}
+
+// Close modals on overlay click
+document.getElementById('addProdOv').addEventListener('click',function(e){if(e.target===this)closeProdModal();});
+document.getElementById('sellOv').addEventListener('click',function(e){if(e.target===this)closeSellModal();});
 </script>
 </body>
 </html>
@@ -762,8 +988,36 @@ def init_db():
                 paid_by        TEXT DEFAULT NULL,
                 payment_method TEXT DEFAULT NULL,
                 sale_time      TEXT DEFAULT NULL,
+                shelf_id       INTEGER DEFAULT NULL,
                 created        TIMESTAMP DEFAULT NOW()
             )
+        """)
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS shelves (
+                id      SERIAL PRIMARY KEY,
+                name    TEXT NOT NULL UNIQUE,
+                color   TEXT DEFAULT '#e8547a'
+            )
+        """)
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS shelf_products (
+                id       SERIAL PRIMARY KEY,
+                shelf_id INTEGER NOT NULL REFERENCES shelves(id) ON DELETE CASCADE,
+                name     TEXT NOT NULL,
+                price    REAL NOT NULL,
+                qty      INTEGER NOT NULL DEFAULT 0,
+                img      TEXT,
+                created  TIMESTAMP DEFAULT NOW()
+            )
+        """)
+        # Insert default shelves
+        cur.execute("""
+            INSERT INTO shelves (name, color) VALUES
+              ('ريحان',      '#f07090'),
+              ('فتحية',      '#4ecdc4'),
+              ('فطوم',       '#b794f4'),
+              ('اكسسوارات', '#f5c842')
+            ON CONFLICT (name) DO NOTHING
         """)
         # Migrations
         for col in ["paid_by","payment_method","sale_time"]:
@@ -789,10 +1043,33 @@ def init_db():
                 paid_by        TEXT DEFAULT NULL,
                 payment_method TEXT DEFAULT NULL,
                 sale_time      TEXT DEFAULT NULL,
+                shelf_id       INTEGER DEFAULT NULL,
                 created        TEXT DEFAULT (datetime('now'))
             )
         """)
-        for col in ["paid_by","payment_method","sale_time"]:
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS shelves (
+                id    INTEGER PRIMARY KEY AUTOINCREMENT,
+                name  TEXT NOT NULL UNIQUE,
+                color TEXT DEFAULT '#e8547a'
+            )
+        """)
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS shelf_products (
+                id       INTEGER PRIMARY KEY AUTOINCREMENT,
+                shelf_id INTEGER NOT NULL,
+                name     TEXT NOT NULL,
+                price    REAL NOT NULL,
+                qty      INTEGER NOT NULL DEFAULT 0,
+                img      TEXT,
+                created  TEXT DEFAULT (datetime('now'))
+            )
+        """)
+        for row in [('ريحان','#f07090'),('فتحية','#4ecdc4'),('فطوم','#b794f4'),('اكسسوارات','#f5c842')]:
+            try:
+                conn.execute("INSERT OR IGNORE INTO shelves (name,color) VALUES (?,?)", row)
+            except: pass
+        for col in ["paid_by","payment_method","sale_time","shelf_id"]:
             try:
                 conn.execute(f"ALTER TABLE entries ADD COLUMN {col} TEXT DEFAULT NULL")
             except:
@@ -1179,6 +1456,53 @@ def api_del(eid):
     return jsonify({"ok": True})
 
 # ── Telegram Webhook ──────────────────────────────────────
+# ── Shelves API ───────────────────────────────────────────
+@app.route("/api/shelves")
+def api_shelves():
+    rows = db_exec("SELECT * FROM shelves ORDER BY id", fetch="all")
+    result = []
+    for s in (rows or []):
+        prods = db_exec("SELECT * FROM shelf_products WHERE shelf_id=? ORDER BY created DESC", (s["id"],), fetch="all")
+        result.append({**dict(s), "products": prods or []})
+    return jsonify(result)
+
+@app.route("/api/shelves/<int:sid>/products", methods=["POST"])
+def api_add_product(sid):
+    d = request.json
+    db_exec("INSERT INTO shelf_products (shelf_id,name,price,qty,img) VALUES (?,?,?,?,?)",
+            (sid, d["name"], float(d["price"]), int(d.get("qty",0)), d.get("img")))
+    return jsonify({"ok": True})
+
+@app.route("/api/shelf_products/<int:pid>", methods=["DELETE"])
+def api_del_product(pid):
+    db_exec("DELETE FROM shelf_products WHERE id=?", (pid,))
+    return jsonify({"ok": True})
+
+@app.route("/api/shelf_products/<int:pid>/sell", methods=["POST"])
+def api_sell_product(pid):
+    d = request.json
+    qty = int(d.get("qty", 1))
+    prod = db_exec("SELECT * FROM shelf_products WHERE id=?", (pid,), fetch="one")
+    if not prod:
+        return jsonify({"ok": False, "error": "not found"}), 404
+    new_qty = max(0, prod["qty"] - qty)
+    db_exec("UPDATE shelf_products SET qty=? WHERE id=?", (new_qty, pid))
+    # Record as sale entry
+    month = datetime.now().strftime("%Y-%m")
+    date  = datetime.now().strftime("%d/%m/%Y")
+    total = prod["price"] * qty
+    shelf = db_exec("SELECT name FROM shelves WHERE id=?", (prod["shelf_id"],), fetch="one")
+    shelf_name = shelf["name"] if shelf else ""
+    db_exec("INSERT INTO entries (type,desc,amt,date,month,shelf_id) VALUES (?,?,?,?,?,?)",
+            ("s", f'{prod["name"]} — رف {shelf_name}', total, date, month, prod["shelf_id"]))
+    return jsonify({"ok": True, "new_qty": new_qty, "total": total})
+
+@app.route("/api/shelf_products/<int:pid>/qty", methods=["POST"])
+def api_update_qty(pid):
+    d = request.json
+    db_exec("UPDATE shelf_products SET qty=? WHERE id=?", (int(d["qty"]), pid))
+    return jsonify({"ok": True})
+
 @app.route("/webhook", methods=["POST"])
 def webhook():
     data = request.json or {}
