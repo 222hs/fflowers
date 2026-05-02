@@ -1093,12 +1093,9 @@ async function delFlower(id){
 
 /* ── PDF REPORTS ── */
 function dlPDF(type){
-  showToast('⏳ جاري إنشاء التقرير...');
+  showToast('⏳ جاري فتح التقرير...');
   const url = `/api/report/pdf?month=${month}&type=${type}`;
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = `fairuz_${type}_${month}.pdf`;
-  a.click();
+  window.open(url, '_blank');
 }
 
 /* ── BACKUP / RESTORE ── */
@@ -1989,24 +1986,15 @@ def api_delete_expense_def(eid):
 
 @app.route("/api/report/pdf")
 def api_report_pdf():
-    """Generate PDF report."""
+    """Generate HTML report (Arabic-friendly, printable as PDF)."""
     try:
-        from reportlab.lib.pagesizes import A4
-        from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-        from reportlab.lib.units import cm
-        from reportlab.lib import colors
-        from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, HRFlowable
-        from reportlab.pdfbase import pdfmetrics
-        from reportlab.pdfbase.ttfonts import TTFont
-        import io
+        month_val = request.args.get("month", cur_month())
+        rtype     = request.args.get("type", "all")
 
-        month  = request.args.get("month", cur_month())
-        rtype  = request.args.get("type", "all")  # all, sales, buys, expenses
-
-        sales, buys = get_month_data(month)
-        buys_only  = [b for b in buys if b.get("type") == "b"]
-        exps       = db_get("SELECT * FROM entries WHERE type='expense' AND month=? ORDER BY date DESC", (month,))
-        exp_defs   = db_get("SELECT * FROM expenses ORDER BY id")
+        sales, buys = get_month_data(month_val)
+        buys_only   = [b for b in buys if b.get("type") == "b"]
+        exps        = db_get("SELECT * FROM entries WHERE type='expense' AND month=? ORDER BY date DESC", (month_val,))
+        exp_defs    = db_get("SELECT * FROM expenses ORDER BY id")
 
         ts = sum(e["amt"] for e in sales)
         tb = sum(e["amt"] for e in buys_only)
@@ -2014,160 +2002,126 @@ def api_report_pdf():
         tp = ts - tb
         tn = tp - te
 
-        def fmt_r(n): return f"{n:,.3f}"
+        def fr(n): return f"{float(n):,.3f}"
+        def row_class(i): return "even" if i%2==0 else ""
 
-        buf = io.BytesIO()
-        doc = SimpleDocTemplate(buf, pagesize=A4,
-            rightMargin=1.5*cm, leftMargin=1.5*cm,
-            topMargin=2*cm, bottomMargin=2*cm)
+        type_labels = {"all":"شامل","sales":"مبيعات","buys":"مشتريات","expenses":"مصاريف"}
+        title = f"فيروز فلورز — تقرير {type_labels.get(rtype,rtype)} — {month_val}"
 
-        styles = getSampleStyleSheet()
-        story  = []
+        # Build HTML sections
+        summary_html = ""
+        if rtype == "all":
+            summary_html = f"""
+            <div class="summary-grid">
+              <div class="sum-card green"><div class="sum-val">{fr(ts)}</div><div class="sum-lbl">💰 المبيعات</div></div>
+              <div class="sum-card red"><div class="sum-val">{fr(tb)}</div><div class="sum-lbl">🛒 المشتريات</div></div>
+              <div class="sum-card gold"><div class="sum-val">{fr(te)}</div><div class="sum-lbl">💸 المصاريف</div></div>
+              <div class="sum-card {'green' if tp>=0 else 'red'}"><div class="sum-val">{fr(tp)}</div><div class="sum-lbl">📊 ربح قبل المصاريف</div></div>
+              <div class="sum-card {'green' if tn>=0 else 'red'}" style="grid-column:span 2"><div class="sum-val">{fr(tn)}</div><div class="sum-lbl">🏆 الربح الصافي النهائي</div></div>
+            </div>"""
 
-        # Header style
-        title_style = ParagraphStyle('title', fontName='Helvetica-Bold',
-            fontSize=18, spaceAfter=6, alignment=1)
-        sub_style = ParagraphStyle('sub', fontName='Helvetica',
-            fontSize=10, spaceAfter=4, alignment=1, textColor=colors.HexColor('#888888'))
-        h2_style = ParagraphStyle('h2', fontName='Helvetica-Bold',
-            fontSize=13, spaceBefore=14, spaceAfter=6,
-            textColor=colors.HexColor('#c4566a'))
-        normal = ParagraphStyle('normal', fontName='Helvetica',
-            fontSize=9, spaceAfter=3)
+        sales_html = ""
+        if rtype in ("all","sales") and sales:
+            rows = "".join(f"""<tr class="{row_class(i)}">
+                <td>{i}</td><td>{e.get('desc','')}</td>
+                <td>{e.get('category','-') or '-'}</td>
+                <td>{e.get('payment_method','-') or '-'}</td>
+                <td>{e.get('date','')}</td>
+                <td class="num">{fr(e['amt'])}</td></tr>"""
+                for i,e in enumerate(sales,1))
+            sales_html = f"""
+            <h2 class="section-title green-t">🌸 المبيعات ({len(sales)} عملية)</h2>
+            <table><thead><tr><th>#</th><th>الوصف</th><th>الفئة</th><th>الدفع</th><th>التاريخ</th><th>المبلغ</th></tr></thead>
+            <tbody>{rows}</tbody>
+            <tfoot><tr><td colspan="5"><b>الإجمالي</b></td><td class="num"><b>{fr(ts)}</b></td></tr></tfoot></table>"""
 
-        # Title
-        story.append(Paragraph("Fairuz Flowers - Monthly Report", title_style))
-        story.append(Paragraph(f"Period: {month}", sub_style))
-        story.append(HRFlowable(width="100%", thickness=1,
-            color=colors.HexColor('#e8798a'), spaceAfter=12))
+        buys_html = ""
+        if rtype in ("all","buys") and buys_only:
+            rows = "".join(f"""<tr class="{row_class(i)}">
+                <td>{i}</td><td>{e.get('desc','')}</td>
+                <td>{e.get('paid_by','-') or '-'}</td>
+                <td>{e.get('date','')}</td>
+                <td class="num">{fr(e['amt'])}</td></tr>"""
+                for i,e in enumerate(buys_only,1))
+            buys_html = f"""
+            <h2 class="section-title red-t">📦 المشتريات ({len(buys_only)} عملية)</h2>
+            <table><thead><tr><th>#</th><th>الوصف</th><th>من دفع</th><th>التاريخ</th><th>المبلغ</th></tr></thead>
+            <tbody>{rows}</tbody>
+            <tfoot><tr><td colspan="4"><b>الإجمالي</b></td><td class="num"><b>{fr(tb)}</b></td></tr></tfoot></table>"""
 
-        # Summary box
-        if rtype in ("all",):
-            summary_data = [
-                ["Category", "Amount (OMR)", "Count"],
-                ["Total Sales", fmt_r(ts), str(len(sales))],
-                ["Total Purchases", fmt_r(tb), str(len(buys_only))],
-                ["Fixed Expenses", fmt_r(te), str(len(exps))],
-                ["Gross Profit", fmt_r(tp), ""],
-                ["Net Profit", fmt_r(tn), ""],
-            ]
-            t = Table(summary_data, colWidths=[8*cm, 5*cm, 3*cm])
-            t.setStyle(TableStyle([
-                ('BACKGROUND', (0,0), (-1,0), colors.HexColor('#e8798a')),
-                ('TEXTCOLOR', (0,0), (-1,0), colors.white),
-                ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold'),
-                ('FONTSIZE', (0,0), (-1,-1), 9),
-                ('ALIGN', (1,0), (-1,-1), 'CENTER'),
-                ('BACKGROUND', (0,-2), (-1,-2), colors.HexColor('#fff3e0')),
-                ('BACKGROUND', (0,-1), (-1,-1), colors.HexColor('#e8f5e9')),
-                ('FONTNAME', (0,-2), (-1,-1), 'Helvetica-Bold'),
-                ('GRID', (0,0), (-1,-1), 0.5, colors.HexColor('#dddddd')),
-                ('ROWBACKGROUNDS', (0,1), (-1,-3), [colors.white, colors.HexColor('#fafafa')]),
-            ]))
-            story.append(t)
-            story.append(Spacer(1, 12))
+        exps_html = ""
+        if rtype in ("all","expenses"):
+            def_rows = "".join(f"""<tr class="{row_class(i)}">
+                <td>{e['name']}</td><td class="num">{fr(float(e['amount']))}</td>
+                <td>{e.get('last_paid') or 'لم يُدفع'}</td>
+                <td><span class="badge {'paid' if e.get('month')==month_val else 'unpaid'}">{('✅ مدفوع' if e.get('month')==month_val else '⏳ غير مدفوع')}</span></td></tr>"""
+                for i,e in enumerate(exp_defs,1))
+            exp_rows = "".join(f"""<tr class="{row_class(i)}">
+                <td>{i}</td><td>{e.get('desc','')}</td>
+                <td>{e.get('date','')}</td>
+                <td class="num">{fr(e['amt'])}</td></tr>"""
+                for i,e in enumerate(exps,1))
+            exps_html = f"""
+            <h2 class="section-title gold-t">💸 المصاريف الثابتة</h2>
+            <table><thead><tr><th>المصروف</th><th>المبلغ الشهري</th><th>آخر دفع</th><th>الحالة</th></tr></thead>
+            <tbody>{def_rows}</tbody></table>
+            {'<h3 style="margin:16px 0 8px;font-size:13px;color:#7a6458;">سجل الدفعات هذا الشهر</h3><table><thead><tr><th>#</th><th>الوصف</th><th>التاريخ</th><th>المبلغ</th></tr></thead><tbody>'+exp_rows+'</tbody><tfoot><tr><td colspan="3"><b>الإجمالي</b></td><td class="num"><b>'+fr(te)+'</b></td></tr></tfoot></table>' if exps else '<p style="color:#b09888;font-size:12px;text-align:center;padding:12px;">لا توجد دفعات مسجلة هذا الشهر</p>'}"""
 
-        # Sales section
-        if rtype in ("all", "sales") and sales:
-            story.append(Paragraph("Sales", h2_style))
-            sale_data = [["#", "Description", "Category", "Payment", "Date", "Amount"]]
-            for i, e in enumerate(sales, 1):
-                sale_data.append([
-                    str(i), e.get("desc","")[:30],
-                    e.get("category","")[:15] or "-",
-                    e.get("payment_method","")[:10] or "-",
-                    e.get("date",""),
-                    fmt_r(e["amt"])
-                ])
-            sale_data.append(["", "TOTAL", "", "", "", fmt_r(ts)])
-            t = Table(sale_data, colWidths=[1*cm, 7*cm, 3*cm, 2.5*cm, 2.5*cm, 2.5*cm])
-            t.setStyle(TableStyle([
-                ('BACKGROUND', (0,0), (-1,0), colors.HexColor('#7aab8a')),
-                ('TEXTCOLOR', (0,0), (-1,0), colors.white),
-                ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold'),
-                ('FONTNAME', (0,-1), (-1,-1), 'Helvetica-Bold'),
-                ('BACKGROUND', (0,-1), (-1,-1), colors.HexColor('#e8f5e9')),
-                ('FONTSIZE', (0,0), (-1,-1), 8),
-                ('GRID', (0,0), (-1,-1), 0.3, colors.HexColor('#dddddd')),
-                ('ROWBACKGROUNDS', (0,1), (-1,-2), [colors.white, colors.HexColor('#f9fff9')]),
-            ]))
-            story.append(t)
-            story.append(Spacer(1, 10))
+        html = f"""<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>{title}</title>
+<link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;600;700;900&display=swap" rel="stylesheet">
+<style>
+*{{margin:0;padding:0;box-sizing:border-box;}}
+body{{font-family:'Tajawal',sans-serif;background:#fdf8f2;color:#3d2c24;padding:24px;direction:rtl;}}
+.header{{text-align:center;margin-bottom:28px;padding:20px;background:linear-gradient(135deg,#f9c8d0,#fdf8f2);border-radius:16px;border:1px solid rgba(232,121,138,.2);}}
+.header h1{{font-size:22px;font-weight:900;color:#c4566a;margin-bottom:4px;}}
+.header p{{font-size:12px;color:#b09888;}}
+.summary-grid{{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:24px;}}
+.sum-card{{padding:14px;border-radius:12px;text-align:center;border:1px solid rgba(0,0,0,.08);}}
+.sum-card.green{{background:#e8f5e9;border-color:rgba(122,171,138,.3);}}
+.sum-card.red{{background:#fce4ec;border-color:rgba(232,121,138,.3);}}
+.sum-card.gold{{background:#fff8e1;border-color:rgba(212,165,87,.3);}}
+.sum-val{{font-size:18px;font-weight:900;margin-bottom:4px;}}
+.green .sum-val{{color:#5a8a6a;}}
+.red .sum-val{{color:#c4566a;}}
+.gold .sum-val{{color:#d4a557;}}
+.sum-lbl{{font-size:11px;color:#7a6458;}}
+h2.section-title{{font-size:15px;font-weight:800;margin:24px 0 10px;padding:8px 14px;border-radius:8px;}}
+.green-t{{background:rgba(122,171,138,.1);color:#5a8a6a;border-right:4px solid #7aab8a;}}
+.red-t{{background:rgba(232,121,138,.1);color:#c4566a;border-right:4px solid #e8798a;}}
+.gold-t{{background:rgba(212,165,87,.1);color:#d4a557;border-right:4px solid #d4a557;}}
+table{{width:100%;border-collapse:collapse;font-size:12px;margin-bottom:8px;}}
+thead tr{{background:linear-gradient(135deg,#6b4c3b,#8b6c5b);color:white;}}
+th{{padding:9px 10px;text-align:right;font-weight:700;}}
+td{{padding:8px 10px;border-bottom:1px solid rgba(107,76,59,.08);}}
+tr.even td{{background:rgba(253,248,242,.8);}}
+tr:hover td{{background:rgba(249,200,208,.1);}}
+tfoot td{{font-weight:700;background:rgba(107,76,59,.05);border-top:2px solid rgba(107,76,59,.15);}}
+.num{{text-align:left;font-weight:600;}}
+.badge{{padding:2px 8px;border-radius:12px;font-size:10px;font-weight:700;}}
+.badge.paid{{background:rgba(122,171,138,.2);color:#5a8a6a;}}
+.badge.unpaid{{background:rgba(232,121,138,.15);color:#c4566a;}}
+.print-btn{{position:fixed;bottom:20px;left:20px;background:linear-gradient(135deg,#e8798a,#c4566a);color:white;border:none;padding:12px 22px;border-radius:40px;font-family:'Tajawal',sans-serif;font-size:14px;font-weight:700;cursor:pointer;box-shadow:0 4px 20px rgba(232,121,138,.4);}}
+@media print{{.print-btn{{display:none;}}body{{background:white;padding:12px;}}}}
+</style>
+</head>
+<body>
+<div class="header">
+  <h1>🌹 فيروز فلورز</h1>
+  <p>تقرير {type_labels.get(rtype,rtype)} — {month_val} &nbsp;|&nbsp; تاريخ الإصدار: {datetime.now().strftime('%d/%m/%Y %H:%M')}</p>
+</div>
+{summary_html}
+{sales_html}
+{buys_html}
+{exps_html}
+<button class="print-btn" onclick="window.print()">🖨️ طباعة / حفظ PDF</button>
+</body></html>"""
 
-        # Purchases section
-        if rtype in ("all", "buys") and buys_only:
-            story.append(Paragraph("Purchases", h2_style))
-            buy_data = [["#", "Description", "Paid By", "Date", "Amount"]]
-            for i, e in enumerate(buys_only, 1):
-                buy_data.append([
-                    str(i), e.get("desc","")[:35],
-                    e.get("paid_by","")[:12] or "-",
-                    e.get("date",""),
-                    fmt_r(e["amt"])
-                ])
-            buy_data.append(["", "TOTAL", "", "", fmt_r(tb)])
-            t = Table(buy_data, colWidths=[1*cm, 9*cm, 3*cm, 2.5*cm, 3*cm])
-            t.setStyle(TableStyle([
-                ('BACKGROUND', (0,0), (-1,0), colors.HexColor('#e8798a')),
-                ('TEXTCOLOR', (0,0), (-1,0), colors.white),
-                ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold'),
-                ('FONTNAME', (0,-1), (-1,-1), 'Helvetica-Bold'),
-                ('BACKGROUND', (0,-1), (-1,-1), colors.HexColor('#fce4ec')),
-                ('FONTSIZE', (0,0), (-1,-1), 8),
-                ('GRID', (0,0), (-1,-1), 0.3, colors.HexColor('#dddddd')),
-                ('ROWBACKGROUNDS', (0,1), (-1,-2), [colors.white, colors.HexColor('#fff9f9')]),
-            ]))
-            story.append(t)
-            story.append(Spacer(1, 10))
-
-        # Expenses section
-        if rtype in ("all", "expenses"):
-            story.append(Paragraph("Fixed Expenses", h2_style))
-            # Expense definitions
-            exp_def_data = [["Expense", "Monthly Amount", "Last Paid", "Status"]]
-            for e in exp_defs:
-                last = e.get("last_paid") or "Not paid"
-                paid_this = e.get("month") == month
-                status = "PAID" if paid_this else "UNPAID"
-                exp_def_data.append([e["name"], fmt_r(float(e["amount"])), last, status])
-            if exps:
-                exp_def_data.append(["", "", "TOTAL PAID", fmt_r(te)])
-
-            t = Table(exp_def_data, colWidths=[6*cm, 4*cm, 4*cm, 3*cm])
-            t.setStyle(TableStyle([
-                ('BACKGROUND', (0,0), (-1,0), colors.HexColor('#d4a557')),
-                ('TEXTCOLOR', (0,0), (-1,0), colors.white),
-                ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold'),
-                ('FONTNAME', (0,-1), (-1,-1), 'Helvetica-Bold'),
-                ('BACKGROUND', (0,-1), (-1,-1), colors.HexColor('#fff8e1')),
-                ('FONTSIZE', (0,0), (-1,-1), 8),
-                ('GRID', (0,0), (-1,-1), 0.3, colors.HexColor('#dddddd')),
-                ('ROWBACKGROUNDS', (0,1), (-1,-2), [colors.white, colors.HexColor('#fffdf5')]),
-            ]))
-            story.append(t)
-
-            # Paid expense entries
-            if exps:
-                story.append(Spacer(1, 6))
-                story.append(Paragraph("Paid Expense Entries", ParagraphStyle('h3',
-                    fontName='Helvetica-Bold', fontSize=10, spaceBefore=8, spaceAfter=4)))
-                ep_data = [["#", "Description", "Date", "Amount"]]
-                for i, e in enumerate(exps, 1):
-                    ep_data.append([str(i), e.get("desc",""), e.get("date",""), fmt_r(e["amt"])])
-                t = Table(ep_data, colWidths=[1*cm, 9*cm, 4*cm, 3*cm])
-                t.setStyle(TableStyle([
-                    ('BACKGROUND', (0,0), (-1,0), colors.HexColor('#f5f5f5')),
-                    ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold'),
-                    ('FONTSIZE', (0,0), (-1,-1), 8),
-                    ('GRID', (0,0), (-1,-1), 0.3, colors.HexColor('#eeeeee')),
-                ]))
-                story.append(t)
-
-        doc.build(story)
-        buf.seek(0)
-        fname = f"fairuz_report_{month}_{rtype}.pdf"
-        return Response(buf.read(), mimetype="application/pdf",
-            headers={"Content-Disposition": f"attachment; filename={fname}"})
+        return Response(html, mimetype="text/html; charset=utf-8")
 
     except Exception as e:
         import traceback
