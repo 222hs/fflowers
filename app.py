@@ -671,62 +671,40 @@ def get_db():
 
 def init_db():
     if USE_PG:
-        conn = get_db()
-        conn.run("""
-            CREATE TABLE IF NOT EXISTS entries (
-                id             SERIAL PRIMARY KEY,
-                type           TEXT NOT NULL,
-                description    TEXT NOT NULL,
-                amt            REAL NOT NULL,
-                date           TEXT NOT NULL,
-                month          TEXT NOT NULL,
-                img            TEXT,
-                paid_by        TEXT DEFAULT NULL,
-                payment_method TEXT DEFAULT NULL,
-                sale_time      TEXT DEFAULT NULL,
-                shelf_id       INTEGER DEFAULT NULL,
-                created        TIMESTAMP DEFAULT NOW()
-            )
-        """)
-        try:
-            conn.run("ALTER TABLE entries RENAME COLUMN desc TO description")
-        except: pass
-        conn.run("""
-            CREATE TABLE IF NOT EXISTS shelves (
-                id      SERIAL PRIMARY KEY,
-                name    TEXT NOT NULL UNIQUE,
-                color   TEXT DEFAULT '#e8547a',
-                rent    REAL DEFAULT 0
-            )
-        """)
-        conn.run("""
-            CREATE TABLE IF NOT EXISTS shelf_products (
-                id       SERIAL PRIMARY KEY,
-                shelf_id INTEGER NOT NULL,
-                name     TEXT NOT NULL,
-                price    REAL NOT NULL,
-                qty      INTEGER NOT NULL DEFAULT 0,
-                img      TEXT,
-                created  TIMESTAMP DEFAULT NOW()
-            )
-        """)
-        try:
-            conn.run("ALTER TABLE shelves ADD COLUMN IF NOT EXISTS rent REAL DEFAULT 0")
-        except: pass
-        conn.run("""
-            INSERT INTO shelves (name, color, rent) VALUES
-              ('ريحان',      '#f07090', 10),
-              ('فتحية',      '#4ecdc4', 8),
-              ('فطوم',       '#b794f4', 8),
-              ('اكسسوارات', '#f5c842', 18)
-            ON CONFLICT (name) DO UPDATE SET rent = EXCLUDED.rent
-        """)
-        for col in ["paid_by","payment_method","sale_time","shelf_id"]:
-            try:
-                conn.run(f"ALTER TABLE entries ADD COLUMN IF NOT EXISTS {col} TEXT DEFAULT NULL")
+        sqls = [
+            """CREATE TABLE IF NOT EXISTS entries (
+                id SERIAL PRIMARY KEY, type TEXT NOT NULL,
+                description TEXT NOT NULL, amt REAL NOT NULL,
+                date TEXT NOT NULL, month TEXT NOT NULL, img TEXT,
+                paid_by TEXT DEFAULT NULL, payment_method TEXT DEFAULT NULL,
+                sale_time TEXT DEFAULT NULL, shelf_id INTEGER DEFAULT NULL,
+                created TIMESTAMP DEFAULT NOW())""",
+            """CREATE TABLE IF NOT EXISTS shelves (
+                id SERIAL PRIMARY KEY, name TEXT NOT NULL UNIQUE,
+                color TEXT DEFAULT '#e8547a', rent REAL DEFAULT 0)""",
+            """CREATE TABLE IF NOT EXISTS shelf_products (
+                id SERIAL PRIMARY KEY, shelf_id INTEGER NOT NULL,
+                name TEXT NOT NULL, price REAL NOT NULL,
+                qty INTEGER NOT NULL DEFAULT 0, img TEXT,
+                created TIMESTAMP DEFAULT NOW())""",
+            """INSERT INTO shelves (name,color,rent) VALUES
+                ('ريحان','#f07090',10),('فتحية','#4ecdc4',8),
+                ('فطوم','#b794f4',8),('اكسسوارات','#f5c842',18)
+                ON CONFLICT (name) DO UPDATE SET rent=EXCLUDED.rent""",
+        ]
+        optional_sqls = [
+            "ALTER TABLE entries RENAME COLUMN desc TO description",
+            "ALTER TABLE shelves ADD COLUMN IF NOT EXISTS rent REAL DEFAULT 0",
+            "ALTER TABLE entries ADD COLUMN IF NOT EXISTS paid_by TEXT DEFAULT NULL",
+            "ALTER TABLE entries ADD COLUMN IF NOT EXISTS payment_method TEXT DEFAULT NULL",
+            "ALTER TABLE entries ADD COLUMN IF NOT EXISTS sale_time TEXT DEFAULT NULL",
+            "ALTER TABLE entries ADD COLUMN IF NOT EXISTS shelf_id TEXT DEFAULT NULL",
+        ]
+        for sql in sqls:
+            db_exec(sql)
+        for sql in optional_sqls:
+            try: db_exec(sql)
             except: pass
-        conn.close()
-        conn.close()
     else:
         import sqlite3 as _sq
         conn = _sq.connect(DB_PATH)
