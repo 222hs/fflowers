@@ -820,23 +820,25 @@ def turso_get(sql, params=()):
         if result.get("type") == "error":
             print("Turso error:", result)
             return []
-        rows_data = result["response"]["result"]["rows"]
-        cols = [c["name"] for c in result["response"]["result"]["cols"]]
+        data = result["response"]["result"]
+        cols = [c["name"] for c in data["cols"]]
         rows = []
-        for row in rows_data:
+        for row in data["rows"]:
             d = {}
             for i, col in enumerate(cols):
                 v = row[i]
-                if isinstance(v, dict):
-                    if v.get("type") == "null":
-                        d[col] = None
-                    elif v.get("type") in ("integer","float","real"):
-                        try: d[col] = float(v.get("value",0))
-                        except: d[col] = v.get("value")
-                    else:
-                        d[col] = v.get("value")
+                t = v.get("type","text")
+                val = v.get("value")
+                if t == "null" or val is None:
+                    d[col] = None
+                elif t in ("integer",):
+                    try: d[col] = int(val)
+                    except: d[col] = val
+                elif t in ("float","real"):
+                    try: d[col] = float(val)
+                    except: d[col] = val
                 else:
-                    d[col] = v
+                    d[col] = val
             rows.append(d)
         return rows
     except Exception as e:
