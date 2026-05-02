@@ -792,6 +792,49 @@ function changeMonth(){month=document.getElementById('msel').value;load();if(doc
 function showToast(msg){const el=document.getElementById('toast');el.textContent=msg;el.classList.add('show');setTimeout(()=>el.classList.remove('show'),3000);}
 
 load();
+
+/* ── BACKUP / RESTORE ── */
+async function doBackup(){
+  try {
+    showToast('⏳ جاري تصدير البيانات...');
+    const r = await fetch('/api/backup');
+    const blob = await r.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `fairuz_backup_${new Date().toISOString().slice(0,10)}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+    showToast('✅ تم تصدير النسخة الاحتياطية');
+  } catch(e) {
+    showToast('❌ خطأ في التصدير');
+  }
+}
+
+async function doRestore(ev){
+  const file = ev.target.files[0];
+  if(!file) return;
+  ev.target.value = '';
+  if(!confirm('هل أنت متأكد؟ سيتم استيراد البيانات من الملف.')) return;
+  try {
+    showToast('⏳ جاري الاستيراد...');
+    const text = await file.text();
+    const data = JSON.parse(text);
+    const r = await api('/api/restore', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(data)
+    });
+    if(r.ok) {
+      showToast(`✅ تم الاستيراد — ${r.restored.entries} إدخال، ${r.restored.products} منتج`);
+      load();
+    } else {
+      showToast('❌ ' + (r.error || 'خطأ في الاستيراد'));
+    }
+  } catch(e) {
+    showToast('❌ ملف غير صالح');
+  }
+}
 </script>
 </body>
 </html>
@@ -1276,6 +1319,74 @@ def init_shelves():
             results.append(f"inserted: {name}")
     all_shelves = db_get("SELECT * FROM shelves")
     return jsonify({"ok": True, "results": results, "shelves": all_shelves})
+
+@app.route("/api/backup")
+def api_backup():
+    """Export all data as JSON."""
+    try:
+        entries = db_get("SELECT * FROM entries ORDER BY created")
+        shelves = db_get("SELECT * FROM shelves ORDER BY id")
+        products = db_get("SELECT * FROM shelf_products ORDER BY id")
+        data = {
+            "version": 1,
+            "exported_at": datetime.now().strftime("%Y-%m-%d %H:%M"),
+            "entries": entries,
+            "shelves": shelves,
+            "shelf_products": products
+        }
+        import json as _json
+        response = Response(
+            _json.dumps(data, ensure_ascii=False, indent=2),
+            mimetype="application/json",
+            headers={"Content-Disposition": f"attachment; filename=fairuz_backup_{datetime.now().strftime('%Y%m%d')}.json"}
+        )
+        return response
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route("/api/restore", methods=["POST"])
+def api_restore():
+    """Restore data from JSON backup."""
+    try:
+        data = request.json
+        if not data or data.get("version") != 1:
+            return jsonify({"error": "ملف غير صالح"}), 400
+
+        restored = {"entries": 0, "shelves": 0, "products": 0}
+
+        # Restore shelves
+        for s in data.get("shelves", []):
+            existing = db_one("SELECT id FROM shelves WHERE name=?", (s["name"],))
+            if existing:
+                db_run("UPDATE shelves SET color=?, rent=? WHERE name=?",
+                       (s.get("color","#e8547a"), s.get("rent",0), s["name"]))
+            else:
+                db_run("INSERT INTO shelves (name,color,rent) VALUES (?,?,?)",
+                       (s["name"], s.get("color","#e8547a"), s.get("rent",0)))
+            restored["shelves"] += 1
+
+        # Restore entries
+        for e in data.get("entries", []):
+            existing = db_one("SELECT id FROM entries WHERE id=?", (e["id"],))
+            if not existing:
+                db_run("""INSERT INTO entries (type,desc,amt,date,month,img,paid_by,payment_method,sale_time,shelf_id)
+                          VALUES (?,?,?,?,?,?,?,?,?,?)""",
+                    (e["type"], e["desc"], e["amt"], e["date"], e["month"],
+                     e.get("img"), e.get("paid_by"), e.get("payment_method"),
+                     e.get("sale_time"), e.get("shelf_id")))
+                restored["entries"] += 1
+
+        # Restore shelf products
+        for p in data.get("shelf_products", []):
+            existing = db_one("SELECT id FROM shelf_products WHERE id=?", (p["id"],))
+            if not existing:
+                db_run("INSERT INTO shelf_products (shelf_id,name,price,qty) VALUES (?,?,?,?)",
+                       (p["shelf_id"], p["name"], p["price"], p.get("qty",0)))
+                restored["products"] += 1
+
+        return jsonify({"ok": True, "restored": restored})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 @app.route("/set_webhook")
 def set_webhook():
