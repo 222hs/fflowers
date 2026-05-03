@@ -515,22 +515,21 @@ header{
       <div class="mpill">
         <label>📅</label>
         <select id="msel" onchange="changeMonth()">
-          <option value="2025-01">يناير 2025</option><option value="2025-02">فبراير 2025</option>
-          <option value="2025-03">مارس 2025</option><option value="2025-04">أبريل 2025</option>
-          <option value="2025-05">مايو 2025</option><option value="2025-06">يونيو 2025</option>
-          <option value="2025-07">يوليو 2025</option><option value="2025-08">أغسطس 2025</option>
-          <option value="2025-09">سبتمبر 2025</option><option value="2025-10">أكتوبر 2025</option>
-          <option value="2025-11">نوفمبر 2025</option><option value="2025-12">ديسمبر 2025</option>
-          <option value="2026-01">يناير 2026</option><option value="2026-02">فبراير 2026</option>
-          <option value="2026-03">مارس 2026</option><option value="2026-04">أبريل 2026</option>
-          <option value="2026-05">مايو 2026</option><option value="2026-06">يونيو 2026</option>
-          <option value="2026-07">يوليو 2026</option><option value="2026-08">أغسطس 2026</option>
-          <option value="2026-09">سبتمبر 2026</option><option value="2026-10">أكتوبر 2026</option>
-          <option value="2026-11">نوفمبر 2026</option><option value="2026-12">ديسمبر 2026</option>
+          <option value="2025-01">يناير 25</option><option value="2025-02">فبراير 25</option>
+          <option value="2025-03">مارس 25</option><option value="2025-04">أبريل 25</option>
+          <option value="2025-05">مايو 25</option><option value="2025-06">يونيو 25</option>
+          <option value="2025-07">يوليو 25</option><option value="2025-08">أغسطس 25</option>
+          <option value="2025-09">سبتمبر 25</option><option value="2025-10">أكتوبر 25</option>
+          <option value="2025-11">نوفمبر 25</option><option value="2025-12">ديسمبر 25</option>
+          <option value="2026-01">يناير 26</option><option value="2026-02">فبراير 26</option>
+          <option value="2026-03">مارس 26</option><option value="2026-04">أبريل 26</option>
+          <option value="2026-05">مايو 26</option><option value="2026-06">يونيو 26</option>
+          <option value="2026-07">يوليو 26</option><option value="2026-08">أغسطس 26</option>
+          <option value="2026-09">سبتمبر 26</option><option value="2026-10">أكتوبر 26</option>
+          <option value="2026-11">نوفمبر 26</option><option value="2026-12">ديسمبر 26</option>
         </select>
       </div>
       <button class="theme-btn" onclick="toggleThemePanel()" title="تغيير الثيم">🎨</button>
-      <button class="theme-btn" id="langBtn" onclick="toggleLang()" title="تغيير اللغة" style="font-size:12px;font-weight:700;font-family:'Tajawal',sans-serif;">EN</button>
       <a href="/logout" class="logout-btn" title="خروج">🔒</a>
     </div>
   </div>
@@ -854,33 +853,27 @@ document.getElementById('bPayer').addEventListener('change',function(){
 });
 
 /* ── LOAD ── */
-// طلب واحد يجيب كل البيانات دفعة واحدة من /api/dashboard
 async function load(){
-  const dash = await api(`/api/dashboard?month=${month}`);
-  // حفظ في cache عشان تغيير اللغة يكون فوري بدون API
-  _lastData = dash;
-  _lastExpData = dash.expenses;
-  renderKPI(dash.sales, dash.buys, dash.expenses);
-  renderLists(dash.sales, dash.buys);
-  loadExpensesPanel(dash, dash.expenses);
-  // رسوم بيانية من نفس البيانات المحملة - بدون طلبات إضافية
-  const ms = ['01','02','03','04','05','06','07','08','09','10','11','12'];
-  const yr = month.split('-')[0];
-  const all = ms.map(m => dash.charts[`${yr}-${m}`] || {sales:[],buys:[]});
-  renderBarChart(
-    all.map(d=>d.sales.reduce((a,e)=>a+e.amt,0)),
-    all.map(d=>d.buys.filter(e=>e.type!=='expense').reduce((a,e)=>a+e.amt,0))
-  );
-  const cur = all[parseInt(month.split('-')[1])-1];
-  if(cur){ renderPayChart(cur.sales); renderPayerChart(cur.buys.filter(e=>e.type!=='expense')); }
-  // الزهور من نفس البيانات
-  if(dash.flowers){
-    document.getElementById('flowerCount').textContent = dash.flowers.total || 0;
-  }
+  const [d, expD] = await Promise.all([
+    api(`/api/entries?month=${month}`),
+    api(`/api/expenses?month=${month}`)
+  ]);
+  renderKPI(d.sales, d.buys, expD);
+  renderLists(d.sales, d.buys);
+  loadCharts();
+  loadExpensesPanel(d, expD);
 }
 
-// تحديث تلقائي كل 60 ثانية - طلب واحد فقط
-setInterval(()=>{load();if(document.getElementById('tab-shelves').classList.contains('active'))loadShelves();},60000);
+async function loadCharts(){
+  const ms=['01','02','03','04','05','06','07','08','09','10','11','12'];
+  const yr=month.split('-')[0];
+  const all=await Promise.all(ms.map(m=>api(`/api/entries?month=${yr}-${m}`)));
+  renderBarChart(all.map(d=>d.sales.reduce((a,e)=>a+e.amt,0)),all.map(d=>d.buys.filter(e=>e.type!=='expense').reduce((a,e)=>a+e.amt,0)));
+  const cur=all[parseInt(month.split('-')[1])-1];
+  renderPayChart(cur.sales);renderPayerChart(cur.buys.filter(e=>e.type!=='expense'));
+}
+
+setInterval(()=>{load();if(document.getElementById('tab-shelves').classList.contains('active'))loadShelves();},15000);
 
 /* ── KPI ── */
 function renderKPI(sales,buys,expD){
@@ -890,22 +883,21 @@ function renderKPI(sales,buys,expD){
   const paidExps=(expD&&expD.paid)||[];
   const te=paidExps.reduce((a,e)=>a+e.amt,0);
   const tn=tp-te;
-  const cur=t('currency');
-  document.getElementById('kS').textContent=fmt(ts)+' '+cur;
-  document.getElementById('kSc').textContent=sales.length+' '+t('operations');
-  document.getElementById('kB').textContent=fmt(tb)+' '+cur;
-  document.getElementById('kBc').textContent=buys.filter(e=>e.type!=='expense').length+' '+t('operations');
-  document.getElementById('kE').textContent=fmt(te)+' '+cur;
-  document.getElementById('kEd').textContent=te>0?paidExps.length+' '+t('paid'):t('notPaid');
-  document.getElementById('kP').textContent=(tp>=0?'+':'')+fmt(tp)+' '+cur;
+  document.getElementById('kS').textContent=fmt(ts)+' ر.ع';
+  document.getElementById('kSc').textContent=sales.length+' عملية';
+  document.getElementById('kB').textContent=fmt(tb)+' ر.ع';
+  document.getElementById('kBc').textContent=buys.filter(e=>e.type!=='expense').length+' عملية';
+  document.getElementById('kE').textContent=fmt(te)+' ر.ع';
+  document.getElementById('kEd').textContent=te>0?paidExps.length+' مصروف مدفوع':'لم تُدفع بعد';
+  document.getElementById('kP').textContent=(tp>=0?'+':'')+fmt(tp)+' ر.ع';
   document.getElementById('kP').style.color=tp>=0?'var(--gold)':'var(--accent)';
   const b=document.getElementById('kPb');
-  b.textContent=tp>0?t('profit'):tp<0?t('loss'):'—';
+  b.textContent=tp>0?'✅ ربح':tp<0?'⚠️ خسارة':'—';
   b.className='badge '+(tp>0?'bp':tp<0?'bn':'');
-  document.getElementById('kN').textContent=(tn>=0?'+':'')+fmt(tn)+' '+cur;
+  document.getElementById('kN').textContent=(tn>=0?'+':'')+fmt(tn)+' ر.ع';
   document.getElementById('kN').style.color=tn>=0?'var(--green2)':'var(--accent)';
   const nb=document.getElementById('kNb');
-  nb.textContent=tn>0?t('net'):tn<0?t('loss'):'—';
+  nb.textContent=tn>0?'🏆 صافي':tn<0?'⚠️ خسارة':'—';
   nb.className='badge '+(tn>0?'bp':tn<0?'bn':'');
   const pm={'كاش 💵':0,'فيزا 💳':0,'تحويل 🏦':0};
   sales.forEach(e=>{if(e.payment_method&&pm[e.payment_method]!==undefined)pm[e.payment_method]+=e.amt;});
@@ -920,7 +912,6 @@ function renderKPI(sales,buys,expD){
 function pb(pm){if(!pm)return'';return`<span class="epb">${pm}</span>`;}
 function renderLists(sales,buys){
   const catIcons={"ورد وباقات":"🌸","طباعة":"🖨️","تاجات":"👑","عطور":"🌿","اكسسوارات":"💍","هدايا":"🎁","تجفيف":"🌾","صناعي":"🎨","أخرى":"✨"};
-  const cur=t('currency');
   document.getElementById('sl').innerHTML=sales.length?sales.map(e=>`
     <div class="entry es">
       <div class="eph">${catIcons[e.category]||'🌸'}</div>
@@ -928,7 +919,7 @@ function renderLists(sales,buys){
         <div class="emeta"><span class="edate">${e.date}</span>${pb(e.payment_method)}${e.category?`<span class="epb">${e.category}</span>`:''}</div></div>
       <div class="eamt">+${fmt(e.amt)}</div>
       <button class="delbtn" onclick="del(${e.id})">🗑</button>
-    </div>`).join(''):`<div class="empty"><div class="ei">🌷</div><p>${lang==='en'?'No sales yet':'لا توجد مبيعات'}</p></div>`;
+    </div>`).join(''):`<div class="empty"><div class="ei">🌷</div><p>لا توجد مبيعات</p></div>`;
   const buysOnly=buys.filter(e=>e.type!=='expense');
   document.getElementById('bl').innerHTML=buysOnly.length?buysOnly.map(e=>`
     <div class="entry">
@@ -937,7 +928,7 @@ function renderLists(sales,buys){
         <div class="emeta"><span class="edate">${e.date}</span>${e.paid_by?`<span class="epb">👤${e.paid_by}</span>`:''}</div></div>
       <div class="eamt exp">-${fmt(e.amt)}</div>
       <button class="delbtn" onclick="del(${e.id})">🗑</button>
-    </div>`).join(''):`<div class="empty"><div class="ei">🌿</div><p>${lang==='en'?'No purchases yet':'لا توجد مشتريات'}</p></div>`;
+    </div>`).join(''):`<div class="empty"><div class="ei">🌿</div><p>لا توجد مشتريات</p></div>`;
   document.getElementById('sbadge').textContent=sales.length;
   document.getElementById('bbadge').textContent=buysOnly.length;
 }
@@ -1222,14 +1213,7 @@ async function doRestore(ev){
 
 /* ── MISC ── */
 document.querySelectorAll('.overlay').forEach(o=>o.addEventListener('click',function(e){if(e.target===this)this.classList.remove('open');}));
-function changeMonth(){
-  const prev = month;
-  month = document.getElementById('msel').value;
-  // امسح الـ cache لو تغيرت السنة
-  if(prev.split('-')[0] !== month.split('-')[0]){ _chartsCache={}; _chartsCacheYear=null; }
-  load();loadFlowers();
-  if(document.getElementById('tab-shelves').classList.contains('active'))loadShelves();
-}
+function changeMonth(){month=document.getElementById('msel').value;load();loadFlowers();if(document.getElementById('tab-shelves').classList.contains('active'))loadShelves();}
 function showToast(msg){const el=document.getElementById('toast');el.textContent=msg;el.classList.add('show');setTimeout(()=>el.classList.remove('show'),3000);}
 
 // Set month selector to current month
@@ -1306,10 +1290,6 @@ const T = {
 };
 let lang = localStorage.getItem('fairuz_lang') || 'ar';
 
-// cache آخر بيانات محملة عشان نستخدمها عند تغيير اللغة بدون API call جديد
-let _lastData = null;
-let _lastExpData = null;
-
 function setLang(l){
   lang = l;
   localStorage.setItem('fairuz_lang', l);
@@ -1317,12 +1297,6 @@ function setLang(l){
   document.documentElement.setAttribute('lang', l);
   applyTranslations();
   updateLangBtn();
-  // أعد رسم البيانات من الـ cache بدون API call جديد
-  if(_lastData && _lastExpData){
-    renderKPI(_lastData.sales, _lastData.buys, _lastExpData);
-    renderLists(_lastData.sales, _lastData.buys);
-    loadExpensesPanel(_lastData, _lastExpData);
-  }
 }
 
 function t(key){ return T[lang][key] || T['ar'][key] || key; }
@@ -1352,7 +1326,8 @@ function toggleLang(){
 // Init language
 setLang(lang);
 
-load(); // طلب واحد يجيب كل شيء
+load();
+loadFlowers();
 </script>
 </body>
 </html>"""
@@ -1938,45 +1913,7 @@ def debug():
         "groq_key_prefix": GROQ_KEY[:8]+"..." if GROQ_KEY else "NOT SET"
     })
 
-@app.route("/api/dashboard")
-@auth
-def api_dashboard():
-    """طلب واحد يجيب كل بيانات الصفحة الرئيسية دفعة واحدة"""
-    month = request.args.get("month", cur_month())
-    yr = month.split("-")[0]
-
-    # 1. بيانات الشهر الحالي
-    s, b = get_month_data(month)
-
-    # 2. المصاريف الثابتة
-    expenses = db_get("SELECT * FROM expenses ORDER BY id")
-    paid = db_get("SELECT * FROM entries WHERE type=\'expense\' AND month=? ORDER BY created DESC", (month,))
-
-    # 3. بيانات كل الأشهر للرسوم البيانية (query واحدة بدل 12)
-    all_entries = db_get("SELECT * FROM entries WHERE month LIKE ? ORDER BY created DESC", (f"{yr}-%",))
-    months_data = {}
-    for mm in [f"{yr}-{str(i).zfill(2)}" for i in range(1,13)]:
-        ms = [e for e in all_entries if e["month"] == mm]
-        months_data[mm] = {
-            "sales": [e for e in ms if e["type"] == "s"],
-            "buys":  [e for e in ms if e["type"] in ("b","expense")]
-        }
-
-    # 4. الزهور
-    flowers = db_get("SELECT * FROM flowers ORDER BY count DESC")
-    flowers_total = sum(f["count"] for f in flowers)
-
-    return jsonify({
-        "month":    month,
-        "sales":    s,
-        "buys":     b,
-        "expenses": {"expenses": expenses, "paid": paid},
-        "charts":   months_data,
-        "flowers":  {"flowers": flowers, "total": flowers_total}
-    })
-
 @app.route("/api/entries")
-@auth
 def api_get():
     month=request.args.get("month",cur_month())
     s,b=get_month_data(month)
