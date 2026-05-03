@@ -1977,24 +1977,22 @@ def api_dashboard():
     yr = month.split("-")[0]
 
     def generate():
-        # المرحلة 1: المبيعات والمشتريات - الأهم - تظهر أولاً
+        NL = "\n"
+        # المرحلة 1: المبيعات والمشتريات - تظهر أولاً
         s, b = get_month_data(month)
-        yield _json.dumps({"type": "main", "sales": s, "buys": b}) + "
-"
+        yield _json.dumps({"type": "main", "sales": s, "buys": b}) + NL
 
         # المرحلة 2: المصاريف
         expenses = db_get("SELECT * FROM expenses ORDER BY id")
         paid = db_get("SELECT * FROM entries WHERE type='expense' AND month=? ORDER BY created DESC", (month,))
-        yield _json.dumps({"type": "expenses", "expenses": expenses, "paid": paid}) + "
-"
+        yield _json.dumps({"type": "expenses", "expenses": expenses, "paid": paid}) + NL
 
         # المرحلة 3: الزهور
         flowers = db_get("SELECT * FROM flowers ORDER BY count DESC")
         flowers_total = sum(f["count"] for f in flowers)
-        yield _json.dumps({"type": "flowers", "flowers": flowers, "total": flowers_total}) + "
-"
+        yield _json.dumps({"type": "flowers", "flowers": flowers, "total": flowers_total}) + NL
 
-        # المرحلة 4: الرسوم البيانية - الأثقل - تجي آخراً
+        # المرحلة 4: الرسوم البيانية - تجي آخراً
         all_entries = db_get("SELECT * FROM entries WHERE month LIKE ? ORDER BY created DESC", (f"{yr}-%",))
         months_data = {}
         for mm in [f"{yr}-{str(i).zfill(2)}" for i in range(1,13)]:
@@ -2003,8 +2001,7 @@ def api_dashboard():
                 "sales": [e for e in ms if e["type"] == "s"],
                 "buys":  [e for e in ms if e["type"] in ("b","expense")]
             }
-        yield _json.dumps({"type": "charts", "charts": months_data}) + "
-"
+        yield _json.dumps({"type": "charts", "charts": months_data}) + NL
 
     return Response(generate(), mimetype="application/x-ndjson")
 
