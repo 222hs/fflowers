@@ -1234,10 +1234,6 @@ function setTheme(t){
     el.style.borderColor=el.id==='th-'+t?'var(--accent)':'transparent';
     el.style.background=el.id==='th-'+t?'rgba(255,255,255,0.15)':'transparent';
   });
-  if(barCI){barCI.destroy();barCI=null;}
-  if(payCI){payCI.destroy();payCI=null;}
-  if(payerCI){payerCI.destroy();payerCI=null;}
-  loadCharts();
 }
 function toggleThemePanel(){
   const p=document.getElementById('themePanel');
