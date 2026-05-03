@@ -1659,6 +1659,79 @@ def month_summary(month):
     ts=sum(e["amt"] for e in s); tb=sum(e["amt"] for e in b)
     return ts,tb,ts-tb,len(s),len(b)
 
+def get_day_data(day_str):
+    """جيب بيانات يوم معين — day_str بصيغة dd/mm/yyyy"""
+    rows = db_get("SELECT * FROM entries WHERE date=? ORDER BY created DESC", (day_str,))
+    return ([r for r in rows if r["type"]=="s"],
+            [r for r in rows if r["type"]=="b"],
+            [r for r in rows if r["type"]=="expense"])
+
+def day_summary(day_str):
+    s, b, e = get_day_data(day_str)
+    ts = sum(r["amt"] for r in s)
+    tb = sum(r["amt"] for r in b)
+    te = sum(r["amt"] for r in e)
+    return ts, tb, te, ts-tb-te, len(s), len(b)
+
+def format_day_report(day_str):
+    s, b, e = get_day_data(day_str)
+    ts = sum(r["amt"] for r in s)
+    tb = sum(r["amt"] for r in b)
+    te = sum(r["amt"] for r in e)
+    net = ts - tb - te
+    emoji = "✅" if net >= 0 else "⚠️"
+    lines = [f"📅 <b>تقرير يوم {day_str}</b>\n"]
+    lines.append(f"🌸 المبيعات: {fmt_omr(ts)} ({len(s)} عملية)")
+    if s:
+        for r in s:
+            pay = f" — {r['payment_method']}" if r.get("payment_method") else ""
+            lines.append(f"  • {r['desc']}: {fmt_omr(r['amt'])}{pay}")
+    lines.append(f"\n📦 المشتريات: {fmt_omr(tb)} ({len(b)} عملية)")
+    if b:
+        for r in b:
+            who = f" — {r['paid_by']}" if r.get("paid_by") else ""
+            lines.append(f"  • {r['desc']}: {fmt_omr(r['amt'])}{who}")
+    if e:
+        lines.append(f"\n💸 المصاريف: {fmt_omr(te)}")
+        for r in e:
+            lines.append(f"  • {r['desc']}: {fmt_omr(r['amt'])}")
+    lines.append(f"\n━━━━━━")
+    lines.append(f"{emoji} الصافي: {fmt_omr(net)}")
+    return "\n".join(lines)
+
+def format_month_report(month):
+    s, b = get_month_data(month)
+    exps = db_get("SELECT * FROM entries WHERE type='expense' AND month=? ORDER BY created DESC", (month,))
+    ts = sum(r["amt"] for r in s)
+    tb = sum(r["amt"] for r in b if r["type"] != "expense")
+    te = sum(r["amt"] for r in exps)
+    net = ts - tb - te
+    emoji = "✅" if net >= 0 else "⚠️"
+    # تقرير يومي داخل الشهر
+    days = {}
+    for r in s:
+        d = r.get("date","")
+        if d not in days: days[d] = {"s":0,"b":0,"sc":0,"bc":0}
+        days[d]["s"] += r["amt"]; days[d]["sc"] += 1
+    for r in b:
+        if r["type"] == "b":
+            d = r.get("date","")
+            if d not in days: days[d] = {"s":0,"b":0,"sc":0,"bc":0}
+            days[d]["b"] += r["amt"]; days[d]["bc"] += 1
+    days_sorted = sorted(days.items(), key=lambda x: x[0])
+    lines = [f"📊 <b>تقرير شهر {month}</b>\n"]
+    lines.append(f"🌸 إجمالي المبيعات: {fmt_omr(ts)} ({len(s)} عملية)")
+    lines.append(f"📦 إجمالي المشتريات: {fmt_omr(tb)}")
+    lines.append(f"💸 إجمالي المصاريف: {fmt_omr(te)}")
+    lines.append(f"{emoji} الصافي: {fmt_omr(net)}\n")
+    lines.append("📆 <b>تفصيل يومي:</b>")
+    for day, v in days_sorted:
+        if day:
+            day_net = v["s"] - v["b"]
+            e2 = "✅" if day_net >= 0 else "🔴"
+            lines.append(f"{e2} {day}: مبيعات {fmt_omr(v['s'])} | مشتريات {fmt_omr(v['b'])}")
+    return "\n".join(lines)
+
 # ── Telegram ──────────────────────────────────────────────
 def tg(chat_id, text):
     if not BOT_TOKEN: return
@@ -2472,10 +2545,34 @@ def webhook():
            "🌸 <b>مخزون الورد:</b>\n"
            "أرسل صورة + تعليق <code>عد الورد</code>\n"
            "/ورد — عرض المخزون\n\n"
+           "📅 /اليوم — تقرير اليوم\n"
+           "📅 /يوم 01/05/2026 — تقرير يوم معين\n"
+           "📊 /شهر — تقرير الشهر الكامل مع تفصيل يومي\n"
            "📊 /report — تقرير الشهر\n"
            "📈 /فئات — مبيعات حسب الفئة\n"
            "👤 /من_دفع — تفصيل المشتريات\n"
            "💼 /مصاريف — المصاريف الثابتة")
+        return "ok"
+
+    # ── تقرير اليوم ──
+    if text in ["/اليوم", "/today", "/يوم"]:
+        today_str = datetime.now().strftime("%d/%m/%Y")
+        tg(chat, format_day_report(today_str))
+        return "ok"
+
+    # ── تقرير يوم معين مثل /يوم 01/05/2026 ──
+    if text.startswith("/يوم "):
+        day_str = text.replace("/يوم ","").strip()
+        try:
+            datetime.strptime(day_str, "%d/%m/%Y")
+            tg(chat, format_day_report(day_str))
+        except:
+            tg(chat, "⚠️ صيغة التاريخ غلط، مثال: <code>/يوم 01/05/2026</code>")
+        return "ok"
+
+    # ── تقرير الشهر ──
+    if text in ["/شهر", "/monthly", "/month_report"]:
+        tg(chat, format_month_report(month))
         return "ok"
 
     if text=="/report":
@@ -2631,20 +2728,19 @@ def webhook():
 
         # تقرير
         if action == "report":
-            ts,tb,tp,sc,bc = month_summary(month)
-            exps = db_get("SELECT * FROM entries WHERE type='expense' AND month=? ORDER BY created DESC",(month,))
-            exp_total = sum(e2["amt"] for e2 in exps)
-            net = tp - exp_total
-            e1 = "✅" if tp>=0 else "⚠️"
-            e2 = "✅" if net>=0 else "⚠️"
-            tg(chat,
-               f"📊 <b>تقرير {month}</b>\n\n"
-               f"🌸 المبيعات: {fmt_omr(ts)} ({sc} عملية)\n"
-               f"📦 المشتريات: {fmt_omr(tb)} ({bc} عملية)\n"
-               f"💸 المصاريف: {fmt_omr(exp_total)}\n"
-               f"━━━━━━\n"
-               f"{e1} الربح: {fmt_omr(tp)}\n"
-               f"{e2} الصافي: {fmt_omr(net)}")
+            period = data.get("period","month")
+            custom_date = data.get("date","")
+            if period == "today" or "اليوم" in text:
+                today_str = datetime.now().strftime("%d/%m/%Y")
+                tg(chat, format_day_report(today_str))
+            elif period == "custom" and custom_date:
+                try:
+                    datetime.strptime(custom_date, "%d/%m/%Y")
+                    tg(chat, format_day_report(custom_date))
+                except:
+                    tg(chat, format_month_report(month))
+            else:
+                tg(chat, format_month_report(month))
             return "ok"
 
         # تسجيل مصروف
