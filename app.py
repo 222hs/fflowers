@@ -854,47 +854,32 @@ document.getElementById('bPayer').addEventListener('change',function(){
 });
 
 /* ── LOAD ── */
-let _chartsCache = {}; // cache بيانات الرسوم البيانية
-let _chartsCacheYear = null;
-
+// طلب واحد يجيب كل البيانات دفعة واحدة من /api/dashboard
 async function load(){
-  const [d, expD] = await Promise.all([
-    api(`/api/entries?month=${month}`),
-    api(`/api/expenses?month=${month}`)
-  ]);
-  // حفظ في cache عشان تغيير اللغة يكون فوري
-  _lastData = d;
-  _lastExpData = expD;
-  renderKPI(d.sales, d.buys, expD);
-  renderLists(d.sales, d.buys);
-  loadExpensesPanel(d, expD);
-  // الرسوم البيانية فقط إذا تغير الشهر أو أول مرة
+  const dash = await api(`/api/dashboard?month=${month}`);
+  // حفظ في cache عشان تغيير اللغة يكون فوري بدون API
+  _lastData = dash;
+  _lastExpData = dash.expenses;
+  renderKPI(dash.sales, dash.buys, dash.expenses);
+  renderLists(dash.sales, dash.buys);
+  loadExpensesPanel(dash, dash.expenses);
+  // رسوم بيانية من نفس البيانات المحملة - بدون طلبات إضافية
+  const ms = ['01','02','03','04','05','06','07','08','09','10','11','12'];
   const yr = month.split('-')[0];
-  if(_chartsCacheYear !== yr || Object.keys(_chartsCache).length === 0){
-    loadCharts();
-  } else {
-    // استخدم الـ cache مباشرة
-    const all = Object.values(_chartsCache);
-    renderBarChart(all.map(d=>d.sales.reduce((a,e)=>a+e.amt,0)),all.map(d=>d.buys.filter(e=>e.type!=='expense').reduce((a,e)=>a+e.amt,0)));
-    const cur = all[parseInt(month.split('-')[1])-1];
-    if(cur){ renderPayChart(cur.sales); renderPayerChart(cur.buys.filter(e=>e.type!=='expense')); }
+  const all = ms.map(m => dash.charts[`${yr}-${m}`] || {sales:[],buys:[]});
+  renderBarChart(
+    all.map(d=>d.sales.reduce((a,e)=>a+e.amt,0)),
+    all.map(d=>d.buys.filter(e=>e.type!=='expense').reduce((a,e)=>a+e.amt,0))
+  );
+  const cur = all[parseInt(month.split('-')[1])-1];
+  if(cur){ renderPayChart(cur.sales); renderPayerChart(cur.buys.filter(e=>e.type!=='expense')); }
+  // الزهور من نفس البيانات
+  if(dash.flowers){
+    document.getElementById('flowerCount').textContent = dash.flowers.total || 0;
   }
 }
 
-async function loadCharts(){
-  const ms=['01','02','03','04','05','06','07','08','09','10','11','12'];
-  const yr=month.split('-')[0];
-  const all=await Promise.all(ms.map(m=>api(`/api/entries?month=${yr}-${m}`)));
-  // حفظ في cache
-  _chartsCache = {};
-  ms.forEach((m,i) => { _chartsCache[m] = all[i]; });
-  _chartsCacheYear = yr;
-  renderBarChart(all.map(d=>d.sales.reduce((a,e)=>a+e.amt,0)),all.map(d=>d.buys.filter(e=>e.type!=='expense').reduce((a,e)=>a+e.amt,0)));
-  const cur=all[parseInt(month.split('-')[1])-1];
-  renderPayChart(cur.sales);renderPayerChart(cur.buys.filter(e=>e.type!=='expense'));
-}
-
-// رفعنا التحديث التلقائي من 15 ثانية إلى 60 ثانية لتخفيف الضغط
+// تحديث تلقائي كل 60 ثانية - طلب واحد فقط
 setInterval(()=>{load();if(document.getElementById('tab-shelves').classList.contains('active'))loadShelves();},60000);
 
 /* ── KPI ── */
@@ -1367,8 +1352,7 @@ function toggleLang(){
 // Init language
 setLang(lang);
 
-load();
-loadFlowers();
+load(); // طلب واحد يجيب كل شيء
 </script>
 </body>
 </html>"""
@@ -1954,7 +1938,45 @@ def debug():
         "groq_key_prefix": GROQ_KEY[:8]+"..." if GROQ_KEY else "NOT SET"
     })
 
+@app.route("/api/dashboard")
+@auth
+def api_dashboard():
+    """طلب واحد يجيب كل بيانات الصفحة الرئيسية دفعة واحدة"""
+    month = request.args.get("month", cur_month())
+    yr = month.split("-")[0]
+
+    # 1. بيانات الشهر الحالي
+    s, b = get_month_data(month)
+
+    # 2. المصاريف الثابتة
+    expenses = db_get("SELECT * FROM expenses ORDER BY id")
+    paid = db_get("SELECT * FROM entries WHERE type=\'expense\' AND month=? ORDER BY created DESC", (month,))
+
+    # 3. بيانات كل الأشهر للرسوم البيانية (query واحدة بدل 12)
+    all_entries = db_get("SELECT * FROM entries WHERE month LIKE ? ORDER BY created DESC", (f"{yr}-%",))
+    months_data = {}
+    for mm in [f"{yr}-{str(i).zfill(2)}" for i in range(1,13)]:
+        ms = [e for e in all_entries if e["month"] == mm]
+        months_data[mm] = {
+            "sales": [e for e in ms if e["type"] == "s"],
+            "buys":  [e for e in ms if e["type"] in ("b","expense")]
+        }
+
+    # 4. الزهور
+    flowers = db_get("SELECT * FROM flowers ORDER BY count DESC")
+    flowers_total = sum(f["count"] for f in flowers)
+
+    return jsonify({
+        "month":    month,
+        "sales":    s,
+        "buys":     b,
+        "expenses": {"expenses": expenses, "paid": paid},
+        "charts":   months_data,
+        "flowers":  {"flowers": flowers, "total": flowers_total}
+    })
+
 @app.route("/api/entries")
+@auth
 def api_get():
     month=request.args.get("month",cur_month())
     s,b=get_month_data(month)
