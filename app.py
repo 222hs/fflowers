@@ -3,10 +3,29 @@ import re
 import sqlite3
 import json
 import requests
+import threading
+import time
 from datetime import datetime
 from flask import Flask, request, jsonify, Response
 
 app = Flask(__name__)
+
+# ── Keep-Alive: يمنع Render من تنويم الخادم ──────────────
+APP_URL = os.environ.get("RENDER_EXTERNAL_URL", "")
+def _keep_alive():
+    """ping كل 10 دقائق لمنع النوم"""
+    time.sleep(30)  # انتظر 30 ثانية بعد البدء
+    while True:
+        try:
+            if APP_URL:
+                requests.get(f"{APP_URL}/ping", timeout=10)
+        except: pass
+        time.sleep(600)  # كل 10 دقائق
+
+_t = threading.Thread(target=_keep_alive, daemon=True)
+_t.start()
+# ─────────────────────────────────────────────────────────
+
 
 # ── Config ────────────────────────────────────────────────
 BOT_TOKEN    = os.environ.get("BOT_TOKEN", "")
@@ -2017,6 +2036,10 @@ def auth(f):
             return redirect('/login')
         return f(*a,**k)
     return w
+
+@app.route("/ping")
+def ping():
+    return "ok", 200
 
 @app.route("/login")
 def login():
