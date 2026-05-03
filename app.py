@@ -1643,6 +1643,61 @@ def parse_text(text):
         return {"type":etype,"desc":desc,"amt":amt,"found":True}
     return {"found":False}
 
+def groq_parse_text(text):
+    """استخدام Groq AI لتحليل أي رسالة نصية وتحديد نوعها وتفاصيلها"""
+    if not GROQ_KEY:
+        return parse_text(text)  # fallback للطريقة القديمة
+    try:
+        today = datetime.now().strftime("%d/%m/%Y")
+        expenses_list = db_get("SELECT name, amount FROM expenses ORDER BY id")
+        exp_names = ", ".join(f"{e['name']} ({fmt_omr(e['amount'])})" for e in expenses_list)
+        prompt = f"""أنت مساعد لمحل فيروز فلورز لبيع الزهور في عُمان.
+اليوم: {today}
+المصاريف الثابتة المسجلة: {exp_names}
+
+حلل هذه الرسالة وأخرج JSON فقط بدون أي شرح:
+"{text}"
+
+الحقول المطلوبة:
+- type: "s" (مبيعة) أو "b" (مشتريات) أو "expense" (مصروف ثابت) أو "unknown"
+- desc: وصف قصير للعملية (بالعربي)
+- amt: المبلغ كرقم عشري (مثل 5.500) أو null إذا غير موجود
+- payment: "كاش 💵" أو "فيزا 💳" أو "تحويل 🏦" أو null
+- paid_by: اسم من دفع (للمشتريات فقط) أو null
+- category: فئة المبيعة من (ورد وباقات, طباعة, تاجات, عطور, اكسسوارات, هدايا, تجفيف, صناعي, أخرى) أو null
+- expense_name: اسم المصروف بالضبط كما في القائمة أو null
+- shelf: اسم الرف إذا ذُكر (ريحان, فتحية, فطوم, اكسسوارات) أو null
+- found: true أو false
+
+أمثلة:
+"بعت باقة بـ 5.500 كاش" → {{"type":"s","desc":"باقة ورد","amt":5.5,"payment":"كاش 💵","category":"ورد وباقات","found":true}}
+"اشتريت زهور بـ 12.000" → {{"type":"b","desc":"زهور","amt":12.0,"paid_by":null,"found":true}}
+"دفعت الراتب" → {{"type":"expense","desc":"راتب العامل","amt":220.0,"expense_name":"راتب العامل","found":true}}
+"بعت طباعة 3d بـ 8 فيزا" → {{"type":"s","desc":"طباعة 3D","amt":8.0,"payment":"فيزا 💳","category":"طباعة","found":true}}
+"مرحبا" → {{"type":"unknown","found":false}}
+
+أخرج JSON فقط:"""
+
+        res = requests.post("https://api.groq.com/openai/v1/chat/completions",
+            headers={"Authorization": f"Bearer {GROQ_KEY}", "Content-Type": "application/json"},
+            json={
+                "model": "llama-3.3-70b-versatile",
+                "messages": [{"role": "user", "content": prompt}],
+                "max_tokens": 200,
+                "temperature": 0.1
+            }, timeout=10)
+        raw = res.json()["choices"][0]["message"]["content"].strip()
+        # نظف الـ JSON
+        raw = re.sub(r'^```json\s*', '', raw)
+        raw = re.sub(r'^```\s*', '', raw)
+        raw = re.sub(r'\s*```$', '', raw)
+        result = json.loads(raw)
+        result["found"] = bool(result.get("found") and result.get("type") != "unknown")
+        return result
+    except Exception as e:
+        print(f"groq_parse_text error: {e}")
+        return parse_text(text)  # fallback
+
 def groq_count_flowers(file_id):
     """Use Groq to count and identify flowers in image."""
     if not GROQ_KEY or not BOT_TOKEN: return None
@@ -2203,6 +2258,37 @@ def webhook():
         return "ok"
 
     state=pending.get(chat,{})
+
+    if state.get("waiting")=="expense_amt":
+        try:
+            amt=float(text.replace(",","."))
+            exp_name=state.get("exp_name","مصروف")
+            exp_id=state.get("exp_id")
+            date_now=datetime.now().strftime("%d/%m/%Y")
+            db_run("INSERT INTO entries (type,desc,amt,date,month,category) VALUES (?,?,?,?,?,?)",
+                   ("expense",exp_name,amt,date_now,month,"مصاريف ثابتة"))
+            if exp_id:
+                db_run("UPDATE expenses SET last_paid=?,month=?,amount=? WHERE id=?",
+                       (date_now,month,amt,exp_id))
+            del pending[chat]
+            tg(chat,f"✅ <b>تم تسجيل {exp_name}</b>\n💰 {fmt_omr(amt)}\n📅 {date_now}")
+        except:
+            tg(chat,"⚠️ أرسل رقم صحيح مثل: <code>220.000</code>")
+        return "ok"
+
+    if state.get("waiting")=="sale_amt":
+        try:
+            amt=float(text.replace(",","."))
+            desc=state.get("desc","مبيعة")
+            del pending[chat]
+            pending[chat]={"waiting":"sale_payment"}
+            db_run("INSERT INTO entries (type,desc,amt,date,month) VALUES (?,?,?,?,?)",("s",desc,amt,date,month))
+            tg_buttons(chat,f"🌸 <b>مبيعة {fmt_omr(amt)}</b>\n📝 {desc}\n\n💳 طريقة الدفع؟",
+                [[{"label":"💵 كاش","data":"pay:كاش 💵"},{"label":"💳 فيزا","data":"pay:فيزا 💳"},{"label":"🏦 تحويل","data":"pay:تحويل 🏦"}]])
+        except:
+            tg(chat,"⚠️ أرسل رقم صحيح مثل: <code>4.500</code>")
+        return "ok"
+
     if state.get("waiting")=="buy_amt":
         try:
             amt=float(text.replace(",","."))
@@ -2389,50 +2475,88 @@ def webhook():
                 tg(chat, f"✅ <b>تم تسجيل {exp_name}</b>\n💰 {fmt_omr(amt)}\n📅 {date_now}")
                 return "ok"
 
-    parsed=parse_text(text)
-    if parsed["found"]:
-        etype=parsed["type"]; desc=parsed["desc"]; amt=parsed["amt"]
-        # Detect if sale is from a shelf
-        shelf_id_detected=None
-        for sname in ["ريحان","فتحية","فطوم","اكسسوارات"]:
-            if sname in text:
-                shelf=db_one("SELECT id FROM shelves WHERE name=?",(sname,))
-                if shelf:
-                    shelf_id_detected=shelf["id"]
-                    # Auto-decrease qty if product name matches
-                    prod=db_one("SELECT * FROM shelf_products WHERE shelf_id=? AND name LIKE ? AND qty>0",
-                               (shelf["id"],f"%{desc}%"))
-                    if prod and etype=="s":
-                        db_run("UPDATE shelf_products SET qty=qty-1 WHERE id=? AND qty>0",(prod["id"],))
-                    break
+    # استخدام Groq AI لفهم الرسالة
+    parsed=groq_parse_text(text)
+    if parsed.get("found"):
+        etype=parsed.get("type"); desc=parsed.get("desc",""); amt=parsed.get("amt") or 0
+
+        # مصروف ثابت
+        if etype=="expense":
+            exp_name = parsed.get("expense_name") or desc
+            exp = db_one("SELECT * FROM expenses WHERE name=?", (exp_name,))
+            if not exp:
+                # حاول بمطابقة جزئية
+                all_exp = db_get("SELECT * FROM expenses ORDER BY id")
+                for e in all_exp:
+                    if any(w in exp_name for w in e["name"].split()[:2]):
+                        exp = e; exp_name = e["name"]; break
+            final_amt = amt if amt and amt > 0 else (float(exp["amount"]) if exp else 0)
+            if final_amt <= 0:
+                tg(chat, f"💸 كم مبلغ {exp_name}؟\nأرسل الرقم فقط: <code>220.000</code>")
+                pending[chat] = {"waiting":"expense_amt","exp_name":exp_name,"exp_id":exp["id"] if exp else None}
+                return "ok"
+            date_now = datetime.now().strftime("%d/%m/%Y")
+            db_run("INSERT INTO entries (type,desc,amt,date,month,category) VALUES (?,?,?,?,?,?)",
+                   ("expense", exp_name, final_amt, date_now, month, "مصاريف ثابتة"))
+            if exp:
+                db_run("UPDATE expenses SET last_paid=?,month=?,amount=? WHERE id=?",
+                       (date_now, month, final_amt, exp["id"]))
+            tg(chat, f"✅ <b>تم تسجيل {exp_name}</b>\n💰 {fmt_omr(final_amt)}\n📅 {date_now}")
+            return "ok"
+
+        # مشتريات
         if etype=="b":
-            pending[chat]={"waiting":"paid_by","desc":desc,"amt":amt,"date":date,"month":month}
-            tg_buttons(chat,f"📦 <b>مشتريات {fmt_omr(amt)}</b>\n\n👤 من دفع؟",
-                [[{"label":"👤 حسين","data":"payer:حسين"},{"label":"👤 شوق","data":"payer:شوق"}],
-                 [{"label":"➕ شخص آخر","data":"payer:other"},{"label":"⏭ تخطي","data":"payer:skip"}]])
-        else:
-            cat=detect_category(text) or detect_category(desc)
-            pay=None
-            if any(w in text for w in ["كاش","نقد"]): pay="كاش 💵"
-            elif any(w in text for w in ["فيزا","بطاقة"]): pay="فيزا 💳"
-            elif "تحويل" in text: pay="تحويل 🏦"
+            if not amt or amt<=0:
+                pending[chat]={"waiting":"buy_amt","desc":desc,"month":month}
+                tg(chat,f"📦 <b>{desc}</b>\nكم المبلغ؟ أرسل الرقم فقط:")
+                return "ok"
+            paid_by = parsed.get("paid_by")
+            if paid_by:
+                db_run("INSERT INTO entries (type,desc,amt,date,month,paid_by) VALUES (?,?,?,?,?,?)",
+                       ("b",desc,amt,date,month,paid_by))
+                tg(chat, f"✅ <b>مشتريات مسجلة!</b>\n📦 {desc}\n💰 {fmt_omr(amt)}\n👤 {paid_by}")
+            else:
+                pending[chat]={"waiting":"paid_by","desc":desc,"amt":amt,"date":date,"month":month}
+                tg_buttons(chat,f"📦 <b>مشتريات {fmt_omr(amt)}</b>\n📝 {desc}\n\n👤 من دفع؟",
+                    [[{"label":"👤 حسين","data":"payer:حسين"},{"label":"👤 شوق","data":"payer:شوق"}],
+                     [{"label":"➕ شخص آخر","data":"payer:other"},{"label":"⏭ تخطي","data":"payer:skip"}]])
+            return "ok"
+
+        # مبيعة
+        if etype=="s":
+            if not amt or amt<=0:
+                pending[chat]={"waiting":"sale_amt","desc":desc}
+                tg(chat,f"🌸 <b>{desc}</b>\nكم المبلغ؟ أرسل الرقم فقط:")
+                return "ok"
+            cat = parsed.get("category") or detect_category(text) or detect_category(desc)
+            pay = parsed.get("payment")
+            # كشف الرف
+            shelf_id_detected = None
+            shelf_name = parsed.get("shelf")
+            if shelf_name:
+                shelf = db_one("SELECT id FROM shelves WHERE name=?", (shelf_name,))
+                if shelf: shelf_id_detected = shelf["id"]
+            else:
+                for sname in ["ريحان","فتحية","فطوم","اكسسوارات"]:
+                    if sname in text:
+                        shelf = db_one("SELECT id FROM shelves WHERE name=?", (sname,))
+                        if shelf: shelf_id_detected = shelf["id"]; break
             db_run("INSERT INTO entries (type,desc,amt,date,month,payment_method,category,shelf_id) VALUES (?,?,?,?,?,?,?,?)",
-                (etype,desc,amt,date,month,pay,cat,shelf_id_detected))
-            # Auto-decrease shelf product qty if matched
+                   ("s",desc,amt,date,month,pay,cat,shelf_id_detected))
             if shelf_id_detected and desc:
                 prod=db_one("SELECT * FROM shelf_products WHERE shelf_id=? AND name LIKE ? AND qty>0",
-                           (shelf_id_detected, f"%{desc.split()[0]}%"))
-                if prod:
-                    db_run("UPDATE shelf_products SET qty=qty-1 WHERE id=? AND qty>0",(prod["id"],))
-            cat_line=f"\n🏷️ {cat}" if cat else ""
+                           (shelf_id_detected,f"%{desc.split()[0]}%"))
+                if prod: db_run("UPDATE shelf_products SET qty=qty-1 WHERE id=? AND qty>0",(prod["id"],))
+            cat_line = f"\n🏷️ {cat}" if cat else ""
             if pay:
-                tg(chat,f"✅ مبيعة {fmt_omr(amt)} — {pay}{cat_line}")
+                tg(chat, f"✅ <b>مبيعة مسجلة!</b>\n🌸 {desc}\n💰 {fmt_omr(amt)} — {pay}{cat_line}")
             else:
                 pending[chat]={"waiting":"sale_payment"}
-                tg_buttons(chat,f"🌸 <b>مبيعة {fmt_omr(amt)}</b>{cat_line}\n\n💳 طريقة الدفع؟",
+                tg_buttons(chat,f"🌸 <b>مبيعة {fmt_omr(amt)}</b>\n📝 {desc}{cat_line}\n\n💳 طريقة الدفع؟",
                     [[{"label":"💵 كاش","data":"pay:كاش 💵"},{"label":"💳 فيزا","data":"pay:فيزا 💳"},{"label":"🏦 تحويل","data":"pay:تحويل 🏦"}]])
+            return "ok"
     else:
-        tg(chat,"لم أفهم 🤔\n\nجرّب:\n<code>بعت باقة بـ 4.500</code>\n<code>اشتريت ورد بـ 8.000</code>\n\n/help للمساعدة")
+        tg(chat, "لم أفهم 🤔\n\nجرّب مثلاً:\n<code>بعت باقة بـ 4.500 كاش</code>\n<code>اشتريت ورد بـ 8.000</code>\n<code>دفعت الراتب</code>\n<code>دفعت الإيجار</code>\n\n/help للمساعدة")
     return "ok"
 
 @app.route("/turso_debug")
