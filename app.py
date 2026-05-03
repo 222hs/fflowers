@@ -167,6 +167,14 @@ header{
 .th-circle{width:32px;height:32px;border-radius:50%;flex-shrink:0;box-shadow:0 2px 8px rgba(0,0,0,0.2);}
 .th-name{font-size:9px;color:var(--text3);font-weight:600;white-space:nowrap;}
 
+/* Daily KPI */
+.day-section{margin-bottom:16px;}
+.day-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;}
+.day-title{font-size:13px;font-weight:800;color:var(--text2);}
+.day-date{font-size:11px;color:var(--text3);}
+.day-chart-card{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:14px;margin-bottom:12px;}
+.day-chart-card h3{font-size:12px;color:var(--text3);margin:0 0 10px;font-weight:600;}
+
 /* Refresh spin */
 @keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
 
@@ -603,6 +611,30 @@ header{
 <div id="tab-home" class="page active">
   <div class="slbl"><span data-t="home">ملخص الشهر</span></div>
 
+  <!-- ── قسم اليوم ── -->
+  <div class="day-section">
+    <div class="day-header">
+      <span class="day-title">📅 اليوم</span>
+      <span class="day-date" id="todayLabel">—</span>
+    </div>
+    <div class="kpi-row row2">
+      <div class="kpi green gc"><div class="kpi-ico">🌸</div>
+        <div class="kpi-lbl">مبيعات اليوم</div>
+        <div class="kpi-val" id="dS">0 ر.ع</div>
+        <div class="kpi-sub" id="dSc">0 عملية</div></div>
+      <div class="kpi gc" style="--kc:var(--accent)"><div class="kpi-ico">🛒</div>
+        <div class="kpi-lbl">مشتريات اليوم</div>
+        <div class="kpi-val" id="dB" style="color:var(--accent)">0 ر.ع</div>
+        <div class="kpi-sub" id="dBc">0 عملية</div></div>
+    </div>
+    <div class="day-chart-card gc">
+      <h3>📊 مبيعات اليوم بالساعة</h3>
+      <canvas id="dayChart" height="130"></canvas>
+    </div>
+  </div>
+  <div style="height:1px;background:var(--border);margin-bottom:16px;"></div>
+
+  <!-- ── ملخص الشهر ── -->
   <div class="kpi-row row2">
     <div class="kpi green gc"><div class="kpi-ico">💰</div>
       <div class="kpi-lbl" data-t="sales">المبيعات</div>
@@ -852,7 +884,72 @@ document.addEventListener('click', e => {
 let formTab='s';
 const _now = new Date();
 let month = `${_now.getFullYear()}-${String(_now.getMonth()+1).padStart(2,'0')}`;
-let barCI=null,payCI=null,payerCI=null;
+let barCI=null,payCI=null,payerCI=null,dayCI=null;
+
+// ── بيانات اليوم ──
+function getTodayStr(){
+  const d=new Date();
+  const dd=String(d.getDate()).padStart(2,'0');
+  const mm=String(d.getMonth()+1).padStart(2,'0');
+  const yyyy=d.getFullYear();
+  return `${dd}/${mm}/${yyyy}`;
+}
+
+function renderDayKPI(sales, buys){
+  const today = getTodayStr();
+  document.getElementById('todayLabel').textContent = today;
+  const ts = sales.reduce((a,e)=>a+e.amt,0);
+  const tb = buys.reduce((a,e)=>a+e.amt,0);
+  const cur = t('currency');
+  document.getElementById('dS').textContent = fmt(ts)+' '+cur;
+  document.getElementById('dSc').textContent = sales.length+' '+t('operations');
+  document.getElementById('dB').textContent = fmt(tb)+' '+cur;
+  document.getElementById('dBc').textContent = buys.length+' '+t('operations');
+  renderDayChart(sales);
+}
+
+function renderDayChart(sales){
+  // نرسم مبيعات اليوم بالساعة (0-23)
+  const hours = Array(24).fill(0);
+  sales.forEach(e=>{
+    // sale_time أو نأخذ الوقت من created
+    const timeStr = e.sale_time || e.created || '';
+    const match = timeStr.match(/(\d{2}):(\d{2})/);
+    if(match){ hours[parseInt(match[1])] += e.amt; }
+    else { hours[new Date().getHours()] += e.amt; }
+  });
+  // نعرض فقط الساعات من 7 صباحاً لـ 11 مساءً
+  const labels = [];
+  const vals = [];
+  for(let h=7;h<=23;h++){
+    labels.push(h<12?`${h}ص`:h===12?`12م`:h===24?`12ل`:`${h-12}م`);
+    vals.push(hours[h]);
+  }
+  if(dayCI) dayCI.destroy();
+  const ctx = document.getElementById('dayChart');
+  if(!ctx) return;
+  dayCI = new Chart(ctx,{
+    type:'bar',
+    data:{
+      labels,
+      datasets:[{
+        label:'المبيعات',
+        data:vals,
+        backgroundColor: vals.map(v=>v>0?'rgba(var(--gold-rgb,212,175,55),0.8)':'rgba(128,128,128,0.15)'),
+        borderRadius:6,
+        borderSkipped:false,
+      }]
+    },
+    options:{
+      responsive:true,
+      plugins:{legend:{display:false},tooltip:{callbacks:{label:i=>`${fmt(i.raw)} ر.ع`}}},
+      scales:{
+        x:{grid:{display:false},ticks:{font:{size:9}}},
+        y:{grid:{color:'rgba(128,128,128,0.1)'},ticks:{font:{size:9},callback:v=>v>0?fmt(v):''},beginAtZero:true}
+      }
+    }
+  });
+}
 let activeProdShelf=null,activeSellProd=null,activeRentShelf=null;
 let flowerOpen=false;
 
@@ -907,6 +1004,11 @@ async function load(){
     renderKPI(dash.sales, dash.buys, dash.expenses);
     renderLists(dash.sales, dash.buys);
     loadExpensesPanel(dash, dash.expenses);
+    // بيانات اليوم
+    const todayStr = getTodayStr();
+    const todaySales = dash.sales.filter(e=>e.date===todayStr);
+    const todayBuys  = dash.buys.filter(e=>e.date===todayStr && e.type!=='expense');
+    renderDayKPI(todaySales, todayBuys);
     const ms = ['01','02','03','04','05','06','07','08','09','10','11','12'];
     const yr = month.split('-')[0];
     const all = ms.map(m => dash.charts[`${yr}-${m}`] || {sales:[],buys:[]});
@@ -1375,6 +1477,10 @@ function setLang(l){
     renderKPI(_lastData.sales, _lastData.buys, _lastExpData);
     renderLists(_lastData.sales, _lastData.buys);
     loadExpensesPanel(_lastData, _lastExpData);
+    const todayStr = getTodayStr();
+    const todaySales = _lastData.sales.filter(e=>e.date===todayStr);
+    const todayBuys  = _lastData.buys.filter(e=>e.date===todayStr && e.type!=='expense');
+    renderDayKPI(todaySales, todayBuys);
   }
 }
 
