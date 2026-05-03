@@ -804,7 +804,34 @@ input[type="date"]{width:100%;padding:10px 12px;border:1px solid var(--border);b
 </div>
 </div>
 
-
+<!-- THEME PANEL -->
+<div id="themePanel" style="display:none;position:fixed;top:62px;left:50%;transform:translateX(-50%);
+  z-index:300;background:var(--bg);border:1px solid var(--border2);border-radius:16px;
+  padding:16px;box-shadow:0 8px 32px var(--shadow);min-width:280px;">
+  <div style="font-size:10px;font-weight:700;color:var(--text3);letter-spacing:2px;text-transform:uppercase;text-align:center;margin-bottom:12px;">اختر الثيم</div>
+  <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:8px;">
+    <div onclick="setTheme('rose')" id="th-rose" style="cursor:pointer;text-align:center;padding:8px 4px;border-radius:10px;border:2px solid transparent;transition:.2s;">
+      <div style="width:36px;height:36px;border-radius:50%;background:linear-gradient(135deg,#f9c8d0,#e8798a);margin:0 auto 4px;box-shadow:0 2px 8px rgba(0,0,0,.2);"></div>
+      <span style="font-size:9px;color:var(--text3);font-weight:600;">وردي</span>
+    </div>
+    <div onclick="setTheme('ocean')" id="th-ocean" style="cursor:pointer;text-align:center;padding:8px 4px;border-radius:10px;border:2px solid transparent;transition:.2s;">
+      <div style="width:36px;height:36px;border-radius:50%;background:linear-gradient(135deg,#0d2233,#4eaccd);margin:0 auto 4px;box-shadow:0 2px 8px rgba(0,0,0,.2);"></div>
+      <span style="font-size:9px;color:var(--text3);font-weight:600;">أزرق</span>
+    </div>
+    <div onclick="setTheme('forest')" id="th-forest" style="cursor:pointer;text-align:center;padding:8px 4px;border-radius:10px;border:2px solid transparent;transition:.2s;">
+      <div style="width:36px;height:36px;border-radius:50%;background:linear-gradient(135deg,#e4ede4,#5a8a6a);margin:0 auto 4px;box-shadow:0 2px 8px rgba(0,0,0,.2);"></div>
+      <span style="font-size:9px;color:var(--text3);font-weight:600;">أخضر</span>
+    </div>
+    <div onclick="setTheme('gold')" id="th-gold" style="cursor:pointer;text-align:center;padding:8px 4px;border-radius:10px;border:2px solid transparent;transition:.2s;">
+      <div style="width:36px;height:36px;border-radius:50%;background:linear-gradient(135deg,#1a1208,#d4a843);margin:0 auto 4px;box-shadow:0 2px 8px rgba(0,0,0,.2);"></div>
+      <span style="font-size:9px;color:var(--text3);font-weight:600;">ذهبي</span>
+    </div>
+    <div onclick="setTheme('lavender')" id="th-lavender" style="cursor:pointer;text-align:center;padding:8px 4px;border-radius:10px;border:2px solid transparent;transition:.2s;">
+      <div style="width:36px;height:36px;border-radius:50%;background:linear-gradient(135deg,#f5f0ff,#9664dc);margin:0 auto 4px;box-shadow:0 2px 8px rgba(0,0,0,.2);"></div>
+      <span style="font-size:9px;color:var(--text3);font-weight:600;">بنفسجي</span>
+    </div>
+  </div>
+</div>
 
 <!-- MODALS -->
 <div class="overlay" id="addProdOv">
@@ -1478,6 +1505,27 @@ function showToast(msg){const el=document.getElementById('toast');el.textContent
     if(!sel.value) sel.selectedIndex = 0;
   }
 })();
+
+/* ── THEMES ── */
+function setTheme(t){
+  document.documentElement.setAttribute('data-theme',t);
+  localStorage.setItem('fairuz_theme',t);
+  document.querySelectorAll('[id^="th-"]').forEach(el=>{
+    el.style.borderColor=el.id==='th-'+t?'var(--accent)':'transparent';
+    el.style.background=el.id==='th-'+t?'rgba(255,255,255,0.15)':'transparent';
+  });
+}
+function toggleThemePanel(){
+  const p=document.getElementById('themePanel');
+  p.style.display=p.style.display==='none'?'block':'none';
+}
+document.addEventListener('click',e=>{
+  if(!e.target.closest('#themePanel')&&!e.target.closest('button[onclick*="toggleThemePanel"]'))
+    document.getElementById('themePanel').style.display='none';
+});
+// Init saved theme
+const savedTheme=localStorage.getItem('fairuz_theme')||'rose';
+setTheme(savedTheme);
 
 /* ── BILINGUAL ── */
 const T = {
