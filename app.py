@@ -530,6 +530,7 @@ header{
         </select>
       </div>
       <button class="theme-btn" onclick="toggleThemePanel()" title="تغيير الثيم">🎨</button>
+      <button class="theme-btn" id="langBtn" onclick="toggleLang()" title="تغيير اللغة" style="font-size:12px;font-weight:700;font-family:'Tajawal',sans-serif;">EN</button>
       <a href="/logout" class="logout-btn" title="خروج">🔒</a>
     </div>
   </div>
@@ -853,27 +854,48 @@ document.getElementById('bPayer').addEventListener('change',function(){
 });
 
 /* ── LOAD ── */
+let _chartsCache = {}; // cache بيانات الرسوم البيانية
+let _chartsCacheYear = null;
+
 async function load(){
   const [d, expD] = await Promise.all([
     api(`/api/entries?month=${month}`),
     api(`/api/expenses?month=${month}`)
   ]);
+  // حفظ في cache عشان تغيير اللغة يكون فوري
+  _lastData = d;
+  _lastExpData = expD;
   renderKPI(d.sales, d.buys, expD);
   renderLists(d.sales, d.buys);
-  loadCharts();
   loadExpensesPanel(d, expD);
+  // الرسوم البيانية فقط إذا تغير الشهر أو أول مرة
+  const yr = month.split('-')[0];
+  if(_chartsCacheYear !== yr || Object.keys(_chartsCache).length === 0){
+    loadCharts();
+  } else {
+    // استخدم الـ cache مباشرة
+    const all = Object.values(_chartsCache);
+    renderBarChart(all.map(d=>d.sales.reduce((a,e)=>a+e.amt,0)),all.map(d=>d.buys.filter(e=>e.type!=='expense').reduce((a,e)=>a+e.amt,0)));
+    const cur = all[parseInt(month.split('-')[1])-1];
+    if(cur){ renderPayChart(cur.sales); renderPayerChart(cur.buys.filter(e=>e.type!=='expense')); }
+  }
 }
 
 async function loadCharts(){
   const ms=['01','02','03','04','05','06','07','08','09','10','11','12'];
   const yr=month.split('-')[0];
   const all=await Promise.all(ms.map(m=>api(`/api/entries?month=${yr}-${m}`)));
+  // حفظ في cache
+  _chartsCache = {};
+  ms.forEach((m,i) => { _chartsCache[m] = all[i]; });
+  _chartsCacheYear = yr;
   renderBarChart(all.map(d=>d.sales.reduce((a,e)=>a+e.amt,0)),all.map(d=>d.buys.filter(e=>e.type!=='expense').reduce((a,e)=>a+e.amt,0)));
   const cur=all[parseInt(month.split('-')[1])-1];
   renderPayChart(cur.sales);renderPayerChart(cur.buys.filter(e=>e.type!=='expense'));
 }
 
-setInterval(()=>{load();if(document.getElementById('tab-shelves').classList.contains('active'))loadShelves();},15000);
+// رفعنا التحديث التلقائي من 15 ثانية إلى 60 ثانية لتخفيف الضغط
+setInterval(()=>{load();if(document.getElementById('tab-shelves').classList.contains('active'))loadShelves();},60000);
 
 /* ── KPI ── */
 function renderKPI(sales,buys,expD){
@@ -883,21 +905,22 @@ function renderKPI(sales,buys,expD){
   const paidExps=(expD&&expD.paid)||[];
   const te=paidExps.reduce((a,e)=>a+e.amt,0);
   const tn=tp-te;
-  document.getElementById('kS').textContent=fmt(ts)+' ر.ع';
-  document.getElementById('kSc').textContent=sales.length+' عملية';
-  document.getElementById('kB').textContent=fmt(tb)+' ر.ع';
-  document.getElementById('kBc').textContent=buys.filter(e=>e.type!=='expense').length+' عملية';
-  document.getElementById('kE').textContent=fmt(te)+' ر.ع';
-  document.getElementById('kEd').textContent=te>0?paidExps.length+' مصروف مدفوع':'لم تُدفع بعد';
-  document.getElementById('kP').textContent=(tp>=0?'+':'')+fmt(tp)+' ر.ع';
+  const cur=t('currency');
+  document.getElementById('kS').textContent=fmt(ts)+' '+cur;
+  document.getElementById('kSc').textContent=sales.length+' '+t('operations');
+  document.getElementById('kB').textContent=fmt(tb)+' '+cur;
+  document.getElementById('kBc').textContent=buys.filter(e=>e.type!=='expense').length+' '+t('operations');
+  document.getElementById('kE').textContent=fmt(te)+' '+cur;
+  document.getElementById('kEd').textContent=te>0?paidExps.length+' '+t('paid'):t('notPaid');
+  document.getElementById('kP').textContent=(tp>=0?'+':'')+fmt(tp)+' '+cur;
   document.getElementById('kP').style.color=tp>=0?'var(--gold)':'var(--accent)';
   const b=document.getElementById('kPb');
-  b.textContent=tp>0?'✅ ربح':tp<0?'⚠️ خسارة':'—';
+  b.textContent=tp>0?t('profit'):tp<0?t('loss'):'—';
   b.className='badge '+(tp>0?'bp':tp<0?'bn':'');
-  document.getElementById('kN').textContent=(tn>=0?'+':'')+fmt(tn)+' ر.ع';
+  document.getElementById('kN').textContent=(tn>=0?'+':'')+fmt(tn)+' '+cur;
   document.getElementById('kN').style.color=tn>=0?'var(--green2)':'var(--accent)';
   const nb=document.getElementById('kNb');
-  nb.textContent=tn>0?'🏆 صافي':tn<0?'⚠️ خسارة':'—';
+  nb.textContent=tn>0?t('net'):tn<0?t('loss'):'—';
   nb.className='badge '+(tn>0?'bp':tn<0?'bn':'');
   const pm={'كاش 💵':0,'فيزا 💳':0,'تحويل 🏦':0};
   sales.forEach(e=>{if(e.payment_method&&pm[e.payment_method]!==undefined)pm[e.payment_method]+=e.amt;});
@@ -912,6 +935,7 @@ function renderKPI(sales,buys,expD){
 function pb(pm){if(!pm)return'';return`<span class="epb">${pm}</span>`;}
 function renderLists(sales,buys){
   const catIcons={"ورد وباقات":"🌸","طباعة":"🖨️","تاجات":"👑","عطور":"🌿","اكسسوارات":"💍","هدايا":"🎁","تجفيف":"🌾","صناعي":"🎨","أخرى":"✨"};
+  const cur=t('currency');
   document.getElementById('sl').innerHTML=sales.length?sales.map(e=>`
     <div class="entry es">
       <div class="eph">${catIcons[e.category]||'🌸'}</div>
@@ -919,7 +943,7 @@ function renderLists(sales,buys){
         <div class="emeta"><span class="edate">${e.date}</span>${pb(e.payment_method)}${e.category?`<span class="epb">${e.category}</span>`:''}</div></div>
       <div class="eamt">+${fmt(e.amt)}</div>
       <button class="delbtn" onclick="del(${e.id})">🗑</button>
-    </div>`).join(''):`<div class="empty"><div class="ei">🌷</div><p>لا توجد مبيعات</p></div>`;
+    </div>`).join(''):`<div class="empty"><div class="ei">🌷</div><p>${lang==='en'?'No sales yet':'لا توجد مبيعات'}</p></div>`;
   const buysOnly=buys.filter(e=>e.type!=='expense');
   document.getElementById('bl').innerHTML=buysOnly.length?buysOnly.map(e=>`
     <div class="entry">
@@ -928,7 +952,7 @@ function renderLists(sales,buys){
         <div class="emeta"><span class="edate">${e.date}</span>${e.paid_by?`<span class="epb">👤${e.paid_by}</span>`:''}</div></div>
       <div class="eamt exp">-${fmt(e.amt)}</div>
       <button class="delbtn" onclick="del(${e.id})">🗑</button>
-    </div>`).join(''):`<div class="empty"><div class="ei">🌿</div><p>لا توجد مشتريات</p></div>`;
+    </div>`).join(''):`<div class="empty"><div class="ei">🌿</div><p>${lang==='en'?'No purchases yet':'لا توجد مشتريات'}</p></div>`;
   document.getElementById('sbadge').textContent=sales.length;
   document.getElementById('bbadge').textContent=buysOnly.length;
 }
@@ -1213,7 +1237,14 @@ async function doRestore(ev){
 
 /* ── MISC ── */
 document.querySelectorAll('.overlay').forEach(o=>o.addEventListener('click',function(e){if(e.target===this)this.classList.remove('open');}));
-function changeMonth(){month=document.getElementById('msel').value;load();loadFlowers();if(document.getElementById('tab-shelves').classList.contains('active'))loadShelves();}
+function changeMonth(){
+  const prev = month;
+  month = document.getElementById('msel').value;
+  // امسح الـ cache لو تغيرت السنة
+  if(prev.split('-')[0] !== month.split('-')[0]){ _chartsCache={}; _chartsCacheYear=null; }
+  load();loadFlowers();
+  if(document.getElementById('tab-shelves').classList.contains('active'))loadShelves();
+}
 function showToast(msg){const el=document.getElementById('toast');el.textContent=msg;el.classList.add('show');setTimeout(()=>el.classList.remove('show'),3000);}
 
 // Set month selector to current month
@@ -1290,6 +1321,10 @@ const T = {
 };
 let lang = localStorage.getItem('fairuz_lang') || 'ar';
 
+// cache آخر بيانات محملة عشان نستخدمها عند تغيير اللغة بدون API call جديد
+let _lastData = null;
+let _lastExpData = null;
+
 function setLang(l){
   lang = l;
   localStorage.setItem('fairuz_lang', l);
@@ -1297,6 +1332,12 @@ function setLang(l){
   document.documentElement.setAttribute('lang', l);
   applyTranslations();
   updateLangBtn();
+  // أعد رسم البيانات من الـ cache بدون API call جديد
+  if(_lastData && _lastExpData){
+    renderKPI(_lastData.sales, _lastData.buys, _lastExpData);
+    renderLists(_lastData.sales, _lastData.buys);
+    loadExpensesPanel(_lastData, _lastExpData);
+  }
 }
 
 function t(key){ return T[lang][key] || T['ar'][key] || key; }
