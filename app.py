@@ -148,6 +148,12 @@ header{
 .th-circle{width:32px;height:32px;border-radius:50%;flex-shrink:0;box-shadow:0 2px 8px rgba(0,0,0,0.2);}
 .th-name{font-size:9px;color:var(--text3);font-weight:600;white-space:nowrap;}
 
+/* Skeleton loading */
+.skl{height:14px;background:linear-gradient(90deg,var(--border) 25%,var(--bg2) 50%,var(--border) 75%);background-size:200% 100%;animation:skl-shine 1.2s infinite;border-radius:6px;margin:4px 0;}
+.skl-sm{width:60%;height:10px;}
+.skl-row{display:flex;flex-direction:column;padding:10px;border-bottom:1px solid var(--border);}
+@keyframes skl-shine{0%{background-position:200% 0}100%{background-position:-200% 0}}
+
 /* Mobile nav tabs */
 .mobile-tabs{
   display:flex;border-top:1px solid var(--border);overflow-x:auto;
@@ -853,60 +859,42 @@ document.getElementById('bPayer').addEventListener('change',function(){
   document.getElementById('bOtherWrap').style.display=this.value==='أخرى'?'block':'none';
 });
 
-/* ── LOAD (Streaming) ── */
-// يعرض البيانات فور وصولها قطعة قطعة بدل الانتظار
+/* ── LOAD ── */
+function showSkeleton(){
+  // skeleton يظهر فوراً بينما تجي البيانات
+  const skl = `<div class="skl-row"><div class="skl"></div><div class="skl skl-sm"></div></div>`;
+  const kpis = document.querySelectorAll('.kpi-val');
+  kpis.forEach(el=>{ el.style.opacity='0.3'; });
+  ['sl','bl'].forEach(id=>{
+    const el=document.getElementById(id);
+    if(el) el.innerHTML=skl.repeat(3);
+  });
+}
+function hideSkeleton(){
+  document.querySelectorAll('.kpi-val').forEach(el=>{ el.style.opacity='1'; });
+}
+
 async function load(){
+  showSkeleton();
   try {
-    const res = await fetch(`/api/dashboard?month=${month}`);
-    const reader = res.body.getReader();
-    const decoder = new TextDecoder();
-    let buffer = '';
-
-    while(true){
-      const {done, value} = await reader.read();
-      if(done) break;
-      buffer += decoder.decode(value, {stream: true});
-      const lines = buffer.split('\n');
-      buffer = lines.pop(); // آخر سطر ناقص نكمله في الـ chunk الجاي
-
-      for(const line of lines){
-        if(!line.trim()) continue;
-        try {
-          const chunk = JSON.parse(line);
-
-          if(chunk.type === 'main'){
-            // ✅ المبيعات والمشتريات - تظهر فوراً
-            _lastData = chunk;
-            _lastExpData = null;
-            renderKPI(chunk.sales, chunk.buys, null);
-            renderLists(chunk.sales, chunk.buys);
-          }
-          else if(chunk.type === 'expenses'){
-            // ✅ المصاريف - تظهر بعدها مباشرة
-            _lastExpData = chunk;
-            renderKPI(_lastData.sales, _lastData.buys, chunk);
-            loadExpensesPanel(_lastData, chunk);
-          }
-          else if(chunk.type === 'flowers'){
-            // ✅ الزهور
-            document.getElementById('flowerCount').textContent = chunk.total || 0;
-          }
-          else if(chunk.type === 'charts'){
-            // ✅ الرسوم البيانية - تظهر آخراً
-            const ms = ['01','02','03','04','05','06','07','08','09','10','11','12'];
-            const yr = month.split('-')[0];
-            const all = ms.map(m => chunk.charts[`${yr}-${m}`] || {sales:[],buys:[]});
-            renderBarChart(
-              all.map(d=>d.sales.reduce((a,e)=>a+e.amt,0)),
-              all.map(d=>d.buys.filter(e=>e.type!=='expense').reduce((a,e)=>a+e.amt,0))
-            );
-            const cur = all[parseInt(month.split('-')[1])-1];
-            if(cur){ renderPayChart(cur.sales); renderPayerChart(cur.buys.filter(e=>e.type!=='expense')); }
-          }
-        } catch(e){}
-      }
-    }
-  } catch(e){ console.error('load error', e); }
+    const dash = await api(`/api/dashboard?month=${month}`);
+    _lastData = dash;
+    _lastExpData = dash.expenses;
+    hideSkeleton();
+    renderKPI(dash.sales, dash.buys, dash.expenses);
+    renderLists(dash.sales, dash.buys);
+    loadExpensesPanel(dash, dash.expenses);
+    const ms = ['01','02','03','04','05','06','07','08','09','10','11','12'];
+    const yr = month.split('-')[0];
+    const all = ms.map(m => dash.charts[`${yr}-${m}`] || {sales:[],buys:[]});
+    renderBarChart(
+      all.map(d=>d.sales.reduce((a,e)=>a+e.amt,0)),
+      all.map(d=>d.buys.filter(e=>e.type!=='expense').reduce((a,e)=>a+e.amt,0))
+    );
+    const cur = all[parseInt(month.split('-')[1])-1];
+    if(cur){ renderPayChart(cur.sales); renderPayerChart(cur.buys.filter(e=>e.type!=='expense')); }
+    if(dash.flowers) document.getElementById('flowerCount').textContent = dash.flowers.total || 0;
+  } catch(e){ hideSkeleton(); console.error('load error', e); }
 }
 
 // تحديث تلقائي كل 60 ثانية
@@ -1971,39 +1959,30 @@ def debug():
 @app.route("/api/dashboard")
 @auth
 def api_dashboard():
-    """Streaming dashboard - يبعث البيانات على مراحل فور جهوزيتها"""
-    import json as _json
+    """طلب واحد يجيب كل البيانات دفعة واحدة"""
     month = request.args.get("month", cur_month())
     yr = month.split("-")[0]
-
-    def generate():
-        NL = "\n"
-        # المرحلة 1: المبيعات والمشتريات - تظهر أولاً
-        s, b = get_month_data(month)
-        yield _json.dumps({"type": "main", "sales": s, "buys": b}) + NL
-
-        # المرحلة 2: المصاريف
-        expenses = db_get("SELECT * FROM expenses ORDER BY id")
-        paid = db_get("SELECT * FROM entries WHERE type='expense' AND month=? ORDER BY created DESC", (month,))
-        yield _json.dumps({"type": "expenses", "expenses": expenses, "paid": paid}) + NL
-
-        # المرحلة 3: الزهور
-        flowers = db_get("SELECT * FROM flowers ORDER BY count DESC")
-        flowers_total = sum(f["count"] for f in flowers)
-        yield _json.dumps({"type": "flowers", "flowers": flowers, "total": flowers_total}) + NL
-
-        # المرحلة 4: الرسوم البيانية - تجي آخراً
-        all_entries = db_get("SELECT * FROM entries WHERE month LIKE ? ORDER BY created DESC", (f"{yr}-%",))
-        months_data = {}
-        for mm in [f"{yr}-{str(i).zfill(2)}" for i in range(1,13)]:
-            ms = [e for e in all_entries if e["month"] == mm]
-            months_data[mm] = {
-                "sales": [e for e in ms if e["type"] == "s"],
-                "buys":  [e for e in ms if e["type"] in ("b","expense")]
-            }
-        yield _json.dumps({"type": "charts", "charts": months_data}) + NL
-
-    return Response(generate(), mimetype="application/x-ndjson")
+    s, b = get_month_data(month)
+    expenses = db_get("SELECT * FROM expenses ORDER BY id")
+    paid = db_get("SELECT * FROM entries WHERE type='expense' AND month=? ORDER BY created DESC", (month,))
+    all_entries = db_get("SELECT * FROM entries WHERE month LIKE ? ORDER BY created DESC", (f"{yr}-%",))
+    months_data = {}
+    for mm in [f"{yr}-{str(i).zfill(2)}" for i in range(1,13)]:
+        ms = [e for e in all_entries if e["month"] == mm]
+        months_data[mm] = {
+            "sales": [e for e in ms if e["type"] == "s"],
+            "buys":  [e for e in ms if e["type"] in ("b","expense")]
+        }
+    flowers = db_get("SELECT * FROM flowers ORDER BY count DESC")
+    flowers_total = sum(f["count"] for f in flowers)
+    return jsonify({
+        "month":    month,
+        "sales":    s,
+        "buys":     b,
+        "expenses": {"expenses": expenses, "paid": paid},
+        "charts":   months_data,
+        "flowers":  {"flowers": flowers, "total": flowers_total}
+    })
 
 @app.route("/api/entries")
 @auth
