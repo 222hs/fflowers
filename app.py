@@ -806,7 +806,9 @@ function switchTab(t){
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
   document.querySelectorAll('.mtab').forEach(b=>b.classList.remove('on'));
   document.getElementById('tab-'+t).classList.add('active');
-  event.currentTarget.classList.add('on');
+  document.querySelectorAll('.mtab').forEach(b=>{
+    if(b.getAttribute('onclick')&&b.getAttribute('onclick').includes("'"+t+"'"))b.classList.add('on');
+  });
   if(t==='shelves') loadShelves();
 }
 
