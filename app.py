@@ -515,18 +515,18 @@ header{
       <div class="mpill">
         <label>📅</label>
         <select id="msel" onchange="changeMonth()">
-          <option value="2025-01">يناير</option><option value="2025-02">فبراير</option>
-          <option value="2025-03">مارس</option><option value="2025-04">أبريل</option>
-          <option value="2025-05">مايو</option><option value="2025-06">يونيو</option>
-          <option value="2025-07">يوليو</option><option value="2025-08">أغسطس</option>
-          <option value="2025-09">سبتمبر</option><option value="2025-10">أكتوبر</option>
-          <option value="2025-11">نوفمبر</option><option value="2025-12">ديسمبر</option>
-          <option value="2026-01">يناير</option><option value="2026-02">فبراير</option>
-          <option value="2026-03">مارس</option><option value="2026-04">أبريل</option>
-          <option value="2026-05">مايو</option><option value="2026-06">يونيو</option>
-          <option value="2026-07">يوليو</option><option value="2026-08">أغسطس</option>
-          <option value="2026-09">سبتمبر</option><option value="2026-10">أكتوبر</option>
-          <option value="2026-11">نوفمبر</option><option value="2026-12">ديسمبر</option>
+          <option value="2025-01">يناير 2025</option><option value="2025-02">فبراير 2025</option>
+          <option value="2025-03">مارس 2025</option><option value="2025-04">أبريل 2025</option>
+          <option value="2025-05">مايو 2025</option><option value="2025-06">يونيو 2025</option>
+          <option value="2025-07">يوليو 2025</option><option value="2025-08">أغسطس 2025</option>
+          <option value="2025-09">سبتمبر 2025</option><option value="2025-10">أكتوبر 2025</option>
+          <option value="2025-11">نوفمبر 2025</option><option value="2025-12">ديسمبر 2025</option>
+          <option value="2026-01">يناير 2026</option><option value="2026-02">فبراير 2026</option>
+          <option value="2026-03">مارس 2026</option><option value="2026-04">أبريل 2026</option>
+          <option value="2026-05">مايو 2026</option><option value="2026-06">يونيو 2026</option>
+          <option value="2026-07">يوليو 2026</option><option value="2026-08">أغسطس 2026</option>
+          <option value="2026-09">سبتمبر 2026</option><option value="2026-10">أكتوبر 2026</option>
+          <option value="2026-11">نوفمبر 2026</option><option value="2026-12">ديسمبر 2026</option>
         </select>
       </div>
       <button class="theme-btn" onclick="toggleThemePanel()" title="تغيير الثيم">🎨</button>
