@@ -530,6 +530,7 @@ header{
         </select>
       </div>
       <button class="theme-btn" onclick="toggleThemePanel()" title="تغيير الثيم">🎨</button>
+      <button class="theme-btn" id="langBtn" onclick="toggleLang()" title="تغيير اللغة" style="font-size:12px;font-weight:700;font-family:'Tajawal',sans-serif;">EN</button>
       <a href="/logout" class="logout-btn" title="خروج">🔒</a>
     </div>
   </div>
@@ -853,6 +854,9 @@ document.getElementById('bPayer').addEventListener('change',function(){
 });
 
 /* ── LOAD ── */
+let _chartsCache = {}; // cache بيانات الرسوم البيانية
+let _chartsCacheYear = null;
+
 async function load(){
   const [d, expD] = await Promise.all([
     api(`/api/entries?month=${month}`),
@@ -860,20 +864,35 @@ async function load(){
   ]);
   renderKPI(d.sales, d.buys, expD);
   renderLists(d.sales, d.buys);
-  loadCharts();
   loadExpensesPanel(d, expD);
+  // الرسوم البيانية فقط إذا تغير الشهر أو أول مرة
+  const yr = month.split('-')[0];
+  if(_chartsCacheYear !== yr || Object.keys(_chartsCache).length === 0){
+    loadCharts();
+  } else {
+    // استخدم الـ cache مباشرة
+    const all = Object.values(_chartsCache);
+    renderBarChart(all.map(d=>d.sales.reduce((a,e)=>a+e.amt,0)),all.map(d=>d.buys.filter(e=>e.type!=='expense').reduce((a,e)=>a+e.amt,0)));
+    const cur = all[parseInt(month.split('-')[1])-1];
+    if(cur){ renderPayChart(cur.sales); renderPayerChart(cur.buys.filter(e=>e.type!=='expense')); }
+  }
 }
 
 async function loadCharts(){
   const ms=['01','02','03','04','05','06','07','08','09','10','11','12'];
   const yr=month.split('-')[0];
   const all=await Promise.all(ms.map(m=>api(`/api/entries?month=${yr}-${m}`)));
+  // حفظ في cache
+  _chartsCache = {};
+  ms.forEach((m,i) => { _chartsCache[m] = all[i]; });
+  _chartsCacheYear = yr;
   renderBarChart(all.map(d=>d.sales.reduce((a,e)=>a+e.amt,0)),all.map(d=>d.buys.filter(e=>e.type!=='expense').reduce((a,e)=>a+e.amt,0)));
   const cur=all[parseInt(month.split('-')[1])-1];
   renderPayChart(cur.sales);renderPayerChart(cur.buys.filter(e=>e.type!=='expense'));
 }
 
-setInterval(()=>{load();if(document.getElementById('tab-shelves').classList.contains('active'))loadShelves();},15000);
+// رفعنا التحديث التلقائي من 15 ثانية إلى 60 ثانية لتخفيف الضغط
+setInterval(()=>{load();if(document.getElementById('tab-shelves').classList.contains('active'))loadShelves();},60000);
 
 /* ── KPI ── */
 function renderKPI(sales,buys,expD){
@@ -1213,7 +1232,14 @@ async function doRestore(ev){
 
 /* ── MISC ── */
 document.querySelectorAll('.overlay').forEach(o=>o.addEventListener('click',function(e){if(e.target===this)this.classList.remove('open');}));
-function changeMonth(){month=document.getElementById('msel').value;load();loadFlowers();if(document.getElementById('tab-shelves').classList.contains('active'))loadShelves();}
+function changeMonth(){
+  const prev = month;
+  month = document.getElementById('msel').value;
+  // امسح الـ cache لو تغيرت السنة
+  if(prev.split('-')[0] !== month.split('-')[0]){ _chartsCache={}; _chartsCacheYear=null; }
+  load();loadFlowers();
+  if(document.getElementById('tab-shelves').classList.contains('active'))loadShelves();
+}
 function showToast(msg){const el=document.getElementById('toast');el.textContent=msg;el.classList.add('show');setTimeout(()=>el.classList.remove('show'),3000);}
 
 // Set month selector to current month
