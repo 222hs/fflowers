@@ -167,6 +167,14 @@ header{
 .th-circle{width:32px;height:32px;border-radius:50%;flex-shrink:0;box-shadow:0 2px 8px rgba(0,0,0,0.2);}
 .th-name{font-size:9px;color:var(--text3);font-weight:600;white-space:nowrap;}
 
+/* Reports UI */
+.rpt-type-row{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px;}
+.rpt-type-btn{padding:12px;border:2px solid var(--border);border-radius:12px;background:var(--card);color:var(--text2);font-family:'Tajawal',sans-serif;font-size:13px;font-weight:700;cursor:pointer;transition:.2s;}
+.rpt-type-btn.active{border-color:var(--accent);background:rgba(var(--accent-rgb,200,100,110),.1);color:var(--accent);}
+.rpt-picker{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:14px;margin-bottom:14px;}
+.rpt-day-label{text-align:center;font-size:12px;color:var(--text3);margin-top:8px;}
+input[type="date"]{width:100%;padding:10px 12px;border:1px solid var(--border);border-radius:10px;background:var(--bg2);color:var(--text1);font-family:'Tajawal',sans-serif;font-size:13px;}
+
 /* Daily KPI */
 .day-section{margin-bottom:16px;}
 .day-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;}
@@ -744,12 +752,49 @@ header{
 
 <!-- REPORTS -->
 <div id="tab-reports" class="page">
-  <div class="slbl">تقارير PDF</div>
+
+  <!-- نوع التقرير -->
+  <div class="slbl">نوع التقرير</div>
+  <div class="rpt-type-row">
+    <button class="rpt-type-btn active" id="rpt-t-day"   onclick="setRptPeriod('day')">📅 يومي</button>
+    <button class="rpt-type-btn"        id="rpt-t-month" onclick="setRptPeriod('month')">📆 شهري</button>
+  </div>
+
+  <!-- اختيار اليوم -->
+  <div id="rpt-day-picker" class="rpt-picker">
+    <div class="fld"><label>📅 اختر اليوم</label>
+      <input type="date" id="rptDayInput" onchange="updateRptDayLabel()"/>
+    </div>
+    <div class="rpt-day-label" id="rptDayLabel">اليوم</div>
+  </div>
+
+  <!-- اختيار الشهر -->
+  <div id="rpt-month-picker" class="rpt-picker" style="display:none">
+    <div class="fld"><label>📆 اختر الشهر</label>
+      <select id="rptMonthInput">
+        <option value="2025-01">يناير 2025</option><option value="2025-02">فبراير 2025</option>
+        <option value="2025-03">مارس 2025</option><option value="2025-04">أبريل 2025</option>
+        <option value="2025-05">مايو 2025</option><option value="2025-06">يونيو 2025</option>
+        <option value="2025-07">يوليو 2025</option><option value="2025-08">أغسطس 2025</option>
+        <option value="2025-09">سبتمبر 2025</option><option value="2025-10">أكتوبر 2025</option>
+        <option value="2025-11">نوفمبر 2025</option><option value="2025-12">ديسمبر 2025</option>
+        <option value="2026-01">يناير 2026</option><option value="2026-02">فبراير 2026</option>
+        <option value="2026-03">مارس 2026</option><option value="2026-04">أبريل 2026</option>
+        <option value="2026-05" selected>مايو 2026</option><option value="2026-06">يونيو 2026</option>
+        <option value="2026-07">يوليو 2026</option><option value="2026-08">أغسطس 2026</option>
+        <option value="2026-09">سبتمبر 2026</option><option value="2026-10">أكتوبر 2026</option>
+        <option value="2026-11">نوفمبر 2026</option><option value="2026-12">ديسمبر 2026</option>
+      </select>
+    </div>
+  </div>
+
+  <!-- نوع المحتوى -->
+  <div class="slbl">محتوى التقرير</div>
   <div class="reports-grid">
-    <button class="rpt-btn gc" onclick="dlPDF('sales')">📄<br>المبيعات</button>
-    <button class="rpt-btn gc" onclick="dlPDF('buys')">📄<br>المشتريات</button>
-    <button class="rpt-btn gc" onclick="dlPDF('expenses')">📄<br>المصاريف</button>
-    <button class="rpt-btn gc" onclick="dlPDF('all')">📊<br>شامل</button>
+    <button class="rpt-btn gc" onclick="openReport('all')">📊<br>شامل</button>
+    <button class="rpt-btn gc" onclick="openReport('sales')">🌸<br>المبيعات</button>
+    <button class="rpt-btn gc" onclick="openReport('buys')">📦<br>المشتريات</button>
+    <button class="rpt-btn gc" onclick="openReport('expenses')">💸<br>المصاريف</button>
   </div>
   <div class="slbl">النسخ الاحتياطي</div>
   <div class="backup-row">
@@ -1370,7 +1415,56 @@ async function updateFlowerCount(id,n){if(n<0)return;await api(`/api/flowers/${i
 async function delFlower(id){await api(`/api/flowers/${id}`,{method:'DELETE'});loadFlowers();showToast(t('delToast'));}
 
 /* ── REPORTS ── */
-function dlPDF(type){showToast('⏳ جاري فتح التقرير...');window.open(`/api/report/pdf?month=${month}&type=${type}`,'_blank');}
+// ── التقارير ──
+let rptPeriod = 'day';
+
+function setRptPeriod(p){
+  rptPeriod = p;
+  document.querySelectorAll('.rpt-type-btn').forEach(b=>b.classList.remove('active'));
+  document.getElementById('rpt-t-'+p).classList.add('active');
+  document.getElementById('rpt-day-picker').style.display   = p==='day'  ?'':'none';
+  document.getElementById('rpt-month-picker').style.display = p==='month'?'':'none';
+}
+
+function updateRptDayLabel(){
+  const v = document.getElementById('rptDayInput').value;
+  if(!v){ document.getElementById('rptDayLabel').textContent='اليوم'; return; }
+  const d = new Date(v);
+  const days=['الأحد','الاثنين','الثلاثاء','الأربعاء','الخميس','الجمعة','السبت'];
+  document.getElementById('rptDayLabel').textContent = days[d.getDay()]+' '+d.toLocaleDateString('ar-OM');
+}
+
+function openReport(type){
+  showToast('⏳ جاري فتح التقرير...');
+  let url;
+  if(rptPeriod==='day'){
+    let dayVal = document.getElementById('rptDayInput').value;
+    if(!dayVal){
+      // افتراضي: اليوم
+      const n=new Date();
+      dayVal=`${n.getFullYear()}-${String(n.getMonth()+1).padStart(2,'0')}-${String(n.getDate()).padStart(2,'0')}`;
+    }
+    // تحويل yyyy-mm-dd → dd/mm/yyyy
+    const [y,m,d]=dayVal.split('-');
+    const dayStr=`${d}/${m}/${y}`;
+    url=`/api/report/pdf?day=${encodeURIComponent(dayStr)}&type=${type}&period=day`;
+  } else {
+    const m = document.getElementById('rptMonthInput').value;
+    url=`/api/report/pdf?month=${m}&type=${type}&period=month`;
+  }
+  window.open(url,'_blank');
+}
+
+// تهيئة تاريخ اليوم
+(function(){
+  const n=new Date();
+  const dayVal=`${n.getFullYear()}-${String(n.getMonth()+1).padStart(2,'0')}-${String(n.getDate()).padStart(2,'0')}`;
+  const el=document.getElementById('rptDayInput');
+  if(el){ el.value=dayVal; updateRptDayLabel(); }
+  // تحديد الشهر الحالي في select
+  const ms=document.getElementById('rptMonthInput');
+  if(ms) ms.value=month;
+})();
 
 /* ── BACKUP ── */
 async function doBackup(){
@@ -3096,87 +3190,139 @@ def api_delete_expense_def(eid):
     return jsonify({"ok": True})
 
 @app.route("/api/report/pdf")
+@auth
 def api_report_pdf():
-    """Generate HTML report (Arabic-friendly, printable as PDF)."""
     try:
-        month_val = request.args.get("month", cur_month())
+        period    = request.args.get("period", "month")
         rtype     = request.args.get("type", "all")
+        month_val = request.args.get("month", cur_month())
+        day_val   = request.args.get("day", "")
 
-        sales, buys = get_month_data(month_val)
-        buys_only   = [b for b in buys if b.get("type") == "b"]
-        exps        = db_get("SELECT * FROM entries WHERE type='expense' AND month=? ORDER BY date DESC", (month_val,))
-        exp_defs    = db_get("SELECT * FROM expenses ORDER BY id")
+        def fr(n): return f"{float(n):,.3f}"
+        def rc(i): return "even" if i%2==0 else ""
 
-        ts = sum(e["amt"] for e in sales)
+        type_labels = {"all":"شامل","sales":"مبيعات","buys":"مشتريات","expenses":"مصاريف"}
+        period_label = f"يوم {day_val}" if period=="day" else f"شهر {month_val}"
+        title = f"فيروز فلورز — تقرير {type_labels.get(rtype,rtype)} — {period_label}"
+
+        # ── جلب البيانات ──
+        if period == "day" and day_val:
+            s_all, b_all, e_all = get_day_data(day_val)
+        else:
+            s_all, b_all = get_month_data(month_val)
+            e_all = db_get("SELECT * FROM entries WHERE type='expense' AND month=? ORDER BY date DESC", (month_val,))
+
+        buys_only = [b for b in b_all if b.get("type")=="b"]
+        exp_defs  = db_get("SELECT * FROM expenses ORDER BY id")
+
+        ts = sum(e["amt"] for e in s_all)
         tb = sum(e["amt"] for e in buys_only)
-        te = sum(e["amt"] for e in exps)
+        te = sum(e["amt"] for e in e_all)
         tp = ts - tb
         tn = tp - te
 
-        def fr(n): return f"{float(n):,.3f}"
-        def row_class(i): return "even" if i%2==0 else ""
-
-        type_labels = {"all":"شامل","sales":"مبيعات","buys":"مشتريات","expenses":"مصاريف"}
-        title = f"فيروز فلورز — تقرير {type_labels.get(rtype,rtype)} — {month_val}"
-
-        # Build HTML sections
+        # ── ملخص ──
         summary_html = ""
         if rtype == "all":
+            net_color = "green" if tn>=0 else "red"
             summary_html = f"""
-            <div class="summary-grid">
-              <div class="sum-card green"><div class="sum-val">{fr(ts)}</div><div class="sum-lbl">💰 المبيعات</div></div>
-              <div class="sum-card red"><div class="sum-val">{fr(tb)}</div><div class="sum-lbl">🛒 المشتريات</div></div>
-              <div class="sum-card gold"><div class="sum-val">{fr(te)}</div><div class="sum-lbl">💸 المصاريف</div></div>
-              <div class="sum-card {'green' if tp>=0 else 'red'}"><div class="sum-val">{fr(tp)}</div><div class="sum-lbl">📊 ربح قبل المصاريف</div></div>
-              <div class="sum-card {'green' if tn>=0 else 'red'}" style="grid-column:span 2"><div class="sum-val">{fr(tn)}</div><div class="sum-lbl">🏆 الربح الصافي النهائي</div></div>
+            <div class="sum-grid">
+              <div class="sum-card green"><div class="sum-ico">💰</div><div class="sum-val">{fr(ts)}</div><div class="sum-lbl">المبيعات<br><span>{len(s_all)} عملية</span></div></div>
+              <div class="sum-card red"><div class="sum-ico">🛒</div><div class="sum-val">{fr(tb)}</div><div class="sum-lbl">المشتريات<br><span>{len(buys_only)} عملية</span></div></div>
+              <div class="sum-card gold"><div class="sum-ico">💸</div><div class="sum-val">{fr(te)}</div><div class="sum-lbl">المصاريف<br><span>{len(e_all)} عملية</span></div></div>
+              <div class="sum-card blue"><div class="sum-ico">📊</div><div class="sum-val">{fr(tp)}</div><div class="sum-lbl">ربح قبل المصاريف<br><span>{"✅" if tp>=0 else "⚠️"}</span></div></div>
+              <div class="sum-card {net_color} span2"><div class="sum-ico">🏆</div><div class="sum-val big">{fr(tn)}</div><div class="sum-lbl">الربح الصافي النهائي<br><span>{"✅ ربح" if tn>=0 else "⚠️ خسارة"}</span></div></div>
             </div>"""
 
+        # ── إضافة تفصيل يومي للتقرير الشهري ──
+        daily_html = ""
+        if period == "month" and rtype in ("all","sales"):
+            day_map = {}
+            for e in s_all:
+                d = e.get("date","")
+                if d not in day_map: day_map[d] = {"s":0,"b":0,"sc":0,"bc":0}
+                day_map[d]["s"]+=e["amt"]; day_map[d]["sc"]+=1
+            for e in buys_only:
+                d = e.get("date","")
+                if d not in day_map: day_map[d] = {"s":0,"b":0,"sc":0,"bc":0}
+                day_map[d]["b"]+=e["amt"]; day_map[d]["bc"]+=1
+            if day_map:
+                day_rows = "".join(f"""<tr class="{rc(i)}">
+                    <td>{d}</td>
+                    <td class="num green-t">{fr(v["s"])}</td><td class="cnt">{v["sc"]}</td>
+                    <td class="num red-t">{fr(v["b"])}</td><td class="cnt">{v["bc"]}</td>
+                    <td class="num {"green-t" if v["s"]-v["b"]>=0 else "red-t"}">{fr(v["s"]-v["b"])}</td>
+                    </tr>"""
+                    for i,(d,v) in enumerate(sorted(day_map.items()),1))
+                daily_html = f"""
+                <h2 class="sec-title blue-t">📆 التفصيل اليومي</h2>
+                <table><thead><tr><th>اليوم</th><th>المبيعات</th><th>#</th><th>المشتريات</th><th>#</th><th>الصافي</th></tr></thead>
+                <tbody>{day_rows}</tbody></table>"""
+
+        # ── جدول المبيعات ──
         sales_html = ""
-        if rtype in ("all","sales") and sales:
-            rows = "".join(f"""<tr class="{row_class(i)}">
-                <td>{i}</td><td>{e.get('desc','')}</td>
-                <td>{e.get('category','-') or '-'}</td>
-                <td>{e.get('payment_method','-') or '-'}</td>
-                <td>{e.get('date','')}</td>
-                <td class="num">{fr(e['amt'])}</td></tr>"""
-                for i,e in enumerate(sales,1))
+        if rtype in ("all","sales") and s_all:
+            # تجميع حسب الفئة
+            cats = {}
+            for e in s_all:
+                c = e.get("category","أخرى") or "أخرى"
+                cats[c] = cats.get(c,0) + e["amt"]
+            cat_summary = "".join(f'<span class="cat-chip">{c}: {fr(v)}</span>' for c,v in sorted(cats.items(),key=lambda x:-x[1]))
+            rows = "".join(f"""<tr class="{rc(i)}">
+                <td>{i}</td><td><b>{e.get("desc","")}</b></td>
+                <td><span class="chip">{e.get("category","-") or "-"}</span></td>
+                <td><span class="chip pay">{e.get("payment_method","-") or "-"}</span></td>
+                <td>{e.get("date","")}</td>
+                <td class="num green-t">{fr(e["amt"])}</td></tr>"""
+                for i,e in enumerate(s_all,1))
             sales_html = f"""
-            <h2 class="section-title green-t">🌸 المبيعات ({len(sales)} عملية)</h2>
-            <table><thead><tr><th>#</th><th>الوصف</th><th>الفئة</th><th>الدفع</th><th>التاريخ</th><th>المبلغ</th></tr></thead>
+            <h2 class="sec-title green-t">🌸 المبيعات ({len(s_all)} عملية)</h2>
+            <div class="cat-row">{cat_summary}</div>
+            <table><thead><tr><th>#</th><th>الوصف</th><th>الفئة</th><th>طريقة الدفع</th><th>التاريخ</th><th>المبلغ</th></tr></thead>
             <tbody>{rows}</tbody>
             <tfoot><tr><td colspan="5"><b>الإجمالي</b></td><td class="num"><b>{fr(ts)}</b></td></tr></tfoot></table>"""
 
+        # ── جدول المشتريات ──
         buys_html = ""
         if rtype in ("all","buys") and buys_only:
-            rows = "".join(f"""<tr class="{row_class(i)}">
-                <td>{i}</td><td>{e.get('desc','')}</td>
-                <td>{e.get('paid_by','-') or '-'}</td>
-                <td>{e.get('date','')}</td>
-                <td class="num">{fr(e['amt'])}</td></tr>"""
+            # تجميع حسب من دفع
+            payers = {}
+            for e in buys_only:
+                p = e.get("paid_by","غير محدد") or "غير محدد"
+                payers[p] = payers.get(p,0) + e["amt"]
+            payer_summary = "".join(f'<span class="cat-chip red-chip">{p}: {fr(v)}</span>' for p,v in sorted(payers.items(),key=lambda x:-x[1]))
+            rows = "".join(f"""<tr class="{rc(i)}">
+                <td>{i}</td><td><b>{e.get("desc","")}</b></td>
+                <td><span class="chip">{e.get("paid_by","-") or "-"}</span></td>
+                <td>{e.get("date","")}</td>
+                <td class="num red-t">{fr(e["amt"])}</td></tr>"""
                 for i,e in enumerate(buys_only,1))
             buys_html = f"""
-            <h2 class="section-title red-t">📦 المشتريات ({len(buys_only)} عملية)</h2>
+            <h2 class="sec-title red-t">📦 المشتريات ({len(buys_only)} عملية)</h2>
+            <div class="cat-row">{payer_summary}</div>
             <table><thead><tr><th>#</th><th>الوصف</th><th>من دفع</th><th>التاريخ</th><th>المبلغ</th></tr></thead>
             <tbody>{rows}</tbody>
             <tfoot><tr><td colspan="4"><b>الإجمالي</b></td><td class="num"><b>{fr(tb)}</b></td></tr></tfoot></table>"""
 
+        # ── جدول المصاريف ──
         exps_html = ""
         if rtype in ("all","expenses"):
-            def_rows = "".join(f"""<tr class="{row_class(i)}">
-                <td>{e['name']}</td><td class="num">{fr(float(e['amount']))}</td>
-                <td>{e.get('last_paid') or 'لم يُدفع'}</td>
-                <td><span class="badge {'paid' if e.get('month')==month_val else 'unpaid'}">{('✅ مدفوع' if e.get('month')==month_val else '⏳ غير مدفوع')}</span></td></tr>"""
+            def_rows = "".join(f"""<tr class="{rc(i)}">
+                <td><b>{e["name"]}</b></td>
+                <td class="num">{fr(float(e["amount"]))}</td>
+                <td>{e.get("last_paid") or "لم يُدفع"}</td>
+                <td><span class="badge {"paid" if e.get("month")==month_val else "unpaid"}">{("✅ مدفوع" if e.get("month")==month_val else "⏳ لم يُدفع")}</span></td></tr>"""
                 for i,e in enumerate(exp_defs,1))
-            exp_rows = "".join(f"""<tr class="{row_class(i)}">
-                <td>{i}</td><td>{e.get('desc','')}</td>
-                <td>{e.get('date','')}</td>
-                <td class="num">{fr(e['amt'])}</td></tr>"""
-                for i,e in enumerate(exps,1))
+            exp_rows = "".join(f"""<tr class="{rc(i)}">
+                <td>{i}</td><td><b>{e.get("desc","")}</b></td>
+                <td>{e.get("date","")}</td>
+                <td class="num gold-t">{fr(e["amt"])}</td></tr>"""
+                for i,e in enumerate(e_all,1))
             exps_html = f"""
-            <h2 class="section-title gold-t">💸 المصاريف الثابتة</h2>
+            <h2 class="sec-title gold-t">💸 المصاريف الثابتة</h2>
             <table><thead><tr><th>المصروف</th><th>المبلغ الشهري</th><th>آخر دفع</th><th>الحالة</th></tr></thead>
             <tbody>{def_rows}</tbody></table>
-            {'<h3 style="margin:16px 0 8px;font-size:13px;color:#7a6458;">سجل الدفعات هذا الشهر</h3><table><thead><tr><th>#</th><th>الوصف</th><th>التاريخ</th><th>المبلغ</th></tr></thead><tbody>'+exp_rows+'</tbody><tfoot><tr><td colspan="3"><b>الإجمالي</b></td><td class="num"><b>'+fr(te)+'</b></td></tr></tfoot></table>' if exps else '<p style="color:#b09888;font-size:12px;text-align:center;padding:12px;">لا توجد دفعات مسجلة هذا الشهر</p>'}"""
+            {f'<h3 class="sub-h">سجل الدفعات</h3><table><thead><tr><th>#</th><th>الوصف</th><th>التاريخ</th><th>المبلغ</th></tr></thead><tbody>'+exp_rows+'</tbody><tfoot><tr><td colspan="3"><b>الإجمالي</b></td><td class="num"><b>'+fr(te)+'</b></td></tr></tfoot></table>' if e_all else '<p class="no-data">لا توجد دفعات مسجلة</p>'}"""
 
         html = f"""<!DOCTYPE html>
 <html lang="ar" dir="rtl">
@@ -3187,49 +3333,61 @@ def api_report_pdf():
 <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;600;700;900&display=swap" rel="stylesheet">
 <style>
 *{{margin:0;padding:0;box-sizing:border-box;}}
-body{{font-family:'Tajawal',sans-serif;background:#fdf8f2;color:#3d2c24;padding:24px;direction:rtl;}}
-.header{{text-align:center;margin-bottom:28px;padding:20px;background:linear-gradient(135deg,#f9c8d0,#fdf8f2);border-radius:16px;border:1px solid rgba(232,121,138,.2);}}
-.header h1{{font-size:22px;font-weight:900;color:#c4566a;margin-bottom:4px;}}
-.header p{{font-size:12px;color:#b09888;}}
-.summary-grid{{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:24px;}}
-.sum-card{{padding:14px;border-radius:12px;text-align:center;border:1px solid rgba(0,0,0,.08);}}
+body{{font-family:'Tajawal',sans-serif;background:#fdf8f2;color:#3d2c24;padding:20px 16px;direction:rtl;}}
+.header{{text-align:center;margin-bottom:24px;padding:18px;background:linear-gradient(135deg,#f9c8d0,#fdf8f2);border-radius:14px;border:1px solid rgba(232,121,138,.25);}}
+.header h1{{font-size:20px;font-weight:900;color:#c4566a;margin-bottom:3px;}}
+.header p{{font-size:11px;color:#b09888;}}
+.sum-grid{{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-bottom:20px;}}
+.sum-card{{padding:14px 12px;border-radius:12px;text-align:center;border:1px solid rgba(0,0,0,.07);}}
+.sum-card.span2{{grid-column:span 2;}}
 .sum-card.green{{background:#e8f5e9;border-color:rgba(122,171,138,.3);}}
 .sum-card.red{{background:#fce4ec;border-color:rgba(232,121,138,.3);}}
 .sum-card.gold{{background:#fff8e1;border-color:rgba(212,165,87,.3);}}
-.sum-val{{font-size:18px;font-weight:900;margin-bottom:4px;}}
-.green .sum-val{{color:#5a8a6a;}}
-.red .sum-val{{color:#c4566a;}}
-.gold .sum-val{{color:#d4a557;}}
-.sum-lbl{{font-size:11px;color:#7a6458;}}
-h2.section-title{{font-size:15px;font-weight:800;margin:24px 0 10px;padding:8px 14px;border-radius:8px;}}
-.green-t{{background:rgba(122,171,138,.1);color:#5a8a6a;border-right:4px solid #7aab8a;}}
-.red-t{{background:rgba(232,121,138,.1);color:#c4566a;border-right:4px solid #e8798a;}}
-.gold-t{{background:rgba(212,165,87,.1);color:#d4a557;border-right:4px solid #d4a557;}}
-table{{width:100%;border-collapse:collapse;font-size:12px;margin-bottom:8px;}}
+.sum-card.blue{{background:#e3f2fd;border-color:rgba(100,150,200,.3);}}
+.sum-ico{{font-size:18px;margin-bottom:4px;}}
+.sum-val{{font-size:16px;font-weight:900;margin-bottom:2px;}}
+.sum-val.big{{font-size:20px;}}
+.green .sum-val{{color:#5a8a6a;}}.red .sum-val{{color:#c4566a;}}.gold .sum-val{{color:#d4a557;}}.blue .sum-val{{color:#4a7ab0;}}
+.sum-lbl{{font-size:10px;color:#7a6458;line-height:1.5;}}
+.sum-lbl span{{font-size:11px;font-weight:700;}}
+.sec-title{{font-size:13px;font-weight:800;margin:20px 0 8px;padding:7px 12px;border-radius:8px;}}
+.green-t{{background:rgba(122,171,138,.1);color:#5a8a6a;border-right:3px solid #7aab8a;}}
+.red-t{{background:rgba(232,121,138,.1);color:#c4566a;border-right:3px solid #e8798a;}}
+.gold-t{{background:rgba(212,165,87,.1);color:#d4a557;border-right:3px solid #d4a557;}}
+.blue-t{{background:rgba(100,150,200,.1);color:#4a7ab0;border-right:3px solid #6a9fd0;}}
+.cat-row{{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px;}}
+.cat-chip{{background:rgba(122,171,138,.15);color:#5a8a6a;padding:3px 10px;border-radius:20px;font-size:10px;font-weight:700;}}
+.red-chip{{background:rgba(232,121,138,.15);color:#c4566a;}}
+table{{width:100%;border-collapse:collapse;font-size:11px;margin-bottom:6px;}}
 thead tr{{background:linear-gradient(135deg,#6b4c3b,#8b6c5b);color:white;}}
-th{{padding:9px 10px;text-align:right;font-weight:700;}}
-td{{padding:8px 10px;border-bottom:1px solid rgba(107,76,59,.08);}}
-tr.even td{{background:rgba(253,248,242,.8);}}
-tr:hover td{{background:rgba(249,200,208,.1);}}
-tfoot td{{font-weight:700;background:rgba(107,76,59,.05);border-top:2px solid rgba(107,76,59,.15);}}
+th{{padding:8px 8px;text-align:right;font-weight:700;font-size:11px;}}
+td{{padding:7px 8px;border-bottom:1px solid rgba(107,76,59,.07);}}
+tr.even td{{background:rgba(253,248,242,.7);}}
+tfoot td{{font-weight:700;background:rgba(107,76,59,.05);border-top:2px solid rgba(107,76,59,.12);}}
 .num{{text-align:left;font-weight:600;}}
-.badge{{padding:2px 8px;border-radius:12px;font-size:10px;font-weight:700;}}
+.cnt{{text-align:center;color:#999;font-size:10px;}}
+.chip{{background:rgba(107,76,59,.08);padding:2px 7px;border-radius:10px;font-size:10px;}}
+.chip.pay{{background:rgba(122,171,138,.15);color:#5a8a6a;}}
+.badge{{padding:2px 7px;border-radius:10px;font-size:10px;font-weight:700;}}
 .badge.paid{{background:rgba(122,171,138,.2);color:#5a8a6a;}}
-.badge.unpaid{{background:rgba(232,121,138,.15);color:#c4566a;}}
-.print-btn{{position:fixed;bottom:20px;left:20px;background:linear-gradient(135deg,#e8798a,#c4566a);color:white;border:none;padding:12px 22px;border-radius:40px;font-family:'Tajawal',sans-serif;font-size:14px;font-weight:700;cursor:pointer;box-shadow:0 4px 20px rgba(232,121,138,.4);}}
-@media print{{.print-btn{{display:none;}}body{{background:white;padding:12px;}}}}
+.badge.unpaid{{background:rgba(232,121,138,.12);color:#c4566a;}}
+.sub-h{{font-size:12px;color:#7a6458;margin:14px 0 6px;font-weight:700;}}
+.no-data{{color:#b09888;font-size:11px;text-align:center;padding:10px;}}
+.print-btn{{position:fixed;bottom:18px;left:16px;background:linear-gradient(135deg,#e8798a,#c4566a);color:white;border:none;padding:11px 20px;border-radius:40px;font-family:'Tajawal',sans-serif;font-size:13px;font-weight:700;cursor:pointer;box-shadow:0 4px 16px rgba(232,121,138,.4);}}
+@media print{{.print-btn{{display:none;}}body{{background:white;padding:8px;}}}}
 </style>
 </head>
 <body>
 <div class="header">
   <h1>🌹 فيروز فلورز</h1>
-  <p>تقرير {type_labels.get(rtype,rtype)} — {month_val} &nbsp;|&nbsp; تاريخ الإصدار: {datetime.now().strftime('%d/%m/%Y %H:%M')}</p>
+  <p>تقرير {type_labels.get(rtype,rtype)} — {period_label} &nbsp;|&nbsp; {datetime.now().strftime("%d/%m/%Y %H:%M")}</p>
 </div>
 {summary_html}
+{daily_html}
 {sales_html}
 {buys_html}
 {exps_html}
-<button class="print-btn" onclick="window.print()">🖨️ طباعة / حفظ PDF</button>
+<button class="print-btn" onclick="window.print()">🖨️ طباعة / PDF</button>
 </body></html>"""
 
         return Response(html, mimetype="text/html; charset=utf-8")
