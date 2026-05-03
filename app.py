@@ -791,13 +791,8 @@ document.addEventListener('click', e => {
 
 /* ── STATE ── */
 let formTab='s';
-const now = new Date();
-let month = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
-// Set the selector to current month
-document.addEventListener('DOMContentLoaded', function(){
-  const sel = document.getElementById('msel');
-  if(sel) sel.value = month;
-});
+const _now = new Date();
+let month = `${_now.getFullYear()}-${String(_now.getMonth()+1).padStart(2,'0')}`;
 let barCI=null,payCI=null,payerCI=null;
 let activeProdShelf=null,activeSellProd=null,activeRentShelf=null;
 let flowerOpen=false;
@@ -1189,6 +1184,16 @@ async function doRestore(ev){
 document.querySelectorAll('.overlay').forEach(o=>o.addEventListener('click',function(e){if(e.target===this)this.classList.remove('open');}));
 function changeMonth(){month=document.getElementById('msel').value;load();loadFlowers();if(document.getElementById('tab-shelves').classList.contains('active'))loadShelves();}
 function showToast(msg){const el=document.getElementById('toast');el.textContent=msg;el.classList.add('show');setTimeout(()=>el.classList.remove('show'),3000);}
+
+// Set month selector to current month
+(function(){
+  const sel = document.getElementById('msel');
+  if(sel){
+    sel.value = month;
+    // If not found, default to first available
+    if(!sel.value) sel.selectedIndex = 0;
+  }
+})();
 
 load();
 loadFlowers();
