@@ -515,12 +515,18 @@ header{
       <div class="mpill">
         <label>📅</label>
         <select id="msel" onchange="changeMonth()">
-          <option value="2026-01">يناير</option><option value="2026-02">فبراير</option>
-          <option value="2026-03">مارس</option><option value="2026-04">أبريل</option>
-          <option value="2026-05" selected>مايو</option><option value="2026-06">يونيو</option>
-          <option value="2026-07">يوليو</option><option value="2026-08">أغسطس</option>
-          <option value="2026-09">سبتمبر</option><option value="2026-10">أكتوبر</option>
-          <option value="2026-11">نوفمبر</option><option value="2026-12">ديسمبر</option>
+          <option value="2025-01">يناير 25</option><option value="2025-02">فبراير 25</option>
+          <option value="2025-03">مارس 25</option><option value="2025-04">أبريل 25</option>
+          <option value="2025-05">مايو 25</option><option value="2025-06">يونيو 25</option>
+          <option value="2025-07">يوليو 25</option><option value="2025-08">أغسطس 25</option>
+          <option value="2025-09">سبتمبر 25</option><option value="2025-10">أكتوبر 25</option>
+          <option value="2025-11">نوفمبر 25</option><option value="2025-12">ديسمبر 25</option>
+          <option value="2026-01">يناير 26</option><option value="2026-02">فبراير 26</option>
+          <option value="2026-03">مارس 26</option><option value="2026-04">أبريل 26</option>
+          <option value="2026-05">مايو 26</option><option value="2026-06">يونيو 26</option>
+          <option value="2026-07">يوليو 26</option><option value="2026-08">أغسطس 26</option>
+          <option value="2026-09">سبتمبر 26</option><option value="2026-10">أكتوبر 26</option>
+          <option value="2026-11">نوفمبر 26</option><option value="2026-12">ديسمبر 26</option>
         </select>
       </div>
       <button class="theme-btn" onclick="toggleThemePanel()" title="تغيير الثيم">🎨</button>
@@ -784,7 +790,14 @@ document.addEventListener('click', e => {
 });
 
 /* ── STATE ── */
-let formTab='s', month='2026-05';
+let formTab='s';
+const now = new Date();
+let month = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
+// Set the selector to current month
+document.addEventListener('DOMContentLoaded', function(){
+  const sel = document.getElementById('msel');
+  if(sel) sel.value = month;
+});
 let barCI=null,payCI=null,payerCI=null;
 let activeProdShelf=null,activeSellProd=null,activeRentShelf=null;
 let flowerOpen=false;
