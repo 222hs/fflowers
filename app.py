@@ -571,16 +571,16 @@ header{
 
 <!-- HOME -->
 <div id="tab-home" class="page active">
-  <div class="slbl">ملخص الشهر</div>
+  <div class="slbl"><span data-t="home">ملخص الشهر</span></div>
 
   <div class="kpi-row row2">
     <div class="kpi green gc"><div class="kpi-ico">💰</div>
-      <div class="kpi-lbl">المبيعات</div>
+      <div class="kpi-lbl" data-t="sales">المبيعات</div>
       <div class="kpi-val" id="kS">0 ر.ع</div>
       <div class="kpi-sub" id="kSc">0 عملية</div>
       <div class="chips" id="payChips"></div></div>
     <div class="kpi gc" style="--kc:var(--accent)"><div class="kpi-ico">🛒</div>
-      <div class="kpi-lbl">المشتريات</div>
+      <div class="kpi-lbl" data-t="purchases">المشتريات</div>
       <div class="kpi-val" id="kB" style="color:var(--accent)">0 ر.ع</div>
       <div class="kpi-sub" id="kBc">0 عملية</div>
       <div class="chips" id="payerChips"></div></div>
@@ -588,20 +588,20 @@ header{
 
   <div class="kpi-row row3">
     <div class="kpi gc"><div class="kpi-ico">💸</div>
-      <div class="kpi-lbl">المصاريف</div>
+      <div class="kpi-lbl" data-t="expenses">المصاريف</div>
       <div class="kpi-val" id="kE" style="color:var(--accent)">0 ر.ع</div>
       <div class="kpi-sub" id="kEd">ثابتة</div></div>
     <div class="kpi gold gc"><div class="kpi-ico">📊</div>
-      <div class="kpi-lbl">ربح قبل المصاريف</div>
+      <div class="kpi-lbl" data-t="grossProfit">ربح قبل المصاريف</div>
       <div class="kpi-val" id="kP">0 ر.ع</div>
       <div class="kpi-sub"><span id="kPb" class="badge">—</span></div></div>
     <div class="kpi green gc"><div class="kpi-ico">🏆</div>
-      <div class="kpi-lbl">الربح الصافي</div>
+      <div class="kpi-lbl" data-t="netProfit">الربح الصافي</div>
       <div class="kpi-val" id="kN">0 ر.ع</div>
       <div class="kpi-sub"><span id="kNb" class="badge">—</span></div></div>
   </div>
 
-  <div class="slbl">إضافة جديد</div>
+  <div class="slbl"><span data-t="addNew">إضافة جديد</span></div>
   <div class="add-card gc">
     <div class="type-tabs">
       <button class="ttab tt-s" id="tt-s" onclick="setFT('s')">🌸 مبيعات</button>
@@ -630,7 +630,7 @@ header{
             <option value="فيزا 💳">💳 فيزا</option>
             <option value="تحويل 🏦">🏦 تحويل</option></select></div>
       </div>
-      <button class="sbtn sb-s" onclick="addSale()">🌸 إضافة مبيعة</button>
+      <button class="sbtn sb-s" onclick="addSale()" data-tb="addSale">🌸 إضافة مبيعة</button>
     </div>
     <div id="form-b" style="display:none;">
       <div class="fgrid fg2">
@@ -647,14 +647,14 @@ header{
       <div id="bOtherWrap" style="display:none;">
         <div class="fld" style="margin-bottom:8px;"><label>الاسم</label><input id="bOther" type="text" placeholder="اكتب الاسم"/></div>
       </div>
-      <button class="sbtn sb-b" onclick="addBuy()">📦 إضافة مشتريات</button>
+      <button class="sbtn sb-b" onclick="addBuy()" data-tb="addBuy">📦 إضافة مشتريات</button>
     </div>
   </div>
 
-  <div class="slbl">المصاريف الثابتة</div>
+  <div class="slbl"><span data-t="fixedExp">المصاريف الثابتة</span></div>
   <div id="expensesWrap" style="margin-bottom:16px;"></div>
 
-  <div class="slbl">السجلات</div>
+  <div class="slbl"><span data-t="records">السجلات</span></div>
   <div class="panels">
     <div class="panel gc">
       <div class="ph"><div class="ph-l"><div class="pico">🌸</div><div class="ptitle">المبيعات</div></div><div class="pcnt" id="sbadge">0</div></div>
@@ -666,7 +666,7 @@ header{
     </div>
   </div>
 
-  <div class="slbl">الإحصائيات</div>
+  <div class="slbl"><span data-t="stats">الإحصائيات</span></div>
   <div class="charts-col">
     <div class="chart-card gc"><h3>📈 مبيعات ومشتريات 2026</h3><canvas id="barChart" height="160"></canvas></div>
     <div class="chart-card gc"><h3>💳 طريقة الدفع</h3><canvas id="payChart" height="160"></canvas></div>
@@ -975,12 +975,12 @@ async function addSale(){
   const amt=parseFloat(document.getElementById('sAmt').value);
   const pay=document.getElementById('sPay').value;
   const cat=document.getElementById('sCat').value;
-  if(!amt||amt<=0){showToast('⚠️ أدخل مبلغاً صحيحاً');return;}
+  if(!amt||amt<=0){showToast(t('errAmt'));return;}
   await api('/api/entries',{method:'POST',headers:{'Content-Type':'application/json'},
     body:JSON.stringify({type:'s',desc,amt,payment_method:pay||null,category:cat||null,month})});
   document.getElementById('sDesc').value='';document.getElementById('sAmt').value='';
   document.getElementById('sPay').value='';document.getElementById('sCat').value='';
-  load();showToast('✅ تمت إضافة المبيعة');
+  load();showToast(t('addToast'));
 }
 
 async function addBuy(){
@@ -988,15 +988,15 @@ async function addBuy(){
   const amt=parseFloat(document.getElementById('bAmt').value);
   let payer=document.getElementById('bPayer').value;
   if(payer==='أخرى')payer=document.getElementById('bOther').value.trim()||null;
-  if(!amt||amt<=0){showToast('⚠️ أدخل مبلغاً صحيحاً');return;}
+  if(!amt||amt<=0){showToast(t('errAmt'));return;}
   await api('/api/entries',{method:'POST',headers:{'Content-Type':'application/json'},
     body:JSON.stringify({type:'b',desc,amt,paid_by:payer||null,month})});
   document.getElementById('bDesc').value='';document.getElementById('bAmt').value='';
   document.getElementById('bPayer').value='';
-  load();showToast('✅ تمت إضافة المشتريات');
+  load();showToast(t('addToast'));
 }
 
-async function del(id){await api(`/api/entries/${id}`,{method:'DELETE'});load();showToast('🗑️ تم الحذف');}
+async function del(id){await api(`/api/entries/${id}`,{method:'DELETE'});load();showToast(t('delToast'));}
 
 /* ── EXPENSES ── */
 async function loadExpensesPanel(d, expD){
@@ -1148,7 +1148,7 @@ async function saveProduct(){
   await api(`/api/shelves/${activeProdShelf}/products`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name,price,qty})});
   closeProdModal();loadShelves();showToast('✅ تم إضافة المنتج');
 }
-async function delProd(pid){await api(`/api/shelf_products/${pid}`,{method:'DELETE'});loadShelves();showToast('🗑️ تم الحذف');}
+async function delProd(pid){await api(`/api/shelf_products/${pid}`,{method:'DELETE'});loadShelves();showToast(t('delToast'));}
 function openSell(pid,name,price,qty){activeSellProd={pid,name,price,qty};document.getElementById('sellDesc').textContent=name;document.getElementById('sellInfo').textContent=`السعر: ${fmt(price)} ر.ع | المتاح: ${qty} قطعة`;document.getElementById('sellQty').value=1;document.getElementById('sellQty').max=qty;document.getElementById('sellPay').value='';document.getElementById('sellOv').classList.add('open');}
 function closeSellModal(){document.getElementById('sellOv').classList.remove('open');}
 async function confirmSell(){
@@ -1188,7 +1188,7 @@ function toggleFlowerPanel(){
   if(flowerOpen)loadFlowers();
 }
 async function updateFlowerCount(id,n){if(n<0)return;await api(`/api/flowers/${id}`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({count:n})});loadFlowers();}
-async function delFlower(id){await api(`/api/flowers/${id}`,{method:'DELETE'});loadFlowers();showToast('🗑️ تم الحذف');}
+async function delFlower(id){await api(`/api/flowers/${id}`,{method:'DELETE'});loadFlowers();showToast(t('delToast'));}
 
 /* ── REPORTS ── */
 function dlPDF(type){showToast('⏳ جاري فتح التقرير...');window.open(`/api/report/pdf?month=${month}&type=${type}`,'_blank');}
@@ -1246,6 +1246,85 @@ document.addEventListener('click',e=>{
 // Init saved theme
 const savedTheme=localStorage.getItem('fairuz_theme')||'rose';
 setTheme(savedTheme);
+
+/* ── BILINGUAL ── */
+const T = {
+  ar: {
+    home:'📊 الرئيسية', shelves:'🗄️ الرفوف', reports:'📄 تقارير',
+    sales:'المبيعات', purchases:'المشتريات', expenses:'المصاريف',
+    grossProfit:'ربح قبل المصاريف', netProfit:'الربح الصافي',
+    addNew:'إضافة جديد', addSale:'🌸 إضافة مبيعة', addBuy:'📦 إضافة مشتريات',
+    productName:'اسم المنتج', price:'السعر (ر.ع)', category:'🏷️ الفئة',
+    payment:'💳 الدفع', supplier:'الوصف', whoPaid:'👤 من دفع؟',
+    records:'السجلات', stats:'الإحصائيات', fixedExp:'المصاريف الثابتة',
+    shelfSummary:'ملخص الرفوف', shelfProds:'منتجات الرفوف',
+    operations:'عملية', paid:'مدفوع', notPaid:'لم تُدفع',
+    currency:'ر.ع', profit:'✅ ربح', loss:'⚠️ خسارة', net:'🏆 صافي',
+    reports2:'تقارير', salesRpt:'المبيعات', buysRpt:'المشتريات', expRpt:'المصاريف', allRpt:'شامل',
+    backup:'النسخ الاحتياطي', export:'💾 تصدير', restore:'📂 استعادة',
+    addToast:'✅ تمت الإضافة', delToast:'🗑️ تم الحذف', errAmt:'⚠️ أدخل مبلغاً صحيحاً',
+    choosePay:'— اختر —', cash:'💵 كاش', visa:'💳 فيزا', transfer:'🏦 تحويل',
+    chooseWho:'— اختر —', other:'➕ أخرى', name:'الاسم',
+    jan:'يناير',feb:'فبراير',mar:'مارس',apr:'أبريل',may:'مايو',jun:'يونيو',
+    jul:'يوليو',aug:'أغسطس',sep:'سبتمبر',oct:'أكتوبر',nov:'نوفمبر',dec:'ديسمبر',
+  },
+  en: {
+    home:'📊 Dashboard', shelves:'🗄️ Shelves', reports:'📄 Reports',
+    sales:'Sales', purchases:'Purchases', expenses:'Expenses',
+    grossProfit:'Gross Profit', netProfit:'Net Profit',
+    addNew:'Add New', addSale:'🌸 Add Sale', addBuy:'📦 Add Purchase',
+    productName:'Product Name', price:'Price (OMR)', category:'🏷️ Category',
+    payment:'💳 Payment', supplier:'Description', whoPaid:'👤 Paid By?',
+    records:'Records', stats:'Statistics', fixedExp:'Fixed Expenses',
+    shelfSummary:'Shelf Summary', shelfProds:'Shelf Products',
+    operations:'ops', paid:'Paid', notPaid:'Not paid',
+    currency:'OMR', profit:'✅ Profit', loss:'⚠️ Loss', net:'🏆 Net',
+    reports2:'Reports', salesRpt:'Sales', buysRpt:'Purchases', expRpt:'Expenses', allRpt:'Full Report',
+    backup:'Backup', export:'💾 Export', restore:'📂 Restore',
+    addToast:'✅ Added successfully', delToast:'🗑️ Deleted', errAmt:'⚠️ Enter a valid amount',
+    choosePay:'— Select —', cash:'💵 Cash', visa:'💳 Visa', transfer:'🏦 Transfer',
+    chooseWho:'— Select —', other:'➕ Other', name:'Name',
+    jan:'Jan',feb:'Feb',mar:'Mar',apr:'Apr',may:'May',jun:'Jun',
+    jul:'Jul',aug:'Aug',sep:'Sep',oct:'Oct',nov:'Nov',dec:'Dec',
+  }
+};
+let lang = localStorage.getItem('fairuz_lang') || 'ar';
+
+function setLang(l){
+  lang = l;
+  localStorage.setItem('fairuz_lang', l);
+  document.documentElement.setAttribute('dir', l==='ar'?'rtl':'ltr');
+  document.documentElement.setAttribute('lang', l);
+  applyTranslations();
+  updateLangBtn();
+}
+
+function t(key){ return T[lang][key] || T['ar'][key] || key; }
+
+function applyTranslations(){
+  // Nav tabs
+  document.getElementById('nt-home').textContent = t('home');
+  document.getElementById('nt-shelves').textContent = t('shelves');
+  document.getElementById('nt-reports').textContent = t('reports');
+  // Section labels
+  const labels = document.querySelectorAll('[data-t]');
+  labels.forEach(el => { if(T[lang][el.dataset.t]) el.textContent = t(el.dataset.t); });
+  // Buttons
+  const btns = document.querySelectorAll('[data-tb]');
+  btns.forEach(el => { if(T[lang][el.dataset.tb]) el.textContent = t(el.dataset.tb); });
+}
+
+function updateLangBtn(){
+  const btn = document.getElementById('langBtn');
+  if(btn) btn.textContent = lang === 'ar' ? 'EN' : 'ع';
+}
+
+function toggleLang(){
+  setLang(lang === 'ar' ? 'en' : 'ar');
+}
+
+// Init language
+setLang(lang);
 
 load();
 loadFlowers();
@@ -1658,7 +1737,7 @@ html,body{height:100%;overflow:hidden;font-family:'Tajawal',sans-serif;}
 
 .shop-name{
   font-family:'Playfair Display',serif;
-  font-size:28px;font-weight:700;
+  font-size:32px;font-weight:700;letter-spacing:4px;
   color:#ffffff;
   text-shadow:0 2px 20px rgba(0,0,0,0.3);
   margin-bottom:4px;letter-spacing:1px;
@@ -1713,8 +1792,8 @@ input[type=password]::placeholder{color:rgba(255,255,255,0.4);letter-spacing:1px
 <div class="wrap">
   <div class="card">
     <div class="logo">🌹</div>
-    <div class="shop-name">فيروز فلورز</div>
-    <div class="shop-sub">Flowers & More</div>
+    <div class="shop-name">FAIROSE</div>
+    <div class="shop-sub">FLOWERS & MORE</div>
     <div class="err" id="err"></div>
     <div class="pw-wrap">
       <input type="password" id="pw" placeholder="كلمة المرور" onkeydown="if(event.key==='Enter')go()"/>
