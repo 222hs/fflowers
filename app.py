@@ -627,10 +627,7 @@ header{
         <div class="kpi-val" id="dB" style="color:var(--accent)">0 ر.ع</div>
         <div class="kpi-sub" id="dBc">0 عملية</div></div>
     </div>
-    <div class="day-chart-card gc">
-      <h3>📊 مبيعات اليوم بالساعة</h3>
-      <canvas id="dayChart" height="130"></canvas>
-    </div>
+
   </div>
   <div style="height:1px;background:var(--border);margin-bottom:16px;"></div>
 
@@ -730,6 +727,7 @@ header{
 
   <div class="slbl"><span data-t="stats">الإحصائيات</span></div>
   <div class="charts-col">
+    <div class="chart-card gc"><h3>📅 مبيعات آخر 14 يوم</h3><canvas id="dayChart" height="170"></canvas></div>
     <div class="chart-card gc"><h3>📈 مبيعات ومشتريات 2026</h3><canvas id="barChart" height="160"></canvas></div>
     <div class="chart-card gc"><h3>💳 طريقة الدفع</h3><canvas id="payChart" height="160"></canvas></div>
     <div class="chart-card gc"><h3>👤 من دفع</h3><canvas id="payerChart" height="160"></canvas></div>
@@ -895,36 +893,41 @@ function getTodayStr(){
   return `${dd}/${mm}/${yyyy}`;
 }
 
-function renderDayKPI(sales, buys){
+function renderDayKPI(todaySales, todayBuys, allSales, allBuys){
   const today = getTodayStr();
   document.getElementById('todayLabel').textContent = today;
-  const ts = sales.reduce((a,e)=>a+e.amt,0);
-  const tb = buys.reduce((a,e)=>a+e.amt,0);
+  const ts = todaySales.reduce((a,e)=>a+e.amt,0);
+  const tb = todayBuys.reduce((a,e)=>a+e.amt,0);
   const cur = t('currency');
   document.getElementById('dS').textContent = fmt(ts)+' '+cur;
-  document.getElementById('dSc').textContent = sales.length+' '+t('operations');
+  document.getElementById('dSc').textContent = todaySales.length+' '+t('operations');
   document.getElementById('dB').textContent = fmt(tb)+' '+cur;
-  document.getElementById('dBc').textContent = buys.length+' '+t('operations');
-  renderDayChart(sales);
+  document.getElementById('dBc').textContent = todayBuys.length+' '+t('operations');
+  // الرسم البياني يستخدم كل بيانات الشهر
+  renderDayChart(allSales, allBuys);
 }
 
-function renderDayChart(sales){
-  // نرسم مبيعات اليوم بالساعة (0-23)
-  const hours = Array(24).fill(0);
-  sales.forEach(e=>{
-    // sale_time أو نأخذ الوقت من created
-    const timeStr = e.sale_time || e.created || '';
-    const match = timeStr.match(/(\d{2}):(\d{2})/);
-    if(match){ hours[parseInt(match[1])] += e.amt; }
-    else { hours[new Date().getHours()] += e.amt; }
-  });
-  // نعرض فقط الساعات من 7 صباحاً لـ 11 مساءً
-  const labels = [];
-  const vals = [];
-  for(let h=7;h<=23;h++){
-    labels.push(h<12?`${h}ص`:h===12?`12م`:h===24?`12ل`:`${h-12}م`);
-    vals.push(hours[h]);
+function renderDayChart(allSales, allBuys){
+  // نبني قاموس بكل أيام آخر 14 يوم
+  const days = {};
+  for(let i=13;i>=0;i--){
+    const d = new Date(); d.setDate(d.getDate()-i);
+    const dd=String(d.getDate()).padStart(2,'0');
+    const mm=String(d.getMonth()+1).padStart(2,'0');
+    const yyyy=d.getFullYear();
+    const key=`${dd}/${mm}/${yyyy}`;
+    const short=i===0?'اليوم':i===1?'أمس':`${dd}/${mm}`;
+    days[key]={label:short, s:0, b:0};
   }
+  // نجمع المبيعات
+  (allSales||[]).forEach(e=>{ if(days[e.date]) days[e.date].s+=e.amt; });
+  // نجمع المشتريات
+  (allBuys||[]).forEach(e=>{ if(e.type!=='expense' && days[e.date]) days[e.date].b+=e.amt; });
+
+  const labels = Object.values(days).map(d=>d.label);
+  const salesVals = Object.values(days).map(d=>d.s);
+  const buysVals  = Object.values(days).map(d=>d.b);
+
   if(dayCI) dayCI.destroy();
   const ctx = document.getElementById('dayChart');
   if(!ctx) return;
@@ -932,17 +935,29 @@ function renderDayChart(sales){
     type:'bar',
     data:{
       labels,
-      datasets:[{
-        label:'المبيعات',
-        data:vals,
-        backgroundColor: vals.map(v=>v>0?'rgba(var(--gold-rgb,212,175,55),0.8)':'rgba(128,128,128,0.15)'),
-        borderRadius:6,
-        borderSkipped:false,
-      }]
+      datasets:[
+        {
+          label:'مبيعات',
+          data:salesVals,
+          backgroundColor:'rgba(100,200,120,0.75)',
+          borderRadius:5,
+          borderSkipped:false,
+        },
+        {
+          label:'مشتريات',
+          data:buysVals,
+          backgroundColor:'rgba(220,80,80,0.6)',
+          borderRadius:5,
+          borderSkipped:false,
+        }
+      ]
     },
     options:{
       responsive:true,
-      plugins:{legend:{display:false},tooltip:{callbacks:{label:i=>`${fmt(i.raw)} ر.ع`}}},
+      plugins:{
+        legend:{display:true,position:'top',labels:{font:{size:10},boxWidth:12}},
+        tooltip:{callbacks:{label:i=>`${i.dataset.label}: ${fmt(i.raw)} ر.ع`}}
+      },
       scales:{
         x:{grid:{display:false},ticks:{font:{size:9}}},
         y:{grid:{color:'rgba(128,128,128,0.1)'},ticks:{font:{size:9},callback:v=>v>0?fmt(v):''},beginAtZero:true}
@@ -1008,7 +1023,7 @@ async function load(){
     const todayStr = getTodayStr();
     const todaySales = dash.sales.filter(e=>e.date===todayStr);
     const todayBuys  = dash.buys.filter(e=>e.date===todayStr && e.type!=='expense');
-    renderDayKPI(todaySales, todayBuys);
+    renderDayKPI(todaySales, todayBuys, dash.sales, dash.buys);
     const ms = ['01','02','03','04','05','06','07','08','09','10','11','12'];
     const yr = month.split('-')[0];
     const all = ms.map(m => dash.charts[`${yr}-${m}`] || {sales:[],buys:[]});
@@ -1480,7 +1495,7 @@ function setLang(l){
     const todayStr = getTodayStr();
     const todaySales = _lastData.sales.filter(e=>e.date===todayStr);
     const todayBuys  = _lastData.buys.filter(e=>e.date===todayStr && e.type!=='expense');
-    renderDayKPI(todaySales, todayBuys);
+    renderDayKPI(todaySales, todayBuys, _lastData.sales, _lastData.buys);
   }
 }
 
