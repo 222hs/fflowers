@@ -1390,6 +1390,53 @@ def turso_exec(sql, params=()):
     r.raise_for_status()
     return r.json()
 
+def turso_multi(queries):
+    """تنفيذ عدة queries في request HTTP واحد — أسرع بكثير"""
+    if not USE_TURSO:
+        return None
+    requests_list = []
+    for sql, params in queries:
+        args = [{"type":"null"} if p is None else {"type":"text","value":str(p)} for p in params]
+        requests_list.append({"type":"execute","stmt":{"sql":sql,"args":args}})
+    requests_list.append({"type":"close"})
+    url = TURSO_URL.replace("libsql://","https://")
+    try:
+        r = requests.post(
+            f"{url}/v2/pipeline",
+            headers={"Authorization":f"Bearer {TURSO_TOKEN}","Content-Type":"application/json"},
+            json={"requests": requests_list},
+            timeout=15
+        )
+        r.raise_for_status()
+        results = r.json()["results"]
+        out = []
+        for i, res in enumerate(results[:-1]):  # آخر واحد هو close
+            if res.get("type") == "error":
+                print("Turso multi error:", res)
+                out.append([])
+                continue
+            data = res["response"]["result"]
+            cols = [c["name"] for c in data["cols"]]
+            rows = []
+            for row in data["rows"]:
+                d = {}
+                for j, col in enumerate(cols):
+                    v = row[j]; t = v.get("type","text"); val = v.get("value")
+                    if t == "null" or val is None: d[col] = None
+                    elif t == "integer":
+                        try: d[col] = int(val)
+                        except: d[col] = val
+                    elif t in ("float","real"):
+                        try: d[col] = float(val)
+                        except: d[col] = val
+                    else: d[col] = val
+                rows.append(d)
+            out.append(rows)
+        return out
+    except Exception as e:
+        print("turso_multi error:", e)
+        return None
+
 def turso_get(sql, params=()):
     """Query rows from Turso."""
     try:
@@ -2014,13 +2061,34 @@ def debug():
 @app.route("/api/dashboard")
 @auth
 def api_dashboard():
-    """طلب واحد يجيب كل البيانات دفعة واحدة"""
+    """كل البيانات في request واحد لـ Turso"""
     month = request.args.get("month", cur_month())
     yr = month.split("-")[0]
-    s, b = get_month_data(month)
-    expenses = db_get("SELECT * FROM expenses ORDER BY id")
-    paid = db_get("SELECT * FROM entries WHERE type='expense' AND month=? ORDER BY created DESC", (month,))
-    all_entries = db_get("SELECT * FROM entries WHERE month LIKE ? ORDER BY created DESC", (f"{yr}-%",))
+
+    queries = [
+        ("SELECT * FROM entries WHERE month=? ORDER BY created DESC",          (month,)),
+        ("SELECT * FROM expenses ORDER BY id",                                  ()),
+        ("SELECT * FROM entries WHERE type='expense' AND month=? ORDER BY created DESC", (month,)),
+        ("SELECT * FROM entries WHERE month LIKE ? ORDER BY created DESC",      (f"{yr}-%",)),
+        ("SELECT * FROM flowers ORDER BY count DESC",                           ()),
+    ]
+
+    # محاولة batch — request واحد لـ Turso
+    batch = turso_multi(queries) if USE_TURSO else None
+
+    if batch:
+        cur_entries, expenses, paid, all_entries, flowers = batch
+    else:
+        # fallback للـ SQLite أو لو فشل الـ batch
+        cur_entries = db_get("SELECT * FROM entries WHERE month=? ORDER BY created DESC", (month,))
+        expenses    = db_get("SELECT * FROM expenses ORDER BY id")
+        paid        = db_get("SELECT * FROM entries WHERE type='expense' AND month=? ORDER BY created DESC", (month,))
+        all_entries = db_get("SELECT * FROM entries WHERE month LIKE ? ORDER BY created DESC", (f"{yr}-%",))
+        flowers     = db_get("SELECT * FROM flowers ORDER BY count DESC")
+
+    s = [e for e in cur_entries if e["type"] == "s"]
+    b = [e for e in cur_entries if e["type"] in ("b","expense")]
+
     months_data = {}
     for mm in [f"{yr}-{str(i).zfill(2)}" for i in range(1,13)]:
         ms = [e for e in all_entries if e["month"] == mm]
@@ -2028,8 +2096,9 @@ def api_dashboard():
             "sales": [e for e in ms if e["type"] == "s"],
             "buys":  [e for e in ms if e["type"] in ("b","expense")]
         }
-    flowers = db_get("SELECT * FROM flowers ORDER BY count DESC")
-    flowers_total = sum(f["count"] for f in flowers)
+
+    flowers_total = sum(f["count"] for f in flowers) if flowers else 0
+
     return jsonify({
         "month":    month,
         "sales":    s,
