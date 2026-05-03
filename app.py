@@ -167,6 +167,9 @@ header{
 .th-circle{width:32px;height:32px;border-radius:50%;flex-shrink:0;box-shadow:0 2px 8px rgba(0,0,0,0.2);}
 .th-name{font-size:9px;color:var(--text3);font-weight:600;white-space:nowrap;}
 
+/* Refresh spin */
+@keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
+
 /* Skeleton loading */
 .skl{height:14px;background:linear-gradient(90deg,var(--border) 25%,var(--bg2) 50%,var(--border) 75%);background-size:200% 100%;animation:skl-shine 1.2s infinite;border-radius:6px;margin:4px 0;}
 .skl-sm{width:60%;height:10px;}
@@ -554,6 +557,7 @@ header{
           <option value="2026-11">نوفمبر 2026</option><option value="2026-12">ديسمبر 2026</option>
         </select>
       </div>
+      <button class="theme-btn" id="refreshBtn" onclick="refreshData()" title="تحديث البيانات">🔄</button>
       <button class="theme-btn" onclick="toggleThemePanel()" title="تغيير الثيم">🎨</button>
       <button class="theme-btn" id="langBtn" onclick="toggleLang()" title="تغيير اللغة" style="font-size:12px;font-weight:700;font-family:'Tajawal',sans-serif;">EN</button>
       <a href="/logout" class="logout-btn" title="خروج">🔒</a>
@@ -918,6 +922,18 @@ async function load(){
 
 // تحديث تلقائي كل 60 ثانية
 setInterval(()=>{load();if(document.getElementById('tab-shelves').classList.contains('active'))loadShelves();},60000);
+
+async function refreshData(){
+  const btn = document.getElementById('refreshBtn');
+  if(!btn) return;
+  btn.style.animation = 'spin 0.7s linear infinite';
+  btn.disabled = true;
+  await load();
+  if(document.getElementById('tab-shelves').classList.contains('active')) await loadShelves();
+  btn.style.animation = '';
+  btn.disabled = false;
+  showToast('✅ تم تحديث البيانات');
+}
 
 /* ── KPI ── */
 function renderKPI(sales,buys,expD){
@@ -1709,60 +1725,94 @@ def parse_text(text):
         return {"type":etype,"desc":desc,"amt":amt,"found":True}
     return {"found":False}
 
-def groq_parse_text(text):
-    """استخدام Groq AI لتحليل أي رسالة نصية وتحديد نوعها وتفاصيلها"""
+def groq_chat(text, chat_id):
+    """ذكاء اصطناعي كامل — يفهم أي كلام ويقرر الإجراء المناسب"""
     if not GROQ_KEY:
-        return parse_text(text)  # fallback للطريقة القديمة
+        return None
     try:
         today = datetime.now().strftime("%d/%m/%Y")
-        expenses_list = db_get("SELECT name, amount FROM expenses ORDER BY id")
-        exp_names = ", ".join(f"{e['name']} ({fmt_omr(e['amount'])})" for e in expenses_list)
-        prompt = f"""أنت مساعد لمحل فيروز فلورز لبيع الزهور في عُمان.
-اليوم: {today}
-المصاريف الثابتة المسجلة: {exp_names}
+        cur_m = cur_month()
+        # نجيب بيانات الشهر الحالي للسياق
+        s, b = get_month_data(cur_m)
+        ts = sum(e["amt"] for e in s)
+        tb = sum(e["amt"] for e in b if e["type"] != "expense")
+        exps_list = db_get("SELECT name, amount, last_paid FROM expenses ORDER BY id")
+        shelves = db_get("SELECT name FROM shelves ORDER BY id")
+        exp_names = ", ".join(f"{e['name']} ({fmt_omr(e['amount'])})" for e in exps_list)
+        shelf_names = ", ".join(s2["name"] for s2 in shelves)
 
-حلل هذه الرسالة وأخرج JSON فقط بدون أي شرح:
-"{text}"
+        system = f"""أنت مساعد ذكي لمحل فيروز فلورز لبيع الزهور في عُمان.
+اليوم: {today} | الشهر الحالي: {cur_m}
+إجمالي مبيعات هذا الشهر: {fmt_omr(ts)} ({len(s)} عملية)
+إجمالي مشتريات هذا الشهر: {fmt_omr(tb)} ({len(b)} عملية)
+المصاريف الثابتة: {exp_names}
+الرفوف: {shelf_names}
 
-الحقول المطلوبة:
-- type: "s" (مبيعة) أو "b" (مشتريات) أو "expense" (مصروف ثابت) أو "unknown"
-- desc: وصف قصير للعملية (بالعربي)
-- amt: المبلغ كرقم عشري (مثل 5.500) أو null إذا غير موجود
-- payment: "كاش 💵" أو "فيزا 💳" أو "تحويل 🏦" أو null
-- paid_by: اسم من دفع (للمشتريات فقط) أو null
-- category: فئة المبيعة من (ورد وباقات, طباعة, تاجات, عطور, اكسسوارات, هدايا, تجفيف, صناعي, أخرى) أو null
-- expense_name: اسم المصروف بالضبط كما في القائمة أو null
-- shelf: اسم الرف إذا ذُكر (ريحان, فتحية, فطوم, اكسسوارات) أو null
-- found: true أو false
+مهمتك: حلل رسالة المستخدم وأخرج JSON فقط بهذا الشكل:
+
+{{
+  "action": "register_sale" | "register_buy" | "register_expense" | "answer" | "report" | "unknown",
+  "data": {{...}},
+  "reply": "رد نصي للمستخدم إذا action=answer"
+}}
+
+قواعد كل action:
+- register_sale: مبيعة → data: {{desc, amt, payment, category, shelf}}
+- register_buy: مشتريات → data: {{desc, amt, paid_by}}
+- register_expense: مصروف → data: {{expense_name, amt}}
+- answer: سؤال أو كلام عام → data: {{}} + reply بالعربي
+- report: طلب تقرير → data: {{period: "today"|"month"|"custom"}}
+
+تصنيفات المبيعات: ورد وباقات, طباعة, تاجات, عطور, اكسسوارات, هدايا, تجفيف, صناعي, أخرى
+طرق الدفع: "كاش 💵" أو "فيزا 💳" أو "تحويل 🏦" أو null
+المبالغ: أرقام عشرية مثل 5.5 أو 12.0
 
 أمثلة:
-"بعت باقة بـ 5.500 كاش" → {{"type":"s","desc":"باقة ورد","amt":5.5,"payment":"كاش 💵","category":"ورد وباقات","found":true}}
-"اشتريت زهور بـ 12.000" → {{"type":"b","desc":"زهور","amt":12.0,"paid_by":null,"found":true}}
-"دفعت الراتب" → {{"type":"expense","desc":"راتب العامل","amt":220.0,"expense_name":"راتب العامل","found":true}}
-"بعت طباعة 3d بـ 8 فيزا" → {{"type":"s","desc":"طباعة 3D","amt":8.0,"payment":"فيزا 💳","category":"طباعة","found":true}}
-"مرحبا" → {{"type":"unknown","found":false}}
+"بعت باقة بـ 5.5 كاش" → {{"action":"register_sale","data":{{"desc":"باقة ورد","amt":5.5,"payment":"كاش 💵","category":"ورد وباقات"}}}}
+"اشتريت ورد 12 ريال" → {{"action":"register_buy","data":{{"desc":"ورد","amt":12.0,"paid_by":null}}}}
+"دفعت الراتب" → {{"action":"register_expense","data":{{"expense_name":"راتب العامل","amt":null}}}}
+"كم مبيعات اليوم؟" → {{"action":"answer","data":{{}},"reply":"مبيعات اليوم..."}}
+"كيف الأرباح هذا الشهر؟" → {{"action":"report","data":{{"period":"month"}}}}
+"مرحبا" → {{"action":"answer","data":{{}},"reply":"أهلاً! كيف أقدر أساعدك اليوم؟"}}
 
-أخرج JSON فقط:"""
+أخرج JSON فقط بدون شرح:"""
 
         res = requests.post("https://api.groq.com/openai/v1/chat/completions",
             headers={"Authorization": f"Bearer {GROQ_KEY}", "Content-Type": "application/json"},
             json={
                 "model": "llama-3.3-70b-versatile",
-                "messages": [{"role": "user", "content": prompt}],
-                "max_tokens": 200,
+                "messages": [
+                    {"role": "system", "content": system},
+                    {"role": "user", "content": text}
+                ],
+                "max_tokens": 300,
                 "temperature": 0.1
-            }, timeout=10)
+            }, timeout=12)
         raw = res.json()["choices"][0]["message"]["content"].strip()
-        # نظف الـ JSON
-        raw = re.sub(r'^```json\s*', '', raw)
-        raw = re.sub(r'^```\s*', '', raw)
-        raw = re.sub(r'\s*```$', '', raw)
-        result = json.loads(raw)
-        result["found"] = bool(result.get("found") and result.get("type") != "unknown")
-        return result
+        raw = re.sub(r"```json\s*", "", raw)
+        raw = re.sub(r"```\s*", "", raw)
+        raw = raw.strip()
+        return json.loads(raw)
     except Exception as e:
-        print(f"groq_parse_text error: {e}")
-        return parse_text(text)  # fallback
+        print(f"groq_chat error: {e}")
+        return None
+
+def groq_parse_text(text):
+    """fallback بسيط لو Groq ما شتغل"""
+    if not GROQ_KEY:
+        return parse_text(text)
+    result = groq_chat(text, None)
+    if not result:
+        return parse_text(text)
+    action = result.get("action","unknown")
+    data = result.get("data",{})
+    if action == "register_sale":
+        return {"found":True,"type":"s","desc":data.get("desc","مبيعة"),"amt":data.get("amt",0),"payment":data.get("payment"),"category":data.get("category"),"shelf":data.get("shelf")}
+    elif action == "register_buy":
+        return {"found":True,"type":"b","desc":data.get("desc","مشتريات"),"amt":data.get("amt",0),"paid_by":data.get("paid_by")}
+    elif action == "register_expense":
+        return {"found":True,"type":"expense","desc":data.get("expense_name","مصروف"),"amt":data.get("amt",0),"expense_name":data.get("expense_name")}
+    return {"found":False}
 
 def groq_count_flowers(file_id):
     """Use Groq to count and identify flowers in image."""
@@ -2567,7 +2617,111 @@ def webhook():
                 tg(chat, f"✅ <b>تم تسجيل {exp_name}</b>\n💰 {fmt_omr(amt)}\n📅 {date_now}")
                 return "ok"
 
-    # استخدام Groq AI لفهم الرسالة
+    # ── الذكاء الاصطناعي الكامل ──
+    ai = groq_chat(text, chat) if GROQ_KEY else None
+    if ai:
+        action = ai.get("action","unknown")
+        data   = ai.get("data",{})
+        reply  = ai.get("reply","")
+
+        # رد مباشر على سؤال أو كلام عام
+        if action == "answer":
+            tg(chat, reply or "كيف أقدر أساعدك؟")
+            return "ok"
+
+        # تقرير
+        if action == "report":
+            ts,tb,tp,sc,bc = month_summary(month)
+            exps = db_get("SELECT * FROM entries WHERE type='expense' AND month=? ORDER BY created DESC",(month,))
+            exp_total = sum(e2["amt"] for e2 in exps)
+            net = tp - exp_total
+            e1 = "✅" if tp>=0 else "⚠️"
+            e2 = "✅" if net>=0 else "⚠️"
+            tg(chat,
+               f"📊 <b>تقرير {month}</b>\n\n"
+               f"🌸 المبيعات: {fmt_omr(ts)} ({sc} عملية)\n"
+               f"📦 المشتريات: {fmt_omr(tb)} ({bc} عملية)\n"
+               f"💸 المصاريف: {fmt_omr(exp_total)}\n"
+               f"━━━━━━\n"
+               f"{e1} الربح: {fmt_omr(tp)}\n"
+               f"{e2} الصافي: {fmt_omr(net)}")
+            return "ok"
+
+        # تسجيل مصروف
+        if action == "register_expense":
+            exp_name = data.get("expense_name") or data.get("desc","مصروف")
+            amt = data.get("amt") or 0
+            exp = db_one("SELECT * FROM expenses WHERE name=?",(exp_name,))
+            if not exp:
+                all_exp = db_get("SELECT * FROM expenses ORDER BY id")
+                for e in all_exp:
+                    if any(w in exp_name for w in e["name"].split()[:2]):
+                        exp = e; exp_name = e["name"]; break
+            final_amt = float(amt) if amt and float(amt)>0 else (float(exp["amount"]) if exp else 0)
+            if final_amt <= 0:
+                tg(chat, f"💸 كم مبلغ {exp_name}؟\nأرسل الرقم فقط: <code>220.000</code>")
+                pending[chat] = {"waiting":"expense_amt","exp_name":exp_name,"exp_id":exp["id"] if exp else None}
+                return "ok"
+            date_now = datetime.now().strftime("%d/%m/%Y")
+            db_run("INSERT INTO entries (type,desc,amt,date,month,category) VALUES (?,?,?,?,?,?)",
+                   ("expense",exp_name,final_amt,date_now,month,"مصاريف ثابتة"))
+            if exp:
+                db_run("UPDATE expenses SET last_paid=?,month=?,amount=? WHERE id=?",
+                       (date_now,month,final_amt,exp["id"]))
+            tg(chat,f"✅ <b>تم تسجيل {exp_name}</b>\n💰 {fmt_omr(final_amt)}\n📅 {date_now}")
+            return "ok"
+
+        # تسجيل مشتريات
+        if action == "register_buy":
+            desc   = data.get("desc","مشتريات")
+            amt    = float(data.get("amt") or 0)
+            paid_by = data.get("paid_by")
+            if not amt or amt<=0:
+                pending[chat]={"waiting":"buy_amt","desc":desc,"month":month}
+                tg(chat,f"📦 <b>{desc}</b>\nكم المبلغ؟ أرسل الرقم فقط:")
+                return "ok"
+            if paid_by:
+                db_run("INSERT INTO entries (type,desc,amt,date,month,paid_by) VALUES (?,?,?,?,?,?)",
+                       ("b",desc,amt,date,month,paid_by))
+                tg(chat,f"✅ <b>مشتريات مسجلة!</b>\n📦 {desc}\n💰 {fmt_omr(amt)}\n👤 {paid_by}")
+            else:
+                pending[chat]={"waiting":"paid_by","desc":desc,"amt":amt,"date":date,"month":month}
+                tg_buttons(chat,f"📦 <b>مشتريات {fmt_omr(amt)}</b>\n📝 {desc}\n\n👤 من دفع؟",
+                    [[{"label":"👤 حسين","data":"payer:حسين"},{"label":"👤 شوق","data":"payer:شوق"}],
+                     [{"label":"➕ شخص آخر","data":"payer:other"},{"label":"⏭ تخطي","data":"payer:skip"}]])
+            return "ok"
+
+        # تسجيل مبيعة
+        if action == "register_sale":
+            desc  = data.get("desc","مبيعة")
+            amt   = float(data.get("amt") or 0)
+            pay   = data.get("payment")
+            cat   = data.get("category") or detect_category(text)
+            shelf_id_detected = None
+            shelf_name = data.get("shelf")
+            if shelf_name:
+                sh = db_one("SELECT id FROM shelves WHERE name=?",(shelf_name,))
+                if sh: shelf_id_detected = sh["id"]
+            if not amt or amt<=0:
+                pending[chat]={"waiting":"sale_amt","desc":desc}
+                tg(chat,f"🌸 <b>{desc}</b>\nكم المبلغ؟ أرسل الرقم فقط:")
+                return "ok"
+            db_run("INSERT INTO entries (type,desc,amt,date,month,payment_method,category,shelf_id) VALUES (?,?,?,?,?,?,?,?)",
+                   ("s",desc,amt,date,month,pay,cat,shelf_id_detected))
+            cat_line = f"\n🏷️ {cat}" if cat else ""
+            if pay:
+                tg(chat,f"✅ <b>مبيعة مسجلة!</b>\n🌸 {desc}\n💰 {fmt_omr(amt)} — {pay}{cat_line}")
+            else:
+                pending[chat]={"waiting":"sale_payment"}
+                tg_buttons(chat,f"🌸 <b>مبيعة {fmt_omr(amt)}</b>\n📝 {desc}{cat_line}\n\n💳 طريقة الدفع؟",
+                    [[{"label":"💵 كاش","data":"pay:كاش 💵"},{"label":"💳 فيزا","data":"pay:فيزا 💳"},{"label":"🏦 تحويل","data":"pay:تحويل 🏦"}]])
+            return "ok"
+
+        # unknown
+        tg(chat, "لم أفهم 🤔\n\nجرّب:\n<code>بعت باقة بـ 4.500 كاش</code>\n<code>اشتريت ورد بـ 8.000</code>\n<code>دفعت الراتب</code>\n\n/help للمساعدة")
+        return "ok"
+
+    # fallback لو Groq ما شتغل
     parsed=groq_parse_text(text)
     if parsed.get("found"):
         etype=parsed.get("type"); desc=parsed.get("desc",""); amt=parsed.get("amt") or 0
