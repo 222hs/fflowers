@@ -641,6 +641,7 @@ input[type="date"]{width:100%;padding:10px 12px;border:1px solid var(--border);b
   <div class="mobile-tabs">
     <button class="mtab on" onclick="switchTab('home')">📊 الرئيسية</button>
     <button class="mtab" onclick="switchTab('shelves')">🗄️ الرفوف</button>
+    <button class="mtab" onclick="switchTab('flowerinv')">🧾 فواتير الورد</button>
     <button class="mtab" onclick="switchTab('reports')">📄 التقارير</button>
   </div>
 </header>
@@ -780,6 +781,34 @@ input[type="date"]{width:100%;padding:10px 12px;border:1px solid var(--border);b
   <div class="shelf-prods-section" id="shelfProds"></div>
 </div>
 
+<!-- FLOWER INVOICES -->
+<div id="tab-flowerinv" class="page">
+  <div class="slbl">فواتير شركات الورد</div>
+
+  <!-- اختيار الشهر + ملخص -->
+  <div class="gc" style="padding:14px;margin-bottom:16px;">
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;">
+      <select id="fi-month-sel" onchange="loadFlowerInvPage()" style="flex:1;padding:9px 12px;border:1px solid var(--border);border-radius:10px;background:var(--bg2);color:var(--text);font-family:'Tajawal',sans-serif;font-size:13px;font-weight:600;"></select>
+      <button onclick="loadFlowerInvPage()" style="padding:9px 14px;border:1px solid var(--border);border-radius:10px;background:var(--glass);color:var(--text2);font-family:'Tajawal',sans-serif;font-size:12px;cursor:pointer;">🔄</button>
+    </div>
+    <!-- KPIs -->
+    <div class="kpi-row row3" id="fi-kpis">
+      <div class="kpi gc"><div class="kpi-ico">🧾</div><div class="kpi-lbl">عدد الفواتير</div><div class="kpi-val" id="fi-count">—</div></div>
+      <div class="kpi gc"><div class="kpi-ico">🏪</div><div class="kpi-lbl">عدد الشركات</div><div class="kpi-val" id="fi-companies">—</div></div>
+      <div class="kpi gc gold"><div class="kpi-ico">💰</div><div class="kpi-lbl">إجمالي الشهر</div><div class="kpi-val" id="fi-total">—</div></div>
+    </div>
+  </div>
+
+  <!-- قائمة الفواتير -->
+  <div class="slbl">الفواتير</div>
+  <div id="fi-list"></div>
+
+  <div style="font-size:10px;color:var(--text3);text-align:center;margin-top:12px;line-height:1.9;">
+    📸 أرسل للبوت صورة الفاتورة + تعليق <b>"فاتورة ورد"</b><br>
+    البوت يقرأ الأصناف والأسعار والشركة تلقائياً
+  </div>
+</div>
+
 <!-- REPORTS -->
 <div id="tab-reports" class="page">
 
@@ -913,29 +942,13 @@ input[type="date"]{width:100%;padding:10px 12px;border:1px solid var(--border);b
 <!-- FLOWER PANEL -->
 <div id="flowerPanel" onclick="if(event.target===this)toggleFlowerPanel()">
   <div class="flower-sheet">
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
-      <div style="font-size:13px;font-weight:800;color:var(--text);">🌸 الورد</div>
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
+      <div style="font-size:13px;font-weight:800;color:var(--text);">🌸 مخزون الورد</div>
       <button onclick="toggleFlowerPanel()" style="background:none;border:none;font-size:18px;cursor:pointer;color:var(--text3);">✕</button>
     </div>
-    <div style="display:flex;background:rgba(0,0,0,0.04);border-radius:10px;padding:3px;margin-bottom:14px;gap:3px;">
-      <button id="ftab-stock" onclick="switchFlowerTab('stock')" style="flex:1;padding:7px;border:none;border-radius:8px;font-family:'Tajawal',sans-serif;font-size:12px;font-weight:700;cursor:pointer;background:rgba(255,255,255,0.8);color:var(--green2);box-shadow:0 2px 6px var(--shadow);">🌹 المخزون</button>
-      <button id="ftab-inv" onclick="switchFlowerTab('inv')" style="flex:1;padding:7px;border:none;border-radius:8px;font-family:'Tajawal',sans-serif;font-size:12px;font-weight:700;cursor:pointer;background:transparent;color:var(--text3);">🧾 فواتير شركات الورد</button>
-    </div>
-    <div id="flower-tab-stock">
-      <div id="flowerList"></div>
-      <div style="font-size:10px;color:var(--text3);text-align:center;margin-top:10px;line-height:1.8;">
-        📸 صورة + <b>"عد الورد"</b> &nbsp;|&nbsp; ✏️ <b>"عندي ورد روز 20"</b>
-      </div>
-    </div>
-    <div id="flower-tab-inv" style="display:none;">
-      <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
-        <select id="invMonthSel" onchange="loadFlowerInvoices()" style="flex:1;padding:8px 10px;border:1px solid var(--border);border-radius:10px;background:var(--bg2);color:var(--text);font-family:'Tajawal',sans-serif;font-size:12px;"></select>
-        <div id="invMonthTotal" style="font-size:11px;font-weight:700;color:var(--accent);white-space:nowrap;"></div>
-      </div>
-      <div id="flowerInvList"></div>
-      <div style="font-size:10px;color:var(--text3);text-align:center;margin-top:10px;line-height:1.8;">
-        📸 صورة فاتورة + تعليق <b>"فاتورة ورد"</b>
-      </div>
+    <div id="flowerList"></div>
+    <div style="font-size:10px;color:var(--text3);text-align:center;margin-top:10px;line-height:1.8;">
+      📸 صورة + <b>"عد الورد"</b> &nbsp;|&nbsp; ✏️ <b>"عندي ورد روز 20"</b>
     </div>
   </div>
 </div>
@@ -1091,6 +1104,7 @@ function switchTab(t){
     if(b.getAttribute('onclick')&&b.getAttribute('onclick').includes("'"+t+"'"))b.classList.add('on');
   });
   if(t==='shelves') loadShelves();
+  if(t==='flowerinv') loadFlowerInvPage();
 }
 
 function setFT(t){
@@ -1486,70 +1500,73 @@ async function loadFlowers(){
       `<div style="padding:20px;text-align:center;color:var(--text3);font-size:12px;">لا يوجد مخزون<br>أرسل للبوت: <b>عندي ورد روز أحمر 20</b><br>أو صورة مع "عد الورد"</div>`;
   }catch(e){}
 }
-let currentFlowerTab='stock';
-function switchFlowerTab(tab){
-  currentFlowerTab=tab;
-  document.getElementById('flower-tab-stock').style.display=tab==='stock'?'block':'none';
-  document.getElementById('flower-tab-inv').style.display=tab==='inv'?'block':'none';
-  document.getElementById('ftab-stock').style.cssText=tab==='stock'?
-    'flex:1;padding:7px;border:none;border-radius:8px;font-family:Tajawal,sans-serif;font-size:12px;font-weight:700;cursor:pointer;background:rgba(255,255,255,0.8);color:var(--green2);box-shadow:0 2px 6px var(--shadow);':
-    'flex:1;padding:7px;border:none;border-radius:8px;font-family:Tajawal,sans-serif;font-size:12px;font-weight:700;cursor:pointer;background:transparent;color:var(--text3);';
-  document.getElementById('ftab-inv').style.cssText=tab==='inv'?
-    'flex:1;padding:7px;border:none;border-radius:8px;font-family:Tajawal,sans-serif;font-size:12px;font-weight:700;cursor:pointer;background:rgba(255,255,255,0.8);color:var(--accent2);box-shadow:0 2px 6px var(--shadow);':
-    'flex:1;padding:7px;border:none;border-radius:8px;font-family:Tajawal,sans-serif;font-size:12px;font-weight:700;cursor:pointer;background:transparent;color:var(--text3);';
-  if(tab==='inv')loadFlowerInvoices();
-}
 function toggleFlowerPanel(){
   flowerOpen=!flowerOpen;
   document.getElementById('flowerPanel').classList.toggle('open',flowerOpen);
-  if(flowerOpen){ if(currentFlowerTab==='stock') loadFlowers(); else loadFlowerInvoices(); }
-}
-async function loadFlowerInvoices(){
-  try{
-    const sel=document.getElementById('invMonthSel');
-    const month=sel.value||'';
-    const d=await api('/api/flower_invoices'+(month?'?month='+month:''));
-    if(d.months&&d.months.length){
-      const cur=sel.value||d.month;
-      sel.innerHTML=d.months.map(m=>`<option value="${m}" ${m===cur?'selected':''}>${m}</option>`).join('');
-    }
-    document.getElementById('invMonthTotal').textContent=d.total?formatOMR(d.total):'';
-    const list=document.getElementById('flowerInvList');
-    if(!d.invoices||!d.invoices.length){
-      list.innerHTML=`<div style="padding:20px;text-align:center;color:var(--text3);font-size:12px;">لا توجد فواتير هذا الشهر<br>أرسل صورة + تعليق <b>"فاتورة ورد"</b></div>`;
-      return;
-    }
-    list.innerHTML=d.invoices.map(inv=>{
-      const items=inv.items||[];
-      const itemsHtml=items.map(i=>`
-        <div style="display:flex;justify-content:space-between;padding:3px 8px;font-size:10px;color:var(--text2);">
-          <span>${i.unit==='بندلة'?'🌸':'🌹'} ${i.name}: ${i.count} ${i.unit||'وردة'}</span>
-          ${parseFloat(i.unit_price||0)>0?`<span>${formatOMR(parseFloat(i.line_total||0))}</span>`:''}
-        </div>`).join('');
-      return `<div style="background:var(--card);border:1px solid var(--border);border-radius:14px;margin-bottom:10px;overflow:hidden;">
-        <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 12px;border-bottom:1px solid var(--border);">
-          <div>
-            <div style="font-size:12px;font-weight:800;">🏪 ${inv.company||'غير محدد'}</div>
-            <div style="font-size:10px;color:var(--text3);">📅 ${inv.inv_date}</div>
-          </div>
-          <div style="display:flex;align-items:center;gap:8px;">
-            <div style="font-size:13px;font-weight:800;color:var(--accent);">${formatOMR(parseFloat(inv.total||0))}</div>
-            <button onclick="delFlowerInvoice(${inv.id})" style="background:none;border:none;cursor:pointer;color:var(--text3);font-size:14px;">🗑</button>
-          </div>
-        </div>
-        ${itemsHtml?`<div style="padding:4px 0;">${itemsHtml}</div>`:''}
-      </div>`;
-    }).join('');
-  }catch(e){}
-}
-function formatOMR(n){return n.toFixed(3)+' ر.ع';}
-async function delFlowerInvoice(id){
-  if(!confirm('حذف الفاتورة؟'))return;
-  await api('/api/flower_invoices/'+id,{method:'DELETE'});
-  loadFlowerInvoices();
+  if(flowerOpen) loadFlowers();
 }
 async function updateFlowerCount(id,n,unit){if(n<0)return;await api(`/api/flowers/${id}`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({count:n,unit:unit||'وردة'})});loadFlowers();}
 async function delFlower(id){await api(`/api/flowers/${id}`,{method:'DELETE'});loadFlowers();showToast(t('delToast'));}
+
+/* ── FLOWER INVOICES PAGE ── */
+async function loadFlowerInvPage(){
+  try{
+    const sel=document.getElementById('fi-month-sel');
+    const m=sel.value||'';
+    const d=await api('/api/flower_invoices'+(m?'?month='+m:''));
+    // populate month selector
+    if(d.months&&d.months.length){
+      const cur=sel.value||d.month;
+      sel.innerHTML=d.months.map(mo=>`<option value="${mo}"${mo===cur?' selected':''}>${mo}</option>`).join('');
+      if(!sel.value&&d.month) sel.value=d.month;
+    } else if(!sel.innerHTML) {
+      const now=new Date(); const mo=now.getFullYear()+'-'+String(now.getMonth()+1).padStart(2,'0');
+      sel.innerHTML=`<option value="${mo}">${mo}</option>`;
+    }
+    const invs=d.invoices||[];
+    // KPIs
+    const companies=[...new Set(invs.map(i=>i.company).filter(Boolean))];
+    document.getElementById('fi-count').textContent=invs.length;
+    document.getElementById('fi-companies').textContent=companies.length;
+    document.getElementById('fi-total').textContent=d.total?(+d.total).toFixed(3)+' ر.ع':'0.000 ر.ع';
+    // List
+    const list=document.getElementById('fi-list');
+    if(!invs.length){
+      list.innerHTML=`<div class="gc" style="padding:24px;text-align:center;color:var(--text3);font-size:12px;line-height:2;">
+        لا توجد فواتير هذا الشهر<br>
+        📸 أرسل صورة الفاتورة للبوت مع تعليق <b>"فاتورة ورد"</b>
+      </div>`;
+      return;
+    }
+    list.innerHTML=invs.map(inv=>{
+      const items=inv.items||[];
+      const itemsHtml=items.map(i=>`
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:5px 12px;border-bottom:1px solid var(--border);">
+          <span style="font-size:11px;color:var(--text2);">${i.unit==='بندلة'?'🌸':'🌹'} ${i.name}: <b>${i.count}</b> ${i.unit||'وردة'}</span>
+          ${parseFloat(i.unit_price||0)>0?`<span style="font-size:11px;color:var(--text3);">${(+i.line_total||0).toFixed(3)} ر.ع</span>`:''}
+        </div>`).join('');
+      return `<div class="gc" style="margin-bottom:12px;overflow:hidden;">
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:12px 14px;border-bottom:1px solid var(--border);">
+          <div>
+            <div style="font-size:13px;font-weight:800;">🏪 ${inv.company||'غير محدد'}</div>
+            <div style="font-size:11px;color:var(--text3);margin-top:2px;">📅 ${inv.inv_date}</div>
+          </div>
+          <div style="display:flex;align-items:center;gap:10px;">
+            <div style="font-size:15px;font-weight:900;color:var(--accent);">${(+inv.total||0).toFixed(3)} <span style="font-size:10px;font-weight:600;">ر.ع</span></div>
+            <button onclick="delFlowerInv(${inv.id})" style="background:rgba(232,121,138,.1);border:1px solid rgba(232,121,138,.2);border-radius:8px;color:var(--accent);font-size:13px;width:30px;height:30px;cursor:pointer;">🗑</button>
+          </div>
+        </div>
+        ${items.length?`<div style="padding:4px 0;">${itemsHtml}</div>`:''}
+      </div>`;
+    }).join('');
+  }catch(e){console.error(e);}
+}
+async function delFlowerInv(id){
+  if(!confirm('حذف هذه الفاتورة؟'))return;
+  await api('/api/flower_invoices/'+id,{method:'DELETE'});
+  loadFlowerInvPage();
+  showToast('✅ تم حذف الفاتورة');
+}
 
 /* ── REPORTS ── */
 // ── التقارير ──
