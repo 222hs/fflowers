@@ -60,6 +60,29 @@ HTML_PAGE = """<!DOCTYPE html>
   --nav-bg:rgba(253,248,242,0.92);
   --orb1:#fce4ec;--orb2:#e8f5e9;--orb3:#fff8e1;
 }
+[data-theme="bloom"] {
+  --bg1:#fff5f7;--bg2:#ffeef2;--nav-bg:rgba(255,240,245,0.92);
+  --card:#fff8fa;--border:rgba(232,150,170,0.25);
+  --text1:#5a1a2a;--text2:#7a3040;--text3:#b06070;
+  --shadow:rgba(200,80,110,0.15);--gold:#e8789a;--green2:#c87898;
+  --accent:#e8789a;--accent2:#c4566a;--accent-glow:rgba(232,120,154,0.3);
+}
+
+/* خلفية الورود المتحركة */
+.rose-bg{display:none;position:fixed;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:0;overflow:hidden;}
+[data-theme="bloom"] .rose-bg{display:block;}
+.rose-bg .petal{position:absolute;font-size:22px;opacity:0;animation:fall linear infinite;}
+@keyframes fall{
+  0%  {opacity:0;transform:translateY(-60px) rotate(0deg);}
+  10% {opacity:0.7;}
+  90% {opacity:0.5;}
+  100%{opacity:0;transform:translateY(110vh) rotate(360deg);}
+}
+/* عشان الصفحة تكون فوق الخلفية */
+[data-theme="bloom"] .app-wrap,
+[data-theme="bloom"] .nav-bar,
+[data-theme="bloom"] .header-top{position:relative;z-index:1;}
+
 [data-theme="ocean"] {
   --bg:#0d1f2d;--bg2:#112436;--card:rgba(255,255,255,0.06);
   --border:rgba(78,174,205,0.25);--border2:rgba(255,255,255,0.1);
@@ -158,7 +181,7 @@ header{
 .theme-panel.open{display:block;animation:fadeIn .2s ease;}
 @keyframes fadeIn{from{opacity:0;transform:translateX(-50%) translateY(-8px);}to{opacity:1;transform:translateX(-50%) translateY(0);}}
 .theme-panel h4{font-size:10px;font-weight:700;color:var(--text3);letter-spacing:2px;text-transform:uppercase;margin-bottom:10px;text-align:center;}
-.themes-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:8px;}
+.themes-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;}
 .th-opt{
   display:flex;flex-direction:column;align-items:center;gap:4px;cursor:pointer;
   padding:8px 4px;border-radius:10px;border:2px solid transparent;transition:.2s;
@@ -542,6 +565,9 @@ input[type="date"]{width:100%;padding:10px 12px;border:1px solid var(--border);b
 <div id="app">
 
 <header>
+  <!-- خلفية ورود متحركة للثيم bloom -->
+  <div class="rose-bg" id="roseBg"></div>
+
   <div class="header-top">
     <div class="brand">
       <div class="emblem">🌹</div>
@@ -603,6 +629,10 @@ input[type="date"]{width:100%;padding:10px 12px;border:1px solid var(--border);b
       <div class="th-opt" onclick="setTheme('lavender')" id="th-lavender">
         <div class="th-circle" style="background:linear-gradient(135deg,#f5f0ff,#9664dc)"></div>
         <span class="th-name">بنفسج</span>
+      </div>
+      <div class="th-opt" onclick="setTheme('bloom')" id="th-bloom">
+        <div class="th-circle" style="background:linear-gradient(135deg,#fff0f5,#e8789a);border:2px solid #e8789a;"></div>
+        <span class="th-name">🌸 ورود</span>
       </div>
     </div>
   </div>
@@ -804,7 +834,34 @@ input[type="date"]{width:100%;padding:10px 12px;border:1px solid var(--border);b
 </div>
 </div>
 
-
+<!-- THEME PANEL -->
+<div id="themePanel" style="display:none;position:fixed;top:62px;left:50%;transform:translateX(-50%);
+  z-index:300;background:var(--bg);border:1px solid var(--border2);border-radius:16px;
+  padding:16px;box-shadow:0 8px 32px var(--shadow);min-width:280px;">
+  <div style="font-size:10px;font-weight:700;color:var(--text3);letter-spacing:2px;text-transform:uppercase;text-align:center;margin-bottom:12px;">اختر الثيم</div>
+  <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:8px;">
+    <div onclick="setTheme('rose')" id="th-rose" style="cursor:pointer;text-align:center;padding:8px 4px;border-radius:10px;border:2px solid transparent;transition:.2s;">
+      <div style="width:36px;height:36px;border-radius:50%;background:linear-gradient(135deg,#f9c8d0,#e8798a);margin:0 auto 4px;box-shadow:0 2px 8px rgba(0,0,0,.2);"></div>
+      <span style="font-size:9px;color:var(--text3);font-weight:600;">وردي</span>
+    </div>
+    <div onclick="setTheme('ocean')" id="th-ocean" style="cursor:pointer;text-align:center;padding:8px 4px;border-radius:10px;border:2px solid transparent;transition:.2s;">
+      <div style="width:36px;height:36px;border-radius:50%;background:linear-gradient(135deg,#0d2233,#4eaccd);margin:0 auto 4px;box-shadow:0 2px 8px rgba(0,0,0,.2);"></div>
+      <span style="font-size:9px;color:var(--text3);font-weight:600;">أزرق</span>
+    </div>
+    <div onclick="setTheme('forest')" id="th-forest" style="cursor:pointer;text-align:center;padding:8px 4px;border-radius:10px;border:2px solid transparent;transition:.2s;">
+      <div style="width:36px;height:36px;border-radius:50%;background:linear-gradient(135deg,#e4ede4,#5a8a6a);margin:0 auto 4px;box-shadow:0 2px 8px rgba(0,0,0,.2);"></div>
+      <span style="font-size:9px;color:var(--text3);font-weight:600;">أخضر</span>
+    </div>
+    <div onclick="setTheme('gold')" id="th-gold" style="cursor:pointer;text-align:center;padding:8px 4px;border-radius:10px;border:2px solid transparent;transition:.2s;">
+      <div style="width:36px;height:36px;border-radius:50%;background:linear-gradient(135deg,#1a1208,#d4a843);margin:0 auto 4px;box-shadow:0 2px 8px rgba(0,0,0,.2);"></div>
+      <span style="font-size:9px;color:var(--text3);font-weight:600;">ذهبي</span>
+    </div>
+    <div onclick="setTheme('lavender')" id="th-lavender" style="cursor:pointer;text-align:center;padding:8px 4px;border-radius:10px;border:2px solid transparent;transition:.2s;">
+      <div style="width:36px;height:36px;border-radius:50%;background:linear-gradient(135deg,#f5f0ff,#9664dc);margin:0 auto 4px;box-shadow:0 2px 8px rgba(0,0,0,.2);"></div>
+      <span style="font-size:9px;color:var(--text3);font-weight:600;">بنفسجي</span>
+    </div>
+  </div>
+</div>
 
 <!-- MODALS -->
 <div class="overlay" id="addProdOv">
@@ -860,19 +917,16 @@ input[type="date"]{width:100%;padding:10px 12px;border:1px solid var(--border);b
       <div style="font-size:13px;font-weight:800;color:var(--text);">🌸 الورد</div>
       <button onclick="toggleFlowerPanel()" style="background:none;border:none;font-size:18px;cursor:pointer;color:var(--text3);">✕</button>
     </div>
-    <!-- تبويبات -->
     <div style="display:flex;background:rgba(0,0,0,0.04);border-radius:10px;padding:3px;margin-bottom:14px;gap:3px;">
       <button id="ftab-stock" onclick="switchFlowerTab('stock')" style="flex:1;padding:7px;border:none;border-radius:8px;font-family:'Tajawal',sans-serif;font-size:12px;font-weight:700;cursor:pointer;background:rgba(255,255,255,0.8);color:var(--green2);box-shadow:0 2px 6px var(--shadow);">🌹 المخزون</button>
       <button id="ftab-inv" onclick="switchFlowerTab('inv')" style="flex:1;padding:7px;border:none;border-radius:8px;font-family:'Tajawal',sans-serif;font-size:12px;font-weight:700;cursor:pointer;background:transparent;color:var(--text3);">🧾 فواتير شركات الورد</button>
     </div>
-    <!-- المخزون -->
     <div id="flower-tab-stock">
       <div id="flowerList"></div>
       <div style="font-size:10px;color:var(--text3);text-align:center;margin-top:10px;line-height:1.8;">
         📸 صورة + <b>"عد الورد"</b> &nbsp;|&nbsp; ✏️ <b>"عندي ورد روز 20"</b>
       </div>
     </div>
-    <!-- فواتير الشرا -->
     <div id="flower-tab-inv" style="display:none;">
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
         <select id="invMonthSel" onchange="loadFlowerInvoices()" style="flex:1;padding:8px 10px;border:1px solid var(--border);border-radius:10px;background:var(--bg2);color:var(--text);font-family:'Tajawal',sans-serif;font-size:12px;"></select>
@@ -894,6 +948,24 @@ input[type="date"]{width:100%;padding:10px 12px;border:1px solid var(--border);b
 const THEMES = ['rose','ocean','forest','gold','lavender'];
 let currentTheme = localStorage.getItem('fairuz_theme') || 'rose';
 
+// ── خلفية الورود المتحركة ──
+function initRoseBg(){
+  const bg = document.getElementById('roseBg');
+  if(!bg || bg.children.length > 0) return;
+  const petals = ['🌸','🌹','🌺','🌼','🌷','💮','🏵️'];
+  for(let i=0;i<22;i++){
+    const p = document.createElement('div');
+    p.className = 'petal';
+    p.textContent = petals[Math.floor(Math.random()*petals.length)];
+    const left = Math.random()*100;
+    const dur  = 6 + Math.random()*10;
+    const delay= Math.random()*12;
+    const size = 14 + Math.random()*16;
+    p.style.cssText = `left:${left}%;font-size:${size}px;animation-duration:${dur}s;animation-delay:-${delay}s;`;
+    bg.appendChild(p);
+  }
+}
+
 function setTheme(t){
   currentTheme = t;
   document.documentElement.setAttribute('data-theme', t);
@@ -901,6 +973,7 @@ function setTheme(t){
   document.querySelectorAll('.th-opt').forEach(el => el.classList.remove('active'));
   const el = document.getElementById('th-'+t);
   if(el) el.classList.add('active');
+  if(t==='bloom') initRoseBg();
   if(barCI) loadCharts();
 }
 
@@ -1436,12 +1509,11 @@ async function loadFlowerInvoices(){
     const sel=document.getElementById('invMonthSel');
     const month=sel.value||'';
     const d=await api('/api/flower_invoices'+(month?'?month='+month:''));
-    // populate month selector
     if(d.months&&d.months.length){
       const cur=sel.value||d.month;
       sel.innerHTML=d.months.map(m=>`<option value="${m}" ${m===cur?'selected':''}>${m}</option>`).join('');
     }
-    document.getElementById('invMonthTotal').textContent=d.total?formatOMR(d.total)+'':'';
+    document.getElementById('invMonthTotal').textContent=d.total?formatOMR(d.total):'';
     const list=document.getElementById('flowerInvList');
     if(!d.invoices||!d.invoices.length){
       list.innerHTML=`<div style="padding:20px;text-align:center;color:var(--text3);font-size:12px;">لا توجد فواتير هذا الشهر<br>أرسل صورة + تعليق <b>"فاتورة ورد"</b></div>`;
@@ -1570,6 +1642,27 @@ function showToast(msg){const el=document.getElementById('toast');el.textContent
     if(!sel.value) sel.selectedIndex = 0;
   }
 })();
+
+/* ── THEMES ── */
+function setTheme(t){
+  document.documentElement.setAttribute('data-theme',t);
+  localStorage.setItem('fairuz_theme',t);
+  document.querySelectorAll('[id^="th-"]').forEach(el=>{
+    el.style.borderColor=el.id==='th-'+t?'var(--accent)':'transparent';
+    el.style.background=el.id==='th-'+t?'rgba(255,255,255,0.15)':'transparent';
+  });
+}
+function toggleThemePanel(){
+  const p=document.getElementById('themePanel');
+  p.style.display=p.style.display==='none'?'block':'none';
+}
+document.addEventListener('click',e=>{
+  if(!e.target.closest('#themePanel')&&!e.target.closest('button[onclick*="toggleThemePanel"]'))
+    document.getElementById('themePanel').style.display='none';
+});
+// Init saved theme
+const savedTheme=localStorage.getItem('fairuz_theme')||'rose';
+setTheme(savedTheme);
 
 /* ── BILINGUAL ── */
 const T = {
@@ -2924,7 +3017,6 @@ def webhook():
 
     # ── إضافة ورد يدوي: انتظار العدد والوحدة ──
     if state.get("waiting") == "flower_manual_count":
-        # قبول "20" أو "20 بندلة" أو "20 وردة"
         m = re.match(r'^(\d+)\s*(بندلة|بنادل|حزمة|حزم|وردة|وردات|قطعة)?$', text.strip())
         if m:
             cnt = int(m.group(1))
@@ -2964,10 +3056,9 @@ def webhook():
                         "دوار","زنبق","ليلوم","ارانوس","ليموناي","ايوروبسم","أوركيد","توليب"]
     _has_flower_kw  = any(kw in text for kw in _flower_keywords)
     _has_number     = bool(re.search(r'\d+', text))
-    _is_bulk        = len(re.findall(r'\d+', text)) >= 3  # 3+ أرقام = قائمة مجموعة
+    _is_bulk        = len(re.findall(r'\d+', text)) >= 3
 
     if _has_flower_kw and _has_number:
-        # ── قائمة كبيرة → أرسلها للذكاء الاصطناعي ──
         if _is_bulk or "\n" in text or len(text) > 60:
             tg(chat, "🌸 جاري تحليل قائمة الورد...")
             parsed = groq_parse_flower_text(text)
@@ -2990,8 +3081,6 @@ def webhook():
                 tg(chat, "⚠️ ما قدرت أحلل القائمة. جرّب /ورد_يدوي لإضافة كل نوع على حدة.")
             return "ok"
 
-        # ── جملة واحدة مثل "عندي ورد روز احمر 20" ──
-        # نمط: (عندي/معي/لدي) (اسم الورد) (عدد) (وحدة اختيارية)
         _single = re.search(
             r'(?:عندي|معي|لدي|عدد)\s*'
             r'(?:ورد\s*|زهور\s*|وردة\s*)?'
@@ -3004,7 +3093,6 @@ def webhook():
             cnt = int(_single.group(2))
             raw_unit = _single.group(3) or ""
             unit = "بندلة" if raw_unit in ("بندلة","بنادل","حزمة") else "وردة"
-            # تنظيف الاسم من كلمات الحشو
             for stop in ["ورد","وردة","زهور","الي","اللي","معي","عندي","لدي","عدد","من","في","و"]:
                 raw_name = raw_name.replace(stop,"").strip()
             name = raw_name if len(raw_name) >= 2 else "ورد"
@@ -3934,7 +4022,6 @@ def api_get_flower_invoices():
         try: inv["items"] = json.loads(inv["items"] or "[]")
         except: inv["items"] = []
     total = sum(float(i["total"]) for i in invs)
-    # List of available months
     months = db_get("SELECT DISTINCT month FROM flower_invoices ORDER BY month DESC")
     return jsonify({"invoices": invs, "total": total, "month": m,
                     "months": [r["month"] for r in months]})
