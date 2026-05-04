@@ -60,29 +60,6 @@ HTML_PAGE = """<!DOCTYPE html>
   --nav-bg:rgba(253,248,242,0.92);
   --orb1:#fce4ec;--orb2:#e8f5e9;--orb3:#fff8e1;
 }
-[data-theme="bloom"] {
-  --bg1:#fff5f7;--bg2:#ffeef2;--nav-bg:rgba(255,240,245,0.92);
-  --card:#fff8fa;--border:rgba(232,150,170,0.25);
-  --text1:#5a1a2a;--text2:#7a3040;--text3:#b06070;
-  --shadow:rgba(200,80,110,0.15);--gold:#e8789a;--green2:#c87898;
-  --accent:#e8789a;--accent2:#c4566a;--accent-glow:rgba(232,120,154,0.3);
-}
-
-/* خلفية الورود المتحركة */
-.rose-bg{display:none;position:fixed;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:0;overflow:hidden;}
-[data-theme="bloom"] .rose-bg{display:block;}
-.rose-bg .petal{position:absolute;font-size:22px;opacity:0;animation:fall linear infinite;}
-@keyframes fall{
-  0%  {opacity:0;transform:translateY(-60px) rotate(0deg);}
-  10% {opacity:0.7;}
-  90% {opacity:0.5;}
-  100%{opacity:0;transform:translateY(110vh) rotate(360deg);}
-}
-/* عشان الصفحة تكون فوق الخلفية */
-[data-theme="bloom"] .app-wrap,
-[data-theme="bloom"] .nav-bar,
-[data-theme="bloom"] .header-top{position:relative;z-index:1;}
-
 [data-theme="ocean"] {
   --bg:#0d1f2d;--bg2:#112436;--card:rgba(255,255,255,0.06);
   --border:rgba(78,174,205,0.25);--border2:rgba(255,255,255,0.1);
@@ -181,7 +158,7 @@ header{
 .theme-panel.open{display:block;animation:fadeIn .2s ease;}
 @keyframes fadeIn{from{opacity:0;transform:translateX(-50%) translateY(-8px);}to{opacity:1;transform:translateX(-50%) translateY(0);}}
 .theme-panel h4{font-size:10px;font-weight:700;color:var(--text3);letter-spacing:2px;text-transform:uppercase;margin-bottom:10px;text-align:center;}
-.themes-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;}
+.themes-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:8px;}
 .th-opt{
   display:flex;flex-direction:column;align-items:center;gap:4px;cursor:pointer;
   padding:8px 4px;border-radius:10px;border:2px solid transparent;transition:.2s;
@@ -565,9 +542,6 @@ input[type="date"]{width:100%;padding:10px 12px;border:1px solid var(--border);b
 <div id="app">
 
 <header>
-  <!-- خلفية ورود متحركة للثيم bloom -->
-  <div class="rose-bg" id="roseBg"></div>
-
   <div class="header-top">
     <div class="brand">
       <div class="emblem">🌹</div>
@@ -629,10 +603,6 @@ input[type="date"]{width:100%;padding:10px 12px;border:1px solid var(--border);b
       <div class="th-opt" onclick="setTheme('lavender')" id="th-lavender">
         <div class="th-circle" style="background:linear-gradient(135deg,#f5f0ff,#9664dc)"></div>
         <span class="th-name">بنفسج</span>
-      </div>
-      <div class="th-opt" onclick="setTheme('bloom')" id="th-bloom">
-        <div class="th-circle" style="background:linear-gradient(135deg,#fff0f5,#e8789a);border:2px solid #e8789a;"></div>
-        <span class="th-name">🌸 ورود</span>
       </div>
     </div>
   </div>
@@ -834,34 +804,7 @@ input[type="date"]{width:100%;padding:10px 12px;border:1px solid var(--border);b
 </div>
 </div>
 
-<!-- THEME PANEL -->
-<div id="themePanel" style="display:none;position:fixed;top:62px;left:50%;transform:translateX(-50%);
-  z-index:300;background:var(--bg);border:1px solid var(--border2);border-radius:16px;
-  padding:16px;box-shadow:0 8px 32px var(--shadow);min-width:280px;">
-  <div style="font-size:10px;font-weight:700;color:var(--text3);letter-spacing:2px;text-transform:uppercase;text-align:center;margin-bottom:12px;">اختر الثيم</div>
-  <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:8px;">
-    <div onclick="setTheme('rose')" id="th-rose" style="cursor:pointer;text-align:center;padding:8px 4px;border-radius:10px;border:2px solid transparent;transition:.2s;">
-      <div style="width:36px;height:36px;border-radius:50%;background:linear-gradient(135deg,#f9c8d0,#e8798a);margin:0 auto 4px;box-shadow:0 2px 8px rgba(0,0,0,.2);"></div>
-      <span style="font-size:9px;color:var(--text3);font-weight:600;">وردي</span>
-    </div>
-    <div onclick="setTheme('ocean')" id="th-ocean" style="cursor:pointer;text-align:center;padding:8px 4px;border-radius:10px;border:2px solid transparent;transition:.2s;">
-      <div style="width:36px;height:36px;border-radius:50%;background:linear-gradient(135deg,#0d2233,#4eaccd);margin:0 auto 4px;box-shadow:0 2px 8px rgba(0,0,0,.2);"></div>
-      <span style="font-size:9px;color:var(--text3);font-weight:600;">أزرق</span>
-    </div>
-    <div onclick="setTheme('forest')" id="th-forest" style="cursor:pointer;text-align:center;padding:8px 4px;border-radius:10px;border:2px solid transparent;transition:.2s;">
-      <div style="width:36px;height:36px;border-radius:50%;background:linear-gradient(135deg,#e4ede4,#5a8a6a);margin:0 auto 4px;box-shadow:0 2px 8px rgba(0,0,0,.2);"></div>
-      <span style="font-size:9px;color:var(--text3);font-weight:600;">أخضر</span>
-    </div>
-    <div onclick="setTheme('gold')" id="th-gold" style="cursor:pointer;text-align:center;padding:8px 4px;border-radius:10px;border:2px solid transparent;transition:.2s;">
-      <div style="width:36px;height:36px;border-radius:50%;background:linear-gradient(135deg,#1a1208,#d4a843);margin:0 auto 4px;box-shadow:0 2px 8px rgba(0,0,0,.2);"></div>
-      <span style="font-size:9px;color:var(--text3);font-weight:600;">ذهبي</span>
-    </div>
-    <div onclick="setTheme('lavender')" id="th-lavender" style="cursor:pointer;text-align:center;padding:8px 4px;border-radius:10px;border:2px solid transparent;transition:.2s;">
-      <div style="width:36px;height:36px;border-radius:50%;background:linear-gradient(135deg,#f5f0ff,#9664dc);margin:0 auto 4px;box-shadow:0 2px 8px rgba(0,0,0,.2);"></div>
-      <span style="font-size:9px;color:var(--text3);font-weight:600;">بنفسجي</span>
-    </div>
-  </div>
-</div>
+
 
 <!-- MODALS -->
 <div class="overlay" id="addProdOv">
@@ -913,13 +856,32 @@ input[type="date"]{width:100%;padding:10px 12px;border:1px solid var(--border);b
 <!-- FLOWER PANEL -->
 <div id="flowerPanel" onclick="if(event.target===this)toggleFlowerPanel()">
   <div class="flower-sheet">
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
-      <div style="font-size:13px;font-weight:800;color:var(--text);">🌸 مخزون الورد <span class="exp-badge" style="font-size:9px;padding:2px 6px;">تجريبي</span></div>
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
+      <div style="font-size:13px;font-weight:800;color:var(--text);">🌸 الورد</div>
       <button onclick="toggleFlowerPanel()" style="background:none;border:none;font-size:18px;cursor:pointer;color:var(--text3);">✕</button>
     </div>
-    <div id="flowerList"></div>
-    <div style="font-size:10px;color:var(--text3);text-align:center;margin-top:10px;line-height:1.7;">
-      📸 أرسل للبوت صورة الورد مع تعليق <b>"عد الورد"</b>
+    <!-- تبويبات -->
+    <div style="display:flex;background:rgba(0,0,0,0.04);border-radius:10px;padding:3px;margin-bottom:14px;gap:3px;">
+      <button id="ftab-stock" onclick="switchFlowerTab('stock')" style="flex:1;padding:7px;border:none;border-radius:8px;font-family:'Tajawal',sans-serif;font-size:12px;font-weight:700;cursor:pointer;background:rgba(255,255,255,0.8);color:var(--green2);box-shadow:0 2px 6px var(--shadow);">🌹 المخزون</button>
+      <button id="ftab-inv" onclick="switchFlowerTab('inv')" style="flex:1;padding:7px;border:none;border-radius:8px;font-family:'Tajawal',sans-serif;font-size:12px;font-weight:700;cursor:pointer;background:transparent;color:var(--text3);">🧾 فواتير شركات الورد</button>
+    </div>
+    <!-- المخزون -->
+    <div id="flower-tab-stock">
+      <div id="flowerList"></div>
+      <div style="font-size:10px;color:var(--text3);text-align:center;margin-top:10px;line-height:1.8;">
+        📸 صورة + <b>"عد الورد"</b> &nbsp;|&nbsp; ✏️ <b>"عندي ورد روز 20"</b>
+      </div>
+    </div>
+    <!-- فواتير الشرا -->
+    <div id="flower-tab-inv" style="display:none;">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
+        <select id="invMonthSel" onchange="loadFlowerInvoices()" style="flex:1;padding:8px 10px;border:1px solid var(--border);border-radius:10px;background:var(--bg2);color:var(--text);font-family:'Tajawal',sans-serif;font-size:12px;"></select>
+        <div id="invMonthTotal" style="font-size:11px;font-weight:700;color:var(--accent);white-space:nowrap;"></div>
+      </div>
+      <div id="flowerInvList"></div>
+      <div style="font-size:10px;color:var(--text3);text-align:center;margin-top:10px;line-height:1.8;">
+        📸 صورة فاتورة + تعليق <b>"فاتورة ورد"</b>
+      </div>
     </div>
   </div>
 </div>
@@ -932,24 +894,6 @@ input[type="date"]{width:100%;padding:10px 12px;border:1px solid var(--border);b
 const THEMES = ['rose','ocean','forest','gold','lavender'];
 let currentTheme = localStorage.getItem('fairuz_theme') || 'rose';
 
-// ── خلفية الورود المتحركة ──
-function initRoseBg(){
-  const bg = document.getElementById('roseBg');
-  if(!bg || bg.children.length > 0) return;
-  const petals = ['🌸','🌹','🌺','🌼','🌷','💮','🏵️'];
-  for(let i=0;i<22;i++){
-    const p = document.createElement('div');
-    p.className = 'petal';
-    p.textContent = petals[Math.floor(Math.random()*petals.length)];
-    const left = Math.random()*100;
-    const dur  = 6 + Math.random()*10;
-    const delay= Math.random()*12;
-    const size = 14 + Math.random()*16;
-    p.style.cssText = `left:${left}%;font-size:${size}px;animation-duration:${dur}s;animation-delay:-${delay}s;`;
-    bg.appendChild(p);
-  }
-}
-
 function setTheme(t){
   currentTheme = t;
   document.documentElement.setAttribute('data-theme', t);
@@ -957,7 +901,6 @@ function setTheme(t){
   document.querySelectorAll('.th-opt').forEach(el => el.classList.remove('active'));
   const el = document.getElementById('th-'+t);
   if(el) el.classList.add('active');
-  if(t==='bloom') initRoseBg();
   if(barCI) loadCharts();
 }
 
@@ -1442,25 +1385,98 @@ async function saveRent(){
 async function loadFlowers(){
   try{
     const d=await api('/api/flowers');
+    const totalStems=(d.flowers||[]).filter(f=>f.unit!=='بندلة').reduce((s,f)=>s+f.count,0);
+    const totalBundles=(d.flowers||[]).filter(f=>f.unit==='بندلة').reduce((s,f)=>s+f.count,0);
     document.getElementById('flowerCount').textContent=d.total||0;
     document.getElementById('flowerList').innerHTML=d.flowers&&d.flowers.length?
-      d.flowers.map(f=>`<div style="display:flex;align-items:center;gap:8px;padding:8px 4px;border-bottom:1px solid var(--border);">
-        <span style="font-size:18px;">🌹</span>
-        <div style="flex:1;"><div style="font-size:12px;font-weight:600;">${f.name}</div></div>
-        <button onclick="updateFlowerCount(${f.id},${f.count-1})" style="width:26px;height:26px;border-radius:50%;border:1px solid var(--border);background:var(--glass);cursor:pointer;">−</button>
-        <span style="font-size:14px;font-weight:800;min-width:24px;text-align:center;color:var(--accent);">${f.count}</span>
-        <button onclick="updateFlowerCount(${f.id},${f.count+1})" style="width:26px;height:26px;border-radius:50%;border:1px solid var(--border);background:var(--glass);cursor:pointer;">+</button>
-        <button onclick="delFlower(${f.id})" style="background:none;border:none;cursor:pointer;color:var(--text3);">🗑</button>
-      </div>`).join('')+`<div style="font-size:9px;color:var(--text3);text-align:center;margin-top:8px;">آخر تحديث: ${d.updated||'—'}</div>`:
-      `<div style="padding:20px;text-align:center;color:var(--text3);font-size:12px;">لا يوجد مخزون<br>أرسل للبوت صورة مع "عد الورد"</div>`;
+      d.flowers.map(f=>{
+        const isBundle=f.unit==='بندلة';
+        const ico=isBundle?'🌸':'🌹';
+        const unitLabel=isBundle?'بندلة':'وردة';
+        return `<div style="display:flex;align-items:center;gap:8px;padding:8px 4px;border-bottom:1px solid var(--border);">
+          <span style="font-size:18px;">${ico}</span>
+          <div style="flex:1;">
+            <div style="font-size:12px;font-weight:600;">${f.name}</div>
+            <div style="font-size:9px;color:var(--text3);">${unitLabel}</div>
+          </div>
+          <button onclick="updateFlowerCount(${f.id},${f.count-1},'${f.unit||'وردة'}')" style="width:26px;height:26px;border-radius:50%;border:1px solid var(--border);background:var(--glass);cursor:pointer;">−</button>
+          <span style="font-size:14px;font-weight:800;min-width:28px;text-align:center;color:${isBundle?'var(--gold)':'var(--accent)'};">${f.count}</span>
+          <button onclick="updateFlowerCount(${f.id},${f.count+1},'${f.unit||'وردة'}')" style="width:26px;height:26px;border-radius:50%;border:1px solid var(--border);background:var(--glass);cursor:pointer;">+</button>
+          <button onclick="delFlower(${f.id})" style="background:none;border:none;cursor:pointer;color:var(--text3);">🗑</button>
+        </div>`;
+      }).join('')+
+      `<div style="display:flex;gap:8px;padding:10px 4px 4px;justify-content:center;">
+        ${totalStems?`<span style="font-size:10px;background:rgba(232,121,138,.12);color:var(--accent);padding:3px 10px;border-radius:20px;font-weight:700;">🌹 ${totalStems} وردة</span>`:''}
+        ${totalBundles?`<span style="font-size:10px;background:rgba(212,168,67,.12);color:var(--gold);padding:3px 10px;border-radius:20px;font-weight:700;">🌸 ${totalBundles} بندلة</span>`:''}
+      </div>
+      <div style="font-size:9px;color:var(--text3);text-align:center;margin-top:4px;">آخر تحديث: ${d.updated||'—'}</div>`:
+      `<div style="padding:20px;text-align:center;color:var(--text3);font-size:12px;">لا يوجد مخزون<br>أرسل للبوت: <b>عندي ورد روز أحمر 20</b><br>أو صورة مع "عد الورد"</div>`;
   }catch(e){}
+}
+let currentFlowerTab='stock';
+function switchFlowerTab(tab){
+  currentFlowerTab=tab;
+  document.getElementById('flower-tab-stock').style.display=tab==='stock'?'block':'none';
+  document.getElementById('flower-tab-inv').style.display=tab==='inv'?'block':'none';
+  document.getElementById('ftab-stock').style.cssText=tab==='stock'?
+    'flex:1;padding:7px;border:none;border-radius:8px;font-family:Tajawal,sans-serif;font-size:12px;font-weight:700;cursor:pointer;background:rgba(255,255,255,0.8);color:var(--green2);box-shadow:0 2px 6px var(--shadow);':
+    'flex:1;padding:7px;border:none;border-radius:8px;font-family:Tajawal,sans-serif;font-size:12px;font-weight:700;cursor:pointer;background:transparent;color:var(--text3);';
+  document.getElementById('ftab-inv').style.cssText=tab==='inv'?
+    'flex:1;padding:7px;border:none;border-radius:8px;font-family:Tajawal,sans-serif;font-size:12px;font-weight:700;cursor:pointer;background:rgba(255,255,255,0.8);color:var(--accent2);box-shadow:0 2px 6px var(--shadow);':
+    'flex:1;padding:7px;border:none;border-radius:8px;font-family:Tajawal,sans-serif;font-size:12px;font-weight:700;cursor:pointer;background:transparent;color:var(--text3);';
+  if(tab==='inv')loadFlowerInvoices();
 }
 function toggleFlowerPanel(){
   flowerOpen=!flowerOpen;
   document.getElementById('flowerPanel').classList.toggle('open',flowerOpen);
-  if(flowerOpen)loadFlowers();
+  if(flowerOpen){ if(currentFlowerTab==='stock') loadFlowers(); else loadFlowerInvoices(); }
 }
-async function updateFlowerCount(id,n){if(n<0)return;await api(`/api/flowers/${id}`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({count:n})});loadFlowers();}
+async function loadFlowerInvoices(){
+  try{
+    const sel=document.getElementById('invMonthSel');
+    const month=sel.value||'';
+    const d=await api('/api/flower_invoices'+(month?'?month='+month:''));
+    // populate month selector
+    if(d.months&&d.months.length){
+      const cur=sel.value||d.month;
+      sel.innerHTML=d.months.map(m=>`<option value="${m}" ${m===cur?'selected':''}>${m}</option>`).join('');
+    }
+    document.getElementById('invMonthTotal').textContent=d.total?formatOMR(d.total)+'':'';
+    const list=document.getElementById('flowerInvList');
+    if(!d.invoices||!d.invoices.length){
+      list.innerHTML=`<div style="padding:20px;text-align:center;color:var(--text3);font-size:12px;">لا توجد فواتير هذا الشهر<br>أرسل صورة + تعليق <b>"فاتورة ورد"</b></div>`;
+      return;
+    }
+    list.innerHTML=d.invoices.map(inv=>{
+      const items=inv.items||[];
+      const itemsHtml=items.map(i=>`
+        <div style="display:flex;justify-content:space-between;padding:3px 8px;font-size:10px;color:var(--text2);">
+          <span>${i.unit==='بندلة'?'🌸':'🌹'} ${i.name}: ${i.count} ${i.unit||'وردة'}</span>
+          ${parseFloat(i.unit_price||0)>0?`<span>${formatOMR(parseFloat(i.line_total||0))}</span>`:''}
+        </div>`).join('');
+      return `<div style="background:var(--card);border:1px solid var(--border);border-radius:14px;margin-bottom:10px;overflow:hidden;">
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 12px;border-bottom:1px solid var(--border);">
+          <div>
+            <div style="font-size:12px;font-weight:800;">🏪 ${inv.company||'غير محدد'}</div>
+            <div style="font-size:10px;color:var(--text3);">📅 ${inv.inv_date}</div>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px;">
+            <div style="font-size:13px;font-weight:800;color:var(--accent);">${formatOMR(parseFloat(inv.total||0))}</div>
+            <button onclick="delFlowerInvoice(${inv.id})" style="background:none;border:none;cursor:pointer;color:var(--text3);font-size:14px;">🗑</button>
+          </div>
+        </div>
+        ${itemsHtml?`<div style="padding:4px 0;">${itemsHtml}</div>`:''}
+      </div>`;
+    }).join('');
+  }catch(e){}
+}
+function formatOMR(n){return n.toFixed(3)+' ر.ع';}
+async function delFlowerInvoice(id){
+  if(!confirm('حذف الفاتورة؟'))return;
+  await api('/api/flower_invoices/'+id,{method:'DELETE'});
+  loadFlowerInvoices();
+}
+async function updateFlowerCount(id,n,unit){if(n<0)return;await api(`/api/flowers/${id}`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({count:n,unit:unit||'وردة'})});loadFlowers();}
 async function delFlower(id){await api(`/api/flowers/${id}`,{method:'DELETE'});loadFlowers();showToast(t('delToast'));}
 
 /* ── REPORTS ── */
@@ -1554,27 +1570,6 @@ function showToast(msg){const el=document.getElementById('toast');el.textContent
     if(!sel.value) sel.selectedIndex = 0;
   }
 })();
-
-/* ── THEMES ── */
-function setTheme(t){
-  document.documentElement.setAttribute('data-theme',t);
-  localStorage.setItem('fairuz_theme',t);
-  document.querySelectorAll('[id^="th-"]').forEach(el=>{
-    el.style.borderColor=el.id==='th-'+t?'var(--accent)':'transparent';
-    el.style.background=el.id==='th-'+t?'rgba(255,255,255,0.15)':'transparent';
-  });
-}
-function toggleThemePanel(){
-  const p=document.getElementById('themePanel');
-  p.style.display=p.style.display==='none'?'block':'none';
-}
-document.addEventListener('click',e=>{
-  if(!e.target.closest('#themePanel')&&!e.target.closest('button[onclick*="toggleThemePanel"]'))
-    document.getElementById('themePanel').style.display='none';
-});
-// Init saved theme
-const savedTheme=localStorage.getItem('fairuz_theme')||'rose';
-setTheme(savedTheme);
 
 /* ── BILINGUAL ── */
 const T = {
@@ -1818,11 +1813,28 @@ def init_db():
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         name TEXT NOT NULL,
         count INTEGER DEFAULT 0,
+        unit TEXT DEFAULT 'وردة',
         updated TEXT DEFAULT (datetime('now')))"""
-    if USE_TURSO: turso_run(flowers_sql)
+    flower_inv_sql = """CREATE TABLE IF NOT EXISTS flower_invoices (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        company TEXT DEFAULT '',
+        inv_date TEXT DEFAULT '',
+        month TEXT DEFAULT '',
+        total REAL DEFAULT 0,
+        items TEXT DEFAULT '[]',
+        created TEXT DEFAULT (datetime('now')))"""
+    if USE_TURSO:
+        turso_run(flowers_sql)
+        turso_run(flower_inv_sql)
+        try: turso_run("ALTER TABLE flowers ADD COLUMN unit TEXT DEFAULT 'وردة'")
+        except: pass
     else:
+        for _sql in (flowers_sql, flower_inv_sql):
+            try:
+                conn4=sqlite3.connect(DB_PATH); conn4.execute(_sql); conn4.commit(); conn4.close()
+            except: pass
         try:
-            conn4=sqlite3.connect(DB_PATH); conn4.execute(flowers_sql); conn4.commit(); conn4.close()
+            conn4=sqlite3.connect(DB_PATH); conn4.execute("ALTER TABLE flowers ADD COLUMN unit TEXT DEFAULT 'وردة'"); conn4.commit(); conn4.close()
         except: pass
     # Expenses table
     fixed_sqls = [
@@ -2161,7 +2173,7 @@ def groq_count_flowers(file_id):
         fp = r.json()["result"]["file_path"]
         img = requests.get(f"https://api.telegram.org/file/bot{BOT_TOKEN}/{fp}", timeout=15).content
         b64 = base64.b64encode(img).decode()
-        prompt = 'Count and identify all flowers in this image. For each flower type, count exactly how many stems/flowers are visible. Reply ONLY with JSON array: [{"name":"Rose","name_ar":"ورد","count":5},{"name":"Lily","name_ar":"زنبق","count":3}]. Use Arabic flower names when possible.'
+        prompt = 'Count and identify all flowers in this image. For each flower type, count stems/flowers. Some flowers come in bundles (like gypsophila/baby\'s breath = بندلة). Reply ONLY with JSON array: [{"name":"روز أحمر","count":5,"unit":"وردة"},{"name":"جبسون","count":2,"unit":"بندلة"}]. Use Arabic names. unit is "وردة" for individual stems, "بندلة" for bundle flowers.'
         res = requests.post("https://api.groq.com/openai/v1/chat/completions",
             headers={"Authorization": f"Bearer {GROQ_KEY}", "Content-Type": "application/json"},
             json={"model": "meta-llama/llama-4-scout-17b-16e-instruct",
@@ -2181,6 +2193,83 @@ def groq_count_flowers(file_id):
         return None
     except Exception as e:
         print("Groq flower error:", e); return None
+
+def groq_read_flower_supplier_invoice(file_id):
+    """Read a handwritten flower supplier invoice image using Groq vision."""
+    if not GROQ_KEY or not BOT_TOKEN: return None
+    try:
+        import base64
+        r = requests.get(f"https://api.telegram.org/bot{BOT_TOKEN}/getFile",
+                        params={"file_id": file_id}, timeout=10)
+        fp = r.json()["result"]["file_path"]
+        img = requests.get(f"https://api.telegram.org/file/bot{BOT_TOKEN}/{fp}", timeout=15).content
+        b64 = base64.b64encode(img).decode()
+        prompt = """This is a flower supplier invoice (possibly handwritten in Arabic). Extract ALL information carefully.
+Return ONLY a JSON object in this exact format:
+{
+  "company": "company/supplier name or empty string",
+  "date": "date in DD/MM/YYYY format or empty string",
+  "items": [
+    {"name": "flower name in Arabic", "count": 10, "unit": "وردة", "unit_price": 0.5, "line_total": 5.0}
+  ],
+  "total": 25.500,
+  "found": true
+}
+Rules:
+- unit is "بندلة" for bundle flowers (gypsophila/جبسون, limonium/ليموناي, etc), otherwise "وردة"
+- If price not visible set unit_price to 0
+- Extract company name from any header/stamp/handwriting on the invoice
+- found=false if this is NOT a flower invoice
+- All flower names in Arabic"""
+        res = requests.post("https://api.groq.com/openai/v1/chat/completions",
+            headers={"Authorization": f"Bearer {GROQ_KEY}", "Content-Type": "application/json"},
+            json={"model": "meta-llama/llama-4-scout-17b-16e-instruct",
+                  "messages": [{"role": "user", "content": [
+                      {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{b64}"}},
+                      {"type": "text", "text": prompt}
+                  ]}],
+                  "max_tokens": 1000, "temperature": 0}, timeout=30)
+        resp = res.json()
+        if "error" in resp:
+            print("Groq flower invoice error:", resp["error"]); return None
+        raw = resp["choices"][0]["message"]["content"]
+        match = re.search(r'\{.*\}', raw, re.DOTALL)
+        if match:
+            return json.loads(match.group())
+        return None
+    except Exception as e:
+        print("Groq flower invoice error:", e); return None
+
+def groq_parse_flower_text(text):
+    """Send bulk flower text to Groq to parse into structured list."""
+    if not GROQ_KEY: return None
+    try:
+        prompt = f"""أنت خبير في تصنيف الورود. المستخدم أرسل قائمة ورود. حوّلها إلى JSON منظّم.
+قواعد مهمة:
+- استخرج كل نوع ورد مع عدده ووحدته
+- الوحدات المتاحة: "وردة" للورود الفردية، "بندلة" للورود التي تجي في حزم (مثل جبسون، ايوروبسم، ليموناي)
+- إذا ذكر "بندلة" أو "بنادل" أو "حزمة" استخدم unit: "بندلة"
+- اللون جزء من الاسم (مثل: "روز أحمر" ← name: "روز أحمر")
+- رد فقط بـ JSON array هكذا بدون أي كلام آخر:
+[{{"name":"روز أحمر","count":20,"unit":"وردة"}},{{"name":"دوار الشمس","count":6,"unit":"وردة"}},{{"name":"جبسون","count":3,"unit":"بندلة"}}]
+
+النص المُرسل:
+{text}"""
+        res = requests.post("https://api.groq.com/openai/v1/chat/completions",
+            headers={"Authorization": f"Bearer {GROQ_KEY}", "Content-Type": "application/json"},
+            json={"model": "meta-llama/llama-4-scout-17b-16e-instruct",
+                  "messages": [{"role": "user", "content": prompt}],
+                  "max_tokens": 800, "temperature": 0}, timeout=20)
+        resp = res.json()
+        if "error" in resp:
+            print("Groq flower text error:", resp["error"]); return None
+        raw = resp["choices"][0]["message"]["content"]
+        match = re.search(r'\[.*?\]', raw, re.DOTALL)
+        if match:
+            return json.loads(match.group())
+        return None
+    except Exception as e:
+        print("Groq flower text error:", e); return None
 
 def groq_read_invoice(file_id):
     if not GROQ_KEY or not BOT_TOKEN: return None
@@ -2635,9 +2724,46 @@ def webhook():
     if "photo" in msg:
         file_id=msg["photo"][-1]["file_id"]; caption=msg.get("caption","").strip()
         # Check if flower counting request
-        caption_is_flowers = any(w in caption for w in ["ورد","عد","flowers","زهور","مخزون"])
+        caption_is_flowers = any(w in caption for w in ["عد الورد","عد ورد","عد زهور","مخزون ورد","count flower"])
+        # Check if flower supplier invoice
+        caption_is_flower_inv = any(w in caption for w in [
+            "فاتورة ورد","فاتورة زهور","فاتورة شركة","مورد ورد","شركة ورد",
+            "flower invoice","supplier","فاتورة مورد","فاتوره ورد","فاتوره زهور"])
         # Pre-detect electricity from caption
         caption_is_elec = any(w in caption for w in ["كهرباء","كهربا","تعبئة","تعبئه","⚡","electric","kwh","prepaid"])
+
+        if caption_is_flower_inv:
+            tg(chat,"🧾 جاري قراءة فاتورة الورد...")
+            inv = groq_read_flower_supplier_invoice(file_id)
+            if inv and inv.get("found") and inv.get("items"):
+                items     = inv.get("items", [])
+                company   = inv.get("company","").strip() or "غير محدد"
+                inv_date  = inv.get("date","").strip()
+                if not inv_date: inv_date = date
+                try:
+                    inv_month = datetime.strptime(inv_date, "%d/%m/%Y").strftime("%Y-%m")
+                except: inv_month = month
+                total = float(inv.get("total") or sum(float(i.get("line_total",0)) for i in items))
+                items_json = json.dumps(items, ensure_ascii=False)
+                db_run(
+                    "INSERT INTO flower_invoices (company,inv_date,month,total,items) VALUES (?,?,?,?,?)",
+                    (company, inv_date, inv_month, total, items_json))
+                lines = "\n".join(
+                    f"  🌹 {i['name']}: {i['count']} {i.get('unit','وردة')}"
+                    + (f" × {i['unit_price']} = {fmt_omr(float(i.get('line_total',0)))}" if float(i.get('unit_price',0))>0 else "")
+                    for i in items)
+                tg(chat,
+                   f"✅ <b>تم حفظ فاتورة الورد!</b>\n\n"
+                   f"🏪 الشركة: <b>{company}</b>\n"
+                   f"📅 التاريخ: {inv_date}\n\n"
+                   f"<b>الأصناف:</b>\n{lines}\n\n"
+                   f"💰 الإجمالي: {fmt_omr(total)}\n\n"
+                   f"لعرض الفواتير: /فواتير_الورد")
+            else:
+                tg(chat,
+                   "⚠️ ما قدرت أقرأ الفاتورة بوضوح.\n\n"
+                   "تأكد أن التعليق يحتوي <code>فاتورة ورد</code> أو <code>فاتورة شركة</code>")
+            return "ok"
 
         if caption_is_flowers:
             tg(chat,"🌸 جاري عد الورد وتحديد الأنواع...")
@@ -2648,12 +2774,18 @@ def webhook():
                 for f in flowers:
                     name = f.get("name_ar") or f.get("name","ورد")
                     cnt = int(f.get("count",0))
-                    db_run("INSERT INTO flowers (name,count,updated) VALUES (?,?,?)",(name,cnt,now))
-                total = sum(int(f.get("count",0)) for f in flowers)
-                lines = "\n".join(f"🌹 {f.get('name_ar') or f.get('name')}: {f.get('count')} وردة" for f in flowers)
+                    unit = f.get("unit","وردة")
+                    db_run("INSERT INTO flowers (name,count,unit,updated) VALUES (?,?,?,?)",(name,cnt,unit,now))
+                total_stems = sum(int(f.get("count",0)) for f in flowers if f.get("unit","وردة")=="وردة")
+                total_bundles = sum(int(f.get("count",0)) for f in flowers if f.get("unit","")=="بندلة")
+                lines = "\n".join(
+                    f"🌹 {f.get('name_ar') or f.get('name')}: {f.get('count')} {f.get('unit','وردة')}"
+                    for f in flowers)
+                summary = f"📊 الورود: {total_stems} وردة"
+                if total_bundles: summary += f" | {total_bundles} بندلة"
                 tg(chat,
                    f"✅ <b>تم عد الورد!</b>\n\n{lines}\n\n"
-                   f"📊 الإجمالي: {total} وردة\n"
+                   f"{summary}\n"
                    f"🕐 {now}\n\n"
                    f"لعرض المخزون: /ورد")
             else:
@@ -2790,6 +2922,105 @@ def webhook():
         del pending[chat]
         tg(chat,f"✅ طريقة الدفع: {pay}"); return "ok"
 
+    # ── إضافة ورد يدوي: انتظار العدد والوحدة ──
+    if state.get("waiting") == "flower_manual_count":
+        # قبول "20" أو "20 بندلة" أو "20 وردة"
+        m = re.match(r'^(\d+)\s*(بندلة|بنادل|حزمة|حزم|وردة|وردات|قطعة)?$', text.strip())
+        if m:
+            cnt = int(m.group(1))
+            raw_unit = m.group(2) or ""
+            unit = "بندلة" if raw_unit in ("بندلة","بنادل","حزمة","حزم") else "وردة"
+            name = state.get("flower_name", "ورد")
+            now = datetime.now().strftime("%d/%m/%Y %H:%M")
+            existing = db_one("SELECT id FROM flowers WHERE name=?", (name,))
+            if existing:
+                db_run("UPDATE flowers SET count=?,unit=?,updated=? WHERE id=?", (cnt, unit, now, existing["id"]))
+            else:
+                db_run("INSERT INTO flowers (name,count,unit,updated) VALUES (?,?,?,?)", (name, cnt, unit, now))
+            del pending[chat]
+            flowers = db_get("SELECT * FROM flowers ORDER BY count DESC")
+            total_s = sum(f["count"] for f in flowers if f.get("unit","وردة")=="وردة")
+            total_b = sum(f["count"] for f in flowers if f.get("unit","")=="بندلة")
+            summary = f"📊 الإجمالي: {total_s} وردة" + (f" | {total_b} بندلة" if total_b else "")
+            tg(chat, f"✅ تم تحديث المخزون!\n🌹 {name}: {cnt} {unit}\n{summary}")
+        else:
+            tg(chat, "⚠️ أرسل عدد صحيح، مثل:\n<code>25</code> أو <code>5 بندلة</code>")
+        return "ok"
+
+    # ── إضافة ورد يدوي: انتظار الاسم ──
+    if state.get("waiting") == "flower_manual_name":
+        name = text.strip()
+        if not name:
+            tg(chat, "⚠️ أرسل اسم الورد"); return "ok"
+        _bundle_flowers = ["جبسون","جبسوفيلا","gypsophila","ايوروبسم","ليموناي","limonium","baby breath"]
+        is_bundle = any(b in name.lower() for b in _bundle_flowers)
+        pending[chat] = {"waiting": "flower_manual_count", "flower_name": name}
+        hint = "مثال: <code>5 بندلة</code>" if is_bundle else "مثال: <code>25</code> أو <code>10 بندلة</code>"
+        tg(chat, f"🌹 كم عدد <b>{name}</b>؟\n{hint}")
+        return "ok"
+
+    # ── تعرّف تلقائي على الورد المسمّى والمجموعات ──
+    _flower_keywords = ["ورد","وردة","وردات","زهور","زهرة","باقة","بوكيه","روز","جبسون","جبسوفيلا",
+                        "دوار","زنبق","ليلوم","ارانوس","ليموناي","ايوروبسم","أوركيد","توليب"]
+    _has_flower_kw  = any(kw in text for kw in _flower_keywords)
+    _has_number     = bool(re.search(r'\d+', text))
+    _is_bulk        = len(re.findall(r'\d+', text)) >= 3  # 3+ أرقام = قائمة مجموعة
+
+    if _has_flower_kw and _has_number:
+        # ── قائمة كبيرة → أرسلها للذكاء الاصطناعي ──
+        if _is_bulk or "\n" in text or len(text) > 60:
+            tg(chat, "🌸 جاري تحليل قائمة الورد...")
+            parsed = groq_parse_flower_text(text)
+            if parsed and len(parsed) > 0:
+                now = datetime.now().strftime("%d/%m/%Y %H:%M")
+                db_run("DELETE FROM flowers")
+                for f in parsed:
+                    nm  = f.get("name","ورد")
+                    cnt = int(f.get("count",0))
+                    un  = f.get("unit","وردة")
+                    db_run("INSERT INTO flowers (name,count,unit,updated) VALUES (?,?,?,?)",(nm,cnt,un,now))
+                total_s = sum(int(f.get("count",0)) for f in parsed if f.get("unit","وردة")=="وردة")
+                total_b = sum(int(f.get("count",0)) for f in parsed if f.get("unit","")=="بندلة")
+                lines = "\n".join(
+                    f"{'🌸' if f.get('unit')=='بندلة' else '🌹'} {f['name']}: {f['count']} {f.get('unit','وردة')}"
+                    for f in parsed)
+                summary = f"📊 الورود: {total_s} وردة" + (f" | {total_b} بندلة" if total_b else "")
+                tg(chat, f"✅ <b>تم تحديث مخزون الورد!</b>\n\n{lines}\n\n{summary}\n🕐 {now}")
+            else:
+                tg(chat, "⚠️ ما قدرت أحلل القائمة. جرّب /ورد_يدوي لإضافة كل نوع على حدة.")
+            return "ok"
+
+        # ── جملة واحدة مثل "عندي ورد روز احمر 20" ──
+        # نمط: (عندي/معي/لدي) (اسم الورد) (عدد) (وحدة اختيارية)
+        _single = re.search(
+            r'(?:عندي|معي|لدي|عدد)\s*'
+            r'(?:ورد\s*|زهور\s*|وردة\s*)?'
+            r'([^\d]{2,30?}?)\s*'
+            r'(\d+)\s*'
+            r'(بندلة|بنادل|حزمة|وردة|وردات)?',
+            text)
+        if _single:
+            raw_name = _single.group(1).strip().strip('ال').strip()
+            cnt = int(_single.group(2))
+            raw_unit = _single.group(3) or ""
+            unit = "بندلة" if raw_unit in ("بندلة","بنادل","حزمة") else "وردة"
+            # تنظيف الاسم من كلمات الحشو
+            for stop in ["ورد","وردة","زهور","الي","اللي","معي","عندي","لدي","عدد","من","في","و"]:
+                raw_name = raw_name.replace(stop,"").strip()
+            name = raw_name if len(raw_name) >= 2 else "ورد"
+            now = datetime.now().strftime("%d/%m/%Y %H:%M")
+            existing = db_one("SELECT id FROM flowers WHERE name=?", (name,))
+            if existing:
+                db_run("UPDATE flowers SET count=?,unit=?,updated=? WHERE id=?", (cnt,unit,now,existing["id"]))
+            else:
+                db_run("INSERT INTO flowers (name,count,unit,updated) VALUES (?,?,?,?)", (name,cnt,unit,now))
+            flowers = db_get("SELECT * FROM flowers ORDER BY count DESC")
+            total_s = sum(f["count"] for f in flowers if f.get("unit","وردة")=="وردة")
+            total_b = sum(f["count"] for f in flowers if f.get("unit","")=="بندلة")
+            summary = f"📊 الإجمالي: {total_s} وردة" + (f" | {total_b} بندلة" if total_b else "")
+            tg(chat, f"✅ تم تحديث المخزون!\n🌹 {name}: {cnt} {unit}\n{summary}")
+            return "ok"
+
     if text in ["/start","/help"]:
         tg(chat,
            "🌹 <b>فيروز فلورز</b>\n\n"
@@ -2808,7 +3039,12 @@ def webhook():
            "<code>/ايجار_الرفوف</code> — تسجيل الإيجارات\n\n"
            "🌸 <b>مخزون الورد:</b>\n"
            "أرسل صورة + تعليق <code>عد الورد</code>\n"
-           "/ورد — عرض المخزون\n\n"
+           "أو: <code>عندي ورد روز احمر 20</code>\n"
+           "أو: <code>عندي جبسون 3 بندلة</code>\n"
+           "/ورد — عرض المخزون | /ورد_يدوي — إضافة يدوي\n\n"
+           "🧾 <b>فواتير شركات الورد:</b>\n"
+           "أرسل صورة الفاتورة + تعليق <code>فاتورة ورد</code>\n"
+           "/فواتير_الورد — فواتير الشهر الحالي\n\n"
            "📅 /اليوم — تقرير اليوم\n"
            "📅 /يوم 01/05/2026 — تقرير يوم معين\n"
            "📊 /شهر — تقرير الشهر الكامل مع تفصيل يومي\n"
@@ -2866,15 +3102,53 @@ def webhook():
            f"💼 المصاريف المدفوعة:\n{exp_lines}")
         return "ok"
 
+    if text in ["/ورد_يدوي", "/add_flower"]:
+        pending[chat] = {"waiting": "flower_manual_name"}
+        tg(chat, "🌹 <b>إضافة ورد يدوياً</b>\n\nاكتب اسم نوع الورد:\nمثال: <code>ورد أحمر</code> أو <code>زنبق</code>")
+        return "ok"
+
+    if text in ["/فواتير_الورد", "/flower_invoices"]:
+        cur = cur_month()
+        invs = db_get("SELECT * FROM flower_invoices WHERE month=? ORDER BY inv_date DESC", (cur,))
+        if not invs:
+            tg(chat,
+               f"🧾 <b>فواتير الورد — {cur}</b>\n\n"
+               "لا توجد فواتير هذا الشهر.\n\n"
+               "أرسل صورة الفاتورة مع تعليق:\n<code>فاتورة ورد</code>")
+        else:
+            total_month = sum(float(i["total"]) for i in invs)
+            lines = []
+            for i in invs:
+                lines.append(
+                    f"📄 <b>{i['company']}</b> — {i['inv_date']}\n"
+                    f"   💰 {fmt_omr(float(i['total']))}"
+                )
+            tg(chat,
+               f"🧾 <b>فواتير الورد — {cur}</b>\n\n"
+               + "\n\n".join(lines)
+               + f"\n\n{'━'*18}\n💰 الإجمالي: {fmt_omr(total_month)}")
+        return "ok"
+
     if text in ["/ورد", "/flowers", "/عد_الورد"]:
         flowers = db_get("SELECT * FROM flowers ORDER BY count DESC")
         if not flowers:
-            tg(chat, "🌸 لا يوجد مخزون ورد مسجل بعد\n\nأرسل صورة الورد مع التعليق: <code>عد الورد</code>")
+            tg(chat,
+               "🌸 لا يوجد مخزون ورد مسجل بعد\n\n"
+               "<b>طرق التسجيل:</b>\n"
+               "📸 صورة + تعليق <code>عد الورد</code>\n"
+               "✏️ <code>عندي ورد روز أحمر 20</code>\n"
+               "✏️ <code>عندي جبسون 3 بندلة</code>\n"
+               "📋 أرسل قائمة كاملة وسيحللها الذكاء الاصطناعي\n"
+               "➕ /ورد_يدوي — إضافة نوع بالخطوات")
         else:
-            total = sum(f["count"] for f in flowers)
+            total_s = sum(f["count"] for f in flowers if f.get("unit","وردة")!="بندلة")
+            total_b = sum(f["count"] for f in flowers if f.get("unit","")=="بندلة")
             updated = flowers[0]["updated"] if flowers else ""
-            lines = "\n".join(f"🌹 {f['name']}: {f['count']} وردة" for f in flowers)
-            tg(chat, f"🌸 <b>مخزون الورد</b>\n\n{lines}\n\n📊 الإجمالي: {total} وردة\n🕐 آخر تحديث: {updated}")
+            lines = "\n".join(
+                f"{'🌸' if f.get('unit')=='بندلة' else '🌹'} {f['name']}: {f['count']} {f.get('unit','وردة')}"
+                for f in flowers)
+            summary = f"📊 الإجمالي: {total_s} وردة" + (f" | {total_b} بندلة" if total_b else "")
+            tg(chat, f"🌸 <b>مخزون الورد</b>\n\n{lines}\n\n{summary}\n🕐 آخر تحديث: {updated}")
         return "ok"
 
     if text in ["/مصاريف","/expenses"]:
@@ -3469,11 +3743,10 @@ def api_set_flowers():
     d = request.json
     flowers = d.get("flowers", [])
     now = datetime.now().strftime("%d/%m/%Y %H:%M")
-    # Clear old inventory
     db_run("DELETE FROM flowers")
     for f in flowers:
-        db_run("INSERT INTO flowers (name, count, updated) VALUES (?,?,?)",
-               (f["name"], int(f["count"]), now))
+        db_run("INSERT INTO flowers (name, count, unit, updated) VALUES (?,?,?,?)",
+               (f["name"], int(f["count"]), f.get("unit","وردة"), now))
     return jsonify({"ok": True, "count": len(flowers)})
 
 @app.route("/api/flowers/<int:fid>", methods=["DELETE"])
@@ -3484,7 +3757,10 @@ def api_del_flower(fid):
 @app.route("/api/flowers/<int:fid>", methods=["POST"])
 def api_update_flower(fid):
     d = request.json
-    db_run("UPDATE flowers SET count=? WHERE id=?", (int(d["count"]), fid))
+    if "unit" in d:
+        db_run("UPDATE flowers SET count=?,unit=? WHERE id=?", (int(d["count"]), d["unit"], fid))
+    else:
+        db_run("UPDATE flowers SET count=? WHERE id=?", (int(d["count"]), fid))
     return jsonify({"ok": True})
 
 @app.route("/fix_elec")
@@ -3647,6 +3923,41 @@ def set_webhook():
     host=request.host_url.rstrip("/")
     r=requests.get(f"https://api.telegram.org/bot{BOT_TOKEN}/setWebhook",params={"url":f"{host}/webhook"},timeout=10)
     return jsonify(r.json())
+
+# ── Flower Invoices API ───────────────────────────────────
+@app.route("/api/flower_invoices")
+@auth
+def api_get_flower_invoices():
+    m = request.args.get("month", cur_month())
+    invs = db_get("SELECT * FROM flower_invoices WHERE month=? ORDER BY inv_date DESC", (m,))
+    for inv in invs:
+        try: inv["items"] = json.loads(inv["items"] or "[]")
+        except: inv["items"] = []
+    total = sum(float(i["total"]) for i in invs)
+    # List of available months
+    months = db_get("SELECT DISTINCT month FROM flower_invoices ORDER BY month DESC")
+    return jsonify({"invoices": invs, "total": total, "month": m,
+                    "months": [r["month"] for r in months]})
+
+@app.route("/api/flower_invoices/<int:iid>", methods=["DELETE"])
+@auth
+def api_del_flower_invoice(iid):
+    db_run("DELETE FROM flower_invoices WHERE id=?", (iid,))
+    return jsonify({"ok": True})
+
+@app.route("/api/flower_invoices", methods=["POST"])
+@auth
+def api_add_flower_invoice():
+    d = request.json or {}
+    company   = d.get("company","")
+    inv_date  = d.get("inv_date", datetime.now().strftime("%d/%m/%Y"))
+    try: inv_month = datetime.strptime(inv_date,"%d/%m/%Y").strftime("%Y-%m")
+    except: inv_month = cur_month()
+    total     = float(d.get("total",0))
+    items     = json.dumps(d.get("items",[]), ensure_ascii=False)
+    db_run("INSERT INTO flower_invoices (company,inv_date,month,total,items) VALUES (?,?,?,?,?)",
+           (company, inv_date, inv_month, total, items))
+    return jsonify({"ok": True})
 
 if __name__=="__main__":
     port=int(os.environ.get("PORT",5000))
