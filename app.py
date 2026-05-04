@@ -60,6 +60,29 @@ HTML_PAGE = """<!DOCTYPE html>
   --nav-bg:rgba(253,248,242,0.92);
   --orb1:#fce4ec;--orb2:#e8f5e9;--orb3:#fff8e1;
 }
+[data-theme="bloom"] {
+  --bg1:#fff5f7;--bg2:#ffeef2;--nav-bg:rgba(255,240,245,0.92);
+  --card:#fff8fa;--border:rgba(232,150,170,0.25);
+  --text1:#5a1a2a;--text2:#7a3040;--text3:#b06070;
+  --shadow:rgba(200,80,110,0.15);--gold:#e8789a;--green2:#c87898;
+  --accent:#e8789a;--accent2:#c4566a;--accent-glow:rgba(232,120,154,0.3);
+}
+
+/* خلفية الورود المتحركة */
+.rose-bg{display:none;position:fixed;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:0;overflow:hidden;}
+[data-theme="bloom"] .rose-bg{display:block;}
+.rose-bg .petal{position:absolute;font-size:22px;opacity:0;animation:fall linear infinite;}
+@keyframes fall{
+  0%  {opacity:0;transform:translateY(-60px) rotate(0deg);}
+  10% {opacity:0.7;}
+  90% {opacity:0.5;}
+  100%{opacity:0;transform:translateY(110vh) rotate(360deg);}
+}
+/* عشان الصفحة تكون فوق الخلفية */
+[data-theme="bloom"] .app-wrap,
+[data-theme="bloom"] .nav-bar,
+[data-theme="bloom"] .header-top{position:relative;z-index:1;}
+
 [data-theme="ocean"] {
   --bg:#0d1f2d;--bg2:#112436;--card:rgba(255,255,255,0.06);
   --border:rgba(78,174,205,0.25);--border2:rgba(255,255,255,0.1);
@@ -158,7 +181,7 @@ header{
 .theme-panel.open{display:block;animation:fadeIn .2s ease;}
 @keyframes fadeIn{from{opacity:0;transform:translateX(-50%) translateY(-8px);}to{opacity:1;transform:translateX(-50%) translateY(0);}}
 .theme-panel h4{font-size:10px;font-weight:700;color:var(--text3);letter-spacing:2px;text-transform:uppercase;margin-bottom:10px;text-align:center;}
-.themes-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:8px;}
+.themes-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;}
 .th-opt{
   display:flex;flex-direction:column;align-items:center;gap:4px;cursor:pointer;
   padding:8px 4px;border-radius:10px;border:2px solid transparent;transition:.2s;
@@ -542,6 +565,9 @@ input[type="date"]{width:100%;padding:10px 12px;border:1px solid var(--border);b
 <div id="app">
 
 <header>
+  <!-- خلفية ورود متحركة للثيم bloom -->
+  <div class="rose-bg" id="roseBg"></div>
+
   <div class="header-top">
     <div class="brand">
       <div class="emblem">🌹</div>
@@ -603,6 +629,10 @@ input[type="date"]{width:100%;padding:10px 12px;border:1px solid var(--border);b
       <div class="th-opt" onclick="setTheme('lavender')" id="th-lavender">
         <div class="th-circle" style="background:linear-gradient(135deg,#f5f0ff,#9664dc)"></div>
         <span class="th-name">بنفسج</span>
+      </div>
+      <div class="th-opt" onclick="setTheme('bloom')" id="th-bloom">
+        <div class="th-circle" style="background:linear-gradient(135deg,#fff0f5,#e8789a);border:2px solid #e8789a;"></div>
+        <span class="th-name">🌸 ورود</span>
       </div>
     </div>
   </div>
@@ -902,6 +932,24 @@ input[type="date"]{width:100%;padding:10px 12px;border:1px solid var(--border);b
 const THEMES = ['rose','ocean','forest','gold','lavender'];
 let currentTheme = localStorage.getItem('fairuz_theme') || 'rose';
 
+// ── خلفية الورود المتحركة ──
+function initRoseBg(){
+  const bg = document.getElementById('roseBg');
+  if(!bg || bg.children.length > 0) return;
+  const petals = ['🌸','🌹','🌺','🌼','🌷','💮','🏵️'];
+  for(let i=0;i<22;i++){
+    const p = document.createElement('div');
+    p.className = 'petal';
+    p.textContent = petals[Math.floor(Math.random()*petals.length)];
+    const left = Math.random()*100;
+    const dur  = 6 + Math.random()*10;
+    const delay= Math.random()*12;
+    const size = 14 + Math.random()*16;
+    p.style.cssText = `left:${left}%;font-size:${size}px;animation-duration:${dur}s;animation-delay:-${delay}s;`;
+    bg.appendChild(p);
+  }
+}
+
 function setTheme(t){
   currentTheme = t;
   document.documentElement.setAttribute('data-theme', t);
@@ -909,6 +957,7 @@ function setTheme(t){
   document.querySelectorAll('.th-opt').forEach(el => el.classList.remove('active'));
   const el = document.getElementById('th-'+t);
   if(el) el.classList.add('active');
+  if(t==='bloom') initRoseBg();
   if(barCI) loadCharts();
 }
 
