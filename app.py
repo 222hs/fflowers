@@ -2306,8 +2306,8 @@ def init_db():
         try: turso_run("ALTER TABLE flowers ADD COLUMN unit TEXT DEFAULT 'وردة'")
         except: pass
         try: turso_run("ALTER TABLE flower_invoices ADD COLUMN invoice_number TEXT DEFAULT NULL")
-        try: turso_run("ALTER TABLE flower_invoices ADD COLUMN paid INTEGER DEFAULT 0")
         except: pass
+        try: turso_run("ALTER TABLE flower_invoices ADD COLUMN paid INTEGER DEFAULT 0")
         except: pass
     else:
         for _sql in (flowers_sql, flower_inv_sql):
@@ -2316,9 +2316,9 @@ def init_db():
             except: pass
         try:
             conn4=sqlite3.connect(DB_PATH); conn4.execute("ALTER TABLE flower_invoices ADD COLUMN invoice_number TEXT DEFAULT NULL"); conn4.commit(); conn4.close()
+        except: pass
         try:
             conn4=sqlite3.connect(DB_PATH); conn4.execute("ALTER TABLE flower_invoices ADD COLUMN paid INTEGER DEFAULT 0"); conn4.commit(); conn4.close()
-        except: pass
         except: pass
         try:
             conn4=sqlite3.connect(DB_PATH); conn4.execute("ALTER TABLE flowers ADD COLUMN unit TEXT DEFAULT 'وردة'"); conn4.commit(); conn4.close()
