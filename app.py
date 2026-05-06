@@ -34,7 +34,8 @@ DB_PATH      = os.environ.get("DB_PATH", "fairuz.db")
 TURSO_URL    = os.environ.get("TURSO_URL", "")
 TURSO_TOKEN  = os.environ.get("TURSO_TOKEN", "")
 USE_TURSO    = bool(TURSO_URL and TURSO_TOKEN)
-APP_PASSWORD = os.environ.get("APP_PASSWORD", "fairuz2026")
+APP_PASSWORD    = os.environ.get("APP_PASSWORD", "fairuz2026")
+WORKER_PASSWORD = os.environ.get("WORKER_PASSWORD", "worker123")
 
 HTML_PAGE = """<!DOCTYPE html>
 <html lang="ar" dir="rtl" data-theme="rose">
@@ -799,17 +800,10 @@ input[type="date"]{width:100%;padding:10px 12px;border:1px solid var(--border);b
     </div>
   </div>
 
-  <!-- زر إضافة يدوي + زر رفع صورة -->
-  <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px;">
-    <button onclick="openAddFlowerInvModal()" style="padding:13px;border:none;border-radius:14px;background:linear-gradient(135deg,var(--gold),#b8891f);color:white;font-family:'Tajawal',sans-serif;font-size:13px;font-weight:800;cursor:pointer;box-shadow:0 3px 14px rgba(212,168,67,.35);display:flex;align-items:center;justify-content:center;gap:6px;transition:transform .2s;" onmousedown="this.style.transform='scale(0.97)'" onmouseup="this.style.transform='scale(1)'">
-      ➕ إضافة يدوياً
-    </button>
-    <button onclick="triggerFlowerInvScan()" style="padding:13px;border:none;border-radius:14px;background:linear-gradient(135deg,var(--accent),var(--accent2));color:white;font-family:'Tajawal',sans-serif;font-size:13px;font-weight:800;cursor:pointer;box-shadow:0 3px 14px var(--accent-glow);display:flex;align-items:center;justify-content:center;gap:6px;transition:transform .2s;" onmousedown="this.style.transform='scale(0.97)'" onmouseup="this.style.transform='scale(1)'">
-      📷 رفع صورة فاتورة
-    </button>
-  </div>
-  <!-- Input مخفي لرفع الصورة -->
-  <input type="file" id="fi-scan-input" accept="image/*" style="display:none" onchange="handleFlowerInvScan(this)">
+  <!-- زر إضافة يدوي -->
+  <button onclick="openAddFlowerInvModal()" style="width:100%;padding:13px;border:none;border-radius:14px;background:linear-gradient(135deg,var(--gold),#b8891f);color:white;font-family:'Tajawal',sans-serif;font-size:14px;font-weight:800;cursor:pointer;margin-bottom:16px;box-shadow:0 3px 14px rgba(212,168,67,.35);display:flex;align-items:center;justify-content:center;gap:8px;transition:transform .2s;" onmousedown="this.style.transform='scale(0.98)'" onmouseup="this.style.transform='scale(1)'">
+    ➕ إضافة فاتورة يدوياً
+  </button>
 
   <!-- قائمة الفواتير -->
   <div class="slbl">الفواتير</div>
@@ -1591,8 +1585,7 @@ async function loadFlowerInvPage(){
     if(!invs.length){
       list.innerHTML=`<div class="gc" style="padding:24px;text-align:center;color:var(--text3);font-size:12px;line-height:2;">
         لا توجد فواتير هذا الشهر<br>
-        📸 أرسل صورة الفاتورة للبوت مع تعليق <b>"فاتورة ورد"</b><br>
-        أو استخدم زر <b>📷 رفع صورة</b> أعلاه لتحليل الفاتورة تلقائياً
+        📸 أرسل صورة الفاتورة للبوت مع تعليق <b>"فاتورة ورد"</b>
       </div>`;
       return;
     }
@@ -1625,37 +1618,6 @@ async function delFlowerInv(id){
   await api('/api/flower_invoices/'+id,{method:'DELETE'});
   loadFlowerInvPage();
   showToast('✅ تم حذف الفاتورة');
-}
-
-/* ── رفع صورة فاتورة ورد للتحليل التلقائي ── */
-function triggerFlowerInvScan(){
-  const inp = document.getElementById('fi-scan-input');
-  if(inp) inp.click();
-}
-
-async function handleFlowerInvScan(input){
-  const file = input.files && input.files[0];
-  if(!file) return;
-  input.value='';
-  showToast('⏳ جاري تحليل الفاتورة...');
-  try{
-    const fd = new FormData();
-    fd.append('file', file);
-    const res = await fetch('/api/flower_invoices/scan', {
-      method:'POST',
-      credentials:'same-origin',
-      body: fd
-    });
-    const d = await res.json();
-    if(!res.ok || d.error){
-      showToast('❌ ' + (d.error||'خطأ في التحليل'));
-      return;
-    }
-    showToast('✅ تم حفظ الفاتورة: ' + (d.company||'') + ' — ' + (d.total||0).toFixed(3) + ' ر.ع');
-    loadFlowerInvPage();
-  }catch(e){
-    showToast('❌ خطأ في الرفع');
-  }
 }
 
 /* ── إضافة فاتورة ورد يدوياً ── */
@@ -2714,6 +2676,516 @@ def groq_read_invoice(file_id):
         return None
 
 # ── Web API ───────────────────────────────────────────────
+
+# ── Worker Interface Page ─────────────────────────────────
+WORKER_PAGE = """<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>فيروز فلورز — العامل</title>
+<link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;700;900&display=swap" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+:root{
+  --bg:#fdf8f2;--card:#fff;--border:rgba(232,121,138,0.2);
+  --accent:#e8798a;--accent2:#c4566a;--accent-glow:rgba(232,121,138,0.25);
+  --green:#7aab8a;--green2:#5a8a6a;--gold:#d4a557;
+  --text:#3d2c24;--text2:#7a6458;--text3:#b09888;
+  --shadow:rgba(107,76,59,0.12);
+}
+html,body{height:100%;font-family:'Tajawal',sans-serif;background:var(--bg);color:var(--text);}
+
+/* Header */
+.wh{background:#fff;border-bottom:1px solid var(--border);padding:12px 16px;
+  display:flex;align-items:center;justify-content:space-between;
+  position:sticky;top:0;z-index:100;box-shadow:0 2px 12px var(--shadow);}
+.wh-brand{display:flex;align-items:center;gap:10px;}
+.wh-emblem{width:38px;height:38px;background:linear-gradient(135deg,var(--accent),var(--accent2));
+  border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:18px;}
+.wh-title{font-size:15px;font-weight:900;color:var(--accent2);}
+.wh-sub{font-size:10px;color:var(--text3);}
+.wh-logout{background:none;border:1px solid var(--border);border-radius:8px;
+  padding:6px 12px;font-family:'Tajawal',sans-serif;font-size:12px;color:var(--text3);cursor:pointer;}
+.wh-logout:active{background:rgba(232,121,138,0.1);}
+
+/* Body */
+.wbody{padding:16px;max-width:540px;margin:0 auto;padding-bottom:80px;}
+
+/* Section label */
+.slbl{font-size:9px;font-weight:700;color:var(--text3);letter-spacing:2px;
+  text-transform:uppercase;margin-bottom:10px;display:flex;align-items:center;gap:8px;}
+.slbl::after{content:'';flex:1;height:1px;background:linear-gradient(90deg,var(--border),transparent);}
+
+/* Card */
+.wcard{background:#fff;border:1px solid var(--border);border-radius:18px;
+  padding:18px;margin-bottom:16px;box-shadow:0 2px 16px var(--shadow);}
+
+/* Type tabs */
+.type-tabs{display:flex;gap:4px;background:rgba(0,0,0,0.04);border-radius:10px;padding:3px;margin-bottom:14px;}
+.ttab{flex:1;padding:10px;border:none;border-radius:8px;font-family:'Tajawal',sans-serif;
+  font-size:13px;font-weight:700;cursor:pointer;transition:.2s;background:transparent;color:var(--text3);
+  display:flex;align-items:center;justify-content:center;gap:4px;}
+.ttab.tt-s{background:#fff;color:var(--green2);box-shadow:0 2px 8px var(--shadow);}
+.ttab.tt-b{background:#fff;color:var(--accent2);box-shadow:0 2px 8px var(--shadow);}
+.ttab.tt-inv{background:#fff;color:var(--gold);box-shadow:0 2px 8px var(--shadow);}
+
+/* Form fields */
+.fld{display:flex;flex-direction:column;gap:4px;margin-bottom:10px;}
+.fld label{font-size:10px;font-weight:700;color:var(--text3);letter-spacing:.5px;}
+.fld input,.fld select,.fld textarea{
+  background:rgba(253,248,242,0.8);border:1px solid var(--border);
+  border-radius:10px;padding:11px 13px;font-family:'Tajawal',sans-serif;
+  font-size:14px;color:var(--text);outline:none;transition:.2s;width:100%;
+  -webkit-appearance:none;
+}
+.fld input:focus,.fld select:focus,.fld textarea:focus{
+  border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-glow);}
+.fld input::placeholder,.fld textarea::placeholder{color:var(--text3);}
+.fld textarea{min-height:70px;resize:none;}
+.fld select option{background:#fff;}
+
+/* Submit button */
+.sbtn{width:100%;padding:14px;border:none;border-radius:12px;font-family:'Tajawal',sans-serif;
+  font-size:15px;font-weight:900;cursor:pointer;transition:all .25s cubic-bezier(.34,1.56,.64,1);
+  display:flex;align-items:center;justify-content:center;gap:6px;-webkit-appearance:none;}
+.sb-s{background:linear-gradient(135deg,var(--green),var(--green2));color:white;box-shadow:0 4px 14px rgba(90,138,106,.35);}
+.sb-b{background:linear-gradient(135deg,var(--accent),var(--accent2));color:white;box-shadow:0 4px 14px var(--accent-glow);}
+.sb-inv{background:linear-gradient(135deg,var(--gold),#b88830);color:white;box-shadow:0 4px 14px rgba(212,165,67,.35);}
+.sbtn:active{transform:scale(0.98);}
+
+/* Image picker */
+.img-zone{border:2px dashed var(--border);border-radius:12px;padding:20px;
+  display:flex;flex-direction:column;align-items:center;gap:8px;cursor:pointer;
+  position:relative;transition:.3s;text-align:center;margin-bottom:10px;background:rgba(253,248,242,0.5);}
+.img-zone input{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%;}
+.img-zone:active{border-color:var(--accent);background:rgba(232,121,138,0.04);}
+.iz-icon{font-size:28px;}
+.iz-txt{font-size:12px;color:var(--text2);}
+.img-preview{width:100%;border-radius:10px;border:1px solid var(--accent);display:block;margin-bottom:8px;max-height:200px;object-fit:cover;}
+.img-clear{width:100%;padding:7px;border:1px solid var(--border);border-radius:8px;
+  background:rgba(232,121,138,.08);color:var(--accent2);font-family:'Tajawal',sans-serif;
+  font-size:12px;font-weight:700;cursor:pointer;}
+
+/* Items list (for invoice) */
+.item-row{display:flex;gap:8px;align-items:center;margin-bottom:8px;}
+.item-row input{flex:1;}
+.item-row .item-qty{width:70px;flex:none;}
+.item-row .item-price{width:90px;flex:none;}
+.item-del{background:none;border:none;color:var(--accent);font-size:18px;cursor:pointer;padding:4px;}
+.add-item-btn{width:100%;padding:9px;border:1px dashed var(--border);border-radius:9px;
+  background:transparent;color:var(--text3);font-family:'Tajawal',sans-serif;
+  font-size:12px;font-weight:600;cursor:pointer;margin-bottom:12px;transition:.2s;}
+.add-item-btn:active{border-color:var(--accent);color:var(--accent);}
+
+/* Today summary */
+.today-sum{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px;}
+.ts-card{padding:14px;background:#fff;border:1px solid var(--border);border-radius:14px;
+  text-align:center;box-shadow:0 2px 10px var(--shadow);}
+.ts-ico{font-size:22px;margin-bottom:6px;}
+.ts-val{font-size:18px;font-weight:900;color:var(--accent);}
+.ts-val.green{color:var(--green2);}
+.ts-lbl{font-size:10px;color:var(--text3);margin-top:3px;}
+
+/* Toast */
+.toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%) translateY(80px);
+  background:#3d2c24;color:#fff;padding:10px 22px;border-radius:40px;font-size:13px;font-weight:700;
+  box-shadow:0 8px 28px rgba(0,0,0,0.2);transition:transform .4s cubic-bezier(.34,1.56,.64,1);
+  z-index:9999;white-space:nowrap;max-width:90vw;text-align:center;}
+.toast.show{transform:translateX(-50%) translateY(0);}
+
+/* Entries list */
+.entry-item{display:flex;align-items:center;gap:10px;padding:10px 12px;
+  border-radius:10px;border:1px solid var(--border);margin-bottom:6px;background:#fff;}
+.ei-ico{width:34px;height:34px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0;}
+.ei-s{background:rgba(90,138,106,0.12);}
+.ei-b{background:rgba(232,121,138,0.12);}
+.ei-info{flex:1;min-width:0;}
+.ei-desc{font-size:12px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.ei-time{font-size:10px;color:var(--text3);}
+.ei-amt{font-size:13px;font-weight:900;flex-shrink:0;}
+.ei-amt.s{color:var(--green2);}
+.ei-amt.b{color:var(--accent);}
+
+/* Divider */
+.divider{height:1px;background:var(--border);margin:14px 0;}
+
+/* Payment method pills */
+.pay-pills{display:flex;gap:6px;margin-bottom:12px;flex-wrap:wrap;}
+.pay-pill{flex:1;min-width:80px;padding:9px 6px;border:2px solid var(--border);border-radius:10px;
+  background:transparent;font-family:'Tajawal',sans-serif;font-size:12px;font-weight:700;
+  color:var(--text2);cursor:pointer;text-align:center;transition:.2s;}
+.pay-pill.active{border-color:var(--green2);background:rgba(90,138,106,0.1);color:var(--green2);}
+.pay-pill.active-b{border-color:var(--accent);background:rgba(232,121,138,0.1);color:var(--accent2);}
+
+/* Invoice items table */
+.inv-total-row{display:flex;justify-content:space-between;align-items:center;
+  padding:10px 12px;background:rgba(212,165,87,0.1);border-radius:9px;margin-bottom:12px;
+  border:1px solid rgba(212,165,87,0.25);}
+.inv-total-row span{font-size:12px;color:var(--text3);}
+.inv-total-row strong{font-size:16px;font-weight:900;color:var(--gold);}
+</style>
+</head>
+<body>
+
+<!-- Header -->
+<div class="wh">
+  <div class="wh-brand">
+    <div class="wh-emblem">🌹</div>
+    <div>
+      <div class="wh-title">فيروز فلورز</div>
+      <div class="wh-sub">واجهة العامل</div>
+    </div>
+  </div>
+  <button class="wh-logout" onclick="location.href='/worker_logout'">خروج 🔒</button>
+</div>
+
+<div class="wbody">
+
+  <!-- Today Summary -->
+  <div class="slbl"><span>ملخص اليوم</span></div>
+  <div class="today-sum">
+    <div class="ts-card">
+      <div class="ts-ico">🌸</div>
+      <div class="ts-val green" id="wdS">0.000</div>
+      <div class="ts-lbl">مبيعات اليوم</div>
+    </div>
+    <div class="ts-card">
+      <div class="ts-ico">🛒</div>
+      <div class="ts-val" id="wdB">0.000</div>
+      <div class="ts-lbl">مشتريات اليوم</div>
+    </div>
+  </div>
+
+  <!-- Entry Form -->
+  <div class="slbl"><span>إضافة جديد</span></div>
+  <div class="wcard">
+    <!-- Tabs -->
+    <div class="type-tabs">
+      <button class="ttab tt-s" id="tab-s" onclick="switchWTab('s')">🌸 مبيعة</button>
+      <button class="ttab" id="tab-b" onclick="switchWTab('b')">🛒 مشتريات</button>
+      <button class="ttab" id="tab-inv" onclick="switchWTab('inv')">🧾 ورد</button>
+    </div>
+
+    <!-- SALE FORM -->
+    <div id="form-s">
+      <div class="fld">
+        <label>الوصف</label>
+        <input id="s-desc" type="text" placeholder="باقة ورد، عطر، هدية..." />
+      </div>
+      <div class="fld">
+        <label>المبلغ (ر.ع)</label>
+        <input id="s-amt" type="number" placeholder="0.000" step="0.001" inputmode="decimal" />
+      </div>
+      <div class="fld"><label>طريقة الدفع</label></div>
+      <div class="pay-pills" id="s-pay-pills">
+        <button class="pay-pill" onclick="selectPay('s','كاش 💵',this)">💵 كاش</button>
+        <button class="pay-pill" onclick="selectPay('s','فيزا 💳',this)">💳 فيزا</button>
+        <button class="pay-pill" onclick="selectPay('s','تحويل 🏦',this)">🏦 تحويل</button>
+      </div>
+      <!-- Image -->
+      <div id="s-img-zone" class="img-zone">
+        <input type="file" accept="image/*" onchange="onWImg(event,'s')" />
+        <div class="iz-icon">📸</div>
+        <div class="iz-txt">صورة المنتج (اختياري)</div>
+      </div>
+      <button class="sbtn sb-s" onclick="submitSale()">✅ تسجيل المبيعة</button>
+    </div>
+
+    <!-- BUY FORM -->
+    <div id="form-b" style="display:none;">
+      <div class="fld">
+        <label>الوصف / المورد</label>
+        <input id="b-desc" type="text" placeholder="ورد، مستلزمات، تعبئة..." />
+      </div>
+      <div class="fld">
+        <label>المبلغ (ر.ع)</label>
+        <input id="b-amt" type="number" placeholder="0.000" step="0.001" inputmode="decimal" />
+      </div>
+      <div class="fld">
+        <label>من دفع</label>
+        <select id="b-payer">
+          <option value="">— اختر —</option>
+          <option value="حسين">حسين</option>
+          <option value="شوق">شوق</option>
+          <option value="أخرى">أخرى</option>
+        </select>
+      </div>
+      <!-- Scan invoice image -->
+      <div id="b-img-zone" class="img-zone">
+        <input type="file" accept="image/*" onchange="onWImg(event,'b')" />
+        <div class="iz-icon">🧾</div>
+        <div class="iz-txt">صورة الفاتورة (اختياري)</div>
+      </div>
+      <button class="sbtn sb-b" onclick="submitBuy()">➕ تسجيل المشتريات</button>
+    </div>
+
+    <!-- FLOWER INVOICE FORM -->
+    <div id="form-inv" style="display:none;">
+      <div class="fld">
+        <label>اسم الشركة / المورد</label>
+        <input id="inv-company" type="text" placeholder="نانا هايبر، فلاور مارت..." />
+      </div>
+      <div class="fld">
+        <label>رقم الفاتورة (اختياري)</label>
+        <input id="inv-num" type="text" placeholder="INV-001" />
+      </div>
+      <div class="fld">
+        <label>التاريخ</label>
+        <input id="inv-date" type="date" />
+      </div>
+
+      <div class="slbl" style="margin-top:4px;"><span>الأصناف</span></div>
+      <div id="inv-items"></div>
+      <button class="add-item-btn" onclick="addInvItem()">＋ إضافة صنف</button>
+
+      <div class="inv-total-row">
+        <span>الإجمالي</span>
+        <strong id="inv-calc-total">0.000 ر.ع</strong>
+      </div>
+
+      <button class="sbtn sb-inv" onclick="submitInvoice()">🧾 حفظ الفاتورة</button>
+    </div>
+  </div>
+
+  <!-- Today Entries -->
+  <div class="slbl"><span>حركات اليوم</span></div>
+  <div id="w-entries">
+    <div style="text-align:center;color:var(--text3);font-size:12px;padding:20px;">جاري التحميل...</div>
+  </div>
+
+</div>
+
+<!-- Toast -->
+<div class="toast" id="wtoast"></div>
+
+<script>
+let wSelPay = {s: '', b: ''};
+let wImgData = {s: null, b: null};
+let invItems = [];
+
+// ── Init ──────────────────────────────────────────────────
+(function(){
+  // Set today's date
+  const d = new Date();
+  const dd = String(d.getDate()).padStart(2,'0');
+  const mm = String(d.getMonth()+1).padStart(2,'0');
+  const yyyy = d.getFullYear();
+  document.getElementById('inv-date').value = `${yyyy}-${mm}-${dd}`;
+  addInvItem();
+  loadWorkerData();
+})();
+
+// ── Tab switching ─────────────────────────────────────────
+function switchWTab(t){
+  ['s','b','inv'].forEach(x=>{
+    document.getElementById('form-'+x).style.display = x===t ? 'block' : 'none';
+    const el = document.getElementById('tab-'+x);
+    el.className = 'ttab' + (x===t ? (x==='s'?' tt-s':x==='b'?' tt-b':' tt-inv') : '');
+  });
+}
+
+// ── Payment pills ─────────────────────────────────────────
+function selectPay(form, val, btn){
+  wSelPay[form] = val;
+  const cls = form==='s' ? 'active' : 'active-b';
+  btn.parentElement.querySelectorAll('.pay-pill').forEach(p=>{
+    p.classList.remove('active','active-b');
+  });
+  btn.classList.add(cls);
+}
+
+// ── Image picker ──────────────────────────────────────────
+function onWImg(ev, form){
+  const file = ev.target.files[0]; if(!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    wImgData[form] = e.target.result;
+    const zone = document.getElementById(form+'-img-zone');
+    zone.innerHTML = `
+      <img src="${e.target.result}" class="img-preview" />
+      <button class="img-clear" onclick="clearWImg('${form}',event)">✕ حذف الصورة</button>`;
+  };
+  reader.readAsDataURL(file);
+}
+function clearWImg(form, ev){
+  ev.stopPropagation();
+  wImgData[form] = null;
+  const zone = document.getElementById(form+'-img-zone');
+  const icon = form==='s' ? '📸' : '🧾';
+  const txt = form==='s' ? 'صورة المنتج (اختياري)' : 'صورة الفاتورة (اختياري)';
+  zone.innerHTML = `<input type="file" accept="image/*" onchange="onWImg(event,'${form}')" /><div class="iz-icon">${icon}</div><div class="iz-txt">${txt}</div>`;
+}
+
+// ── Load today data ───────────────────────────────────────
+async function loadWorkerData(){
+  try{
+    const today = todayStr();
+    const r = await fetch('/api/entries?month='+curMonth());
+    const d = await r.json();
+    const entries = (d.entries||[]).filter(e=>e.date===today);
+    const sales = entries.filter(e=>e.type==='s');
+    const buys  = entries.filter(e=>e.type==='b');
+    const ts = sales.reduce((a,e)=>a+e.amt,0);
+    const tb = buys.reduce((a,e)=>a+e.amt,0);
+    document.getElementById('wdS').textContent = ts.toFixed(3);
+    document.getElementById('wdB').textContent = tb.toFixed(3);
+
+    // render entries
+    const all = [...entries].sort((a,b)=>b.created>a.created?1:-1);
+    const container = document.getElementById('w-entries');
+    if(!all.length){
+      container.innerHTML='<div style="text-align:center;color:var(--text3);font-size:12px;padding:20px;">لا توجد حركات اليوم</div>';
+      return;
+    }
+    container.innerHTML = all.map(e=>`
+      <div class="entry-item">
+        <div class="ei-ico ${e.type==='s'?'ei-s':'ei-b'}">${e.type==='s'?'🌸':'🛒'}</div>
+        <div class="ei-info">
+          <div class="ei-desc">${e.desc||'—'}</div>
+          <div class="ei-time">${e.date||''} ${e.payment_method||e.paid_by||''}</div>
+        </div>
+        <div class="ei-amt ${e.type}">${e.amt.toFixed(3)}</div>
+      </div>`).join('');
+  }catch(err){console.error(err);}
+}
+
+function todayStr(){
+  const d=new Date();
+  return String(d.getDate()).padStart(2,'0')+'/'+String(d.getMonth()+1).padStart(2,'0')+'/'+d.getFullYear();
+}
+function curMonth(){
+  const d=new Date();
+  return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');
+}
+
+// ── Submit sale ───────────────────────────────────────────
+async function submitSale(){
+  const desc = document.getElementById('s-desc').value.trim() || 'مبيعة';
+  const amt  = parseFloat(document.getElementById('s-amt').value);
+  if(!amt||amt<=0){wToast('⚠️ أدخل مبلغاً صحيحاً');return;}
+  const pay  = wSelPay.s || null;
+  const img  = wImgData.s || null;
+  try{
+    const r = await fetch('/api/entries',{method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({type:'s',desc,amt,payment_method:pay,img})});
+    const d = await r.json();
+    if(d.ok){
+      wToast('✅ تم تسجيل المبيعة!');
+      document.getElementById('s-desc').value='';
+      document.getElementById('s-amt').value='';
+      wSelPay.s='';
+      document.getElementById('s-pay-pills').querySelectorAll('.pay-pill').forEach(p=>p.classList.remove('active'));
+      clearWImg('s',{stopPropagation:()=>{}});
+      loadWorkerData();
+    }else wToast('❌ حدث خطأ');
+  }catch(e){wToast('❌ خطأ في الاتصال');}
+}
+
+// ── Submit buy ────────────────────────────────────────────
+async function submitBuy(){
+  const desc  = document.getElementById('b-desc').value.trim() || 'مشتريات';
+  const amt   = parseFloat(document.getElementById('b-amt').value);
+  if(!amt||amt<=0){wToast('⚠️ أدخل مبلغاً صحيحاً');return;}
+  const payer = document.getElementById('b-payer').value || null;
+  try{
+    const r = await fetch('/api/entries',{method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({type:'b',desc,amt,paid_by:payer})});
+    const d = await r.json();
+    if(d.ok){
+      wToast('✅ تم تسجيل المشتريات!');
+      document.getElementById('b-desc').value='';
+      document.getElementById('b-amt').value='';
+      document.getElementById('b-payer').value='';
+      clearWImg('b',{stopPropagation:()=>{}});
+      loadWorkerData();
+    }else wToast('❌ حدث خطأ');
+  }catch(e){wToast('❌ خطأ في الاتصال');}
+}
+
+// ── Invoice items ─────────────────────────────────────────
+function addInvItem(){
+  const id = Date.now();
+  invItems.push(id);
+  const div = document.createElement('div');
+  div.className='item-row'; div.id='irow-'+id;
+  div.innerHTML=`
+    <input class="item-name" type="text" placeholder="اسم الصنف" style="flex:2;" id="in-${id}" onchange="calcInvTotal()" />
+    <input class="item-qty" type="number" placeholder="الكمية" id="iq-${id}" min="1" value="1" oninput="calcInvTotal()" style="width:70px;" />
+    <input class="item-price" type="number" placeholder="السعر" id="ip-${id}" step="0.001" oninput="calcInvTotal()" style="width:100px;" />
+    <button class="item-del" onclick="removeItem(${id})">✕</button>`;
+  document.getElementById('inv-items').appendChild(div);
+}
+function removeItem(id){
+  const el=document.getElementById('irow-'+id);
+  if(el) el.remove();
+  invItems=invItems.filter(i=>i!==id);
+  calcInvTotal();
+}
+function calcInvTotal(){
+  let total=0;
+  invItems.forEach(id=>{
+    const q=parseFloat(document.getElementById('iq-'+id)?.value)||0;
+    const p=parseFloat(document.getElementById('ip-'+id)?.value)||0;
+    total+=q*p;
+  });
+  document.getElementById('inv-calc-total').textContent=total.toFixed(3)+' ر.ع';
+}
+
+// ── Submit invoice ────────────────────────────────────────
+async function submitInvoice(){
+  const company = document.getElementById('inv-company').value.trim()||'غير محدد';
+  const invNum  = document.getElementById('inv-num').value.trim()||null;
+  const dateVal = document.getElementById('inv-date').value;
+  // Convert yyyy-mm-dd → dd/mm/yyyy
+  let inv_date = '';
+  if(dateVal){
+    const [y,m,dd]=dateVal.split('-');
+    inv_date=`${dd}/${m}/${y}`;
+  }
+  const items=[];
+  let total=0;
+  for(const id of invItems){
+    const name=document.getElementById('in-'+id)?.value.trim()||'';
+    const qty=parseInt(document.getElementById('iq-'+id)?.value)||1;
+    const price=parseFloat(document.getElementById('ip-'+id)?.value)||0;
+    if(!name&&!price) continue;
+    const line_total=qty*price;
+    items.push({name,qty,unit_price:price,line_total:parseFloat(line_total.toFixed(3))});
+    total+=line_total;
+  }
+  if(!items.length||total<=0){wToast('⚠️ أضف أصنافاً وأسعاراً');return;}
+  try{
+    const r=await fetch('/api/flower_invoices',{method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({company,invoice_number:invNum,inv_date,total:parseFloat(total.toFixed(3)),items})});
+    const d=await r.json();
+    if(d.ok){
+      wToast('✅ تم حفظ الفاتورة!');
+      document.getElementById('inv-company').value='';
+      document.getElementById('inv-num').value='';
+      document.getElementById('inv-items').innerHTML='';
+      invItems=[];
+      addInvItem();
+      calcInvTotal();
+    }else wToast('❌ حدث خطأ');
+  }catch(e){wToast('❌ خطأ في الاتصال');}
+}
+
+// ── Toast ─────────────────────────────────────────────────
+function wToast(msg){
+  const el=document.getElementById('wtoast');
+  el.textContent=msg;el.classList.add('show');
+  setTimeout(()=>el.classList.remove('show'),3000);
+}
+</script>
+</body>
+</html>"""
+
+
 LOGIN_PAGE = """<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
@@ -2845,6 +3317,29 @@ input[type=password]::placeholder{color:rgba(255,255,255,0.4);letter-spacing:1px
     <div class="logo">🌹</div>
     <div class="shop-name">FAIROSE</div>
     <div class="shop-sub">FLOWERS & MORE</div>
+    <!-- Role selection -->
+    <div id="role-sel" style="margin-bottom:18px;">
+      <div style="font-size:11px;color:rgba(255,255,255,0.5);letter-spacing:1px;margin-bottom:12px;">اختر نوع الدخول</div>
+      <div style="display:flex;gap:10px;">
+        <button class="role-btn" id="rb-admin" onclick="selRole('admin')" style="
+          flex:1;padding:14px 8px;border-radius:14px;border:2px solid rgba(212,168,67,0.5);
+          background:rgba(212,168,67,0.15);color:#f5e6c0;font-family:'Tajawal',sans-serif;
+          font-size:13px;font-weight:700;cursor:pointer;transition:.2s;
+          display:flex;flex-direction:column;align-items:center;gap:6px;">
+          <span style="font-size:24px;">👑</span>
+          <span>المدير</span>
+        </button>
+        <button class="role-btn" id="rb-worker" onclick="selRole('worker')" style="
+          flex:1;padding:14px 8px;border-radius:14px;border:2px solid rgba(255,255,255,0.2);
+          background:rgba(255,255,255,0.08);color:rgba(255,255,255,0.7);font-family:'Tajawal',sans-serif;
+          font-size:13px;font-weight:700;cursor:pointer;transition:.2s;
+          display:flex;flex-direction:column;align-items:center;gap:6px;">
+          <span style="font-size:24px;">👤</span>
+          <span>العامل</span>
+        </button>
+      </div>
+    </div>
+
     <div class="err" id="err"></div>
     <div class="pw-wrap">
       <input type="password" id="pw" placeholder="كلمة المرور" onkeydown="if(event.key==='Enter')go()"/>
@@ -2855,6 +3350,21 @@ input[type=password]::placeholder{color:rgba(255,255,255,0.4);letter-spacing:1px
 </div>
 
 <script>
+let selRole_val = 'admin';
+
+function selRole(r){
+  selRole_val = r;
+  const ab = document.getElementById('rb-admin');
+  const wb = document.getElementById('rb-worker');
+  if(r==='admin'){
+    ab.style.borderColor='rgba(212,168,67,0.8)';ab.style.background='rgba(212,168,67,0.25)';ab.style.color='#f5e6c0';
+    wb.style.borderColor='rgba(255,255,255,0.2)';wb.style.background='rgba(255,255,255,0.08)';wb.style.color='rgba(255,255,255,0.6)';
+  } else {
+    wb.style.borderColor='rgba(78,205,196,0.8)';wb.style.background='rgba(78,205,196,0.2)';wb.style.color='#e0f8f6';
+    ab.style.borderColor='rgba(255,255,255,0.2)';ab.style.background='rgba(255,255,255,0.08)';ab.style.color='rgba(255,255,255,0.6)';
+  }
+}
+
 // Petals
 (function(){
   const wrap=document.getElementById('petals');
@@ -2889,10 +3399,11 @@ async function go(){
   try{
     const r=await fetch('/auth',{method:'POST',
       headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({p:pw})});
+      body:JSON.stringify({p:pw, role:selRole_val})});
     const d=await r.json();
-    if(d.ok){location.href='/';}
-    else{
+    if(d.ok){
+      location.href = selRole_val==='worker' ? '/worker' : '/';
+    } else {
       document.getElementById('err').textContent='❌ كلمة المرور غير صحيحة';
       document.getElementById('pw').value='';
       btn.textContent='دخول';btn.disabled=false;
@@ -2913,13 +3424,28 @@ import hashlib
 def get_token():
     return hashlib.md5((APP_PASSWORD + "_fairuz_token").encode()).hexdigest()
 
+def get_worker_token():
+    return hashlib.md5((WORKER_PASSWORD + "_fairuz_worker").encode()).hexdigest()
+
 def check_auth():
     return request.cookies.get("fairuz_auth") == get_token()
+
+def check_worker_auth():
+    return (request.cookies.get("fairuz_worker") == get_worker_token() or
+            request.cookies.get("fairuz_auth") == get_token())
 
 def auth(f):
     @wraps(f)
     def w(*a,**k):
         if not check_auth():
+            return redirect('/login')
+        return f(*a,**k)
+    return w
+
+def worker_auth(f):
+    @wraps(f)
+    def w(*a,**k):
+        if not check_worker_auth():
             return redirect('/login')
         return f(*a,**k)
     return w
@@ -2935,9 +3461,18 @@ def login():
 @app.route("/auth", methods=["POST"])
 def do_auth():
     d = request.json or {}
-    if d.get("p") == APP_PASSWORD:
-        resp = make_response(jsonify({"ok": True}))
+    role = d.get("role", "admin")
+    pw = d.get("p", "")
+    # Admin login
+    if pw == APP_PASSWORD:
+        resp = make_response(jsonify({"ok": True, "role": "admin"}))
         resp.set_cookie("fairuz_auth", get_token(),
+                       max_age=60*60*24*30, httponly=True, samesite="Lax")
+        return resp
+    # Worker login
+    if pw == WORKER_PASSWORD:
+        resp = make_response(jsonify({"ok": True, "role": "worker"}))
+        resp.set_cookie("fairuz_worker", get_worker_token(),
                        max_age=60*60*24*30, httponly=True, samesite="Lax")
         return resp
     return jsonify({"ok": False})
@@ -2946,7 +3481,19 @@ def do_auth():
 def logout():
     resp = make_response(redirect('/login'))
     resp.delete_cookie("fairuz_auth")
+    resp.delete_cookie("fairuz_worker")
     return resp
+
+@app.route("/worker_logout")
+def worker_logout():
+    resp = make_response(redirect('/login'))
+    resp.delete_cookie("fairuz_worker")
+    return resp
+
+@app.route("/worker")
+@worker_auth
+def worker_page():
+    return Response(WORKER_PAGE, mimetype="text/html")
 
 @app.route("/")
 @auth
@@ -3019,13 +3566,15 @@ def api_dashboard():
     })
 
 @app.route("/api/entries")
-@auth
+@worker_auth
 def api_get():
     month=request.args.get("month",cur_month())
     s,b=get_month_data(month)
-    return jsonify({"sales":s,"buys":b})
+    entries=s+b
+    return jsonify({"sales":s,"buys":b,"entries":entries})
 
 @app.route("/api/entries",methods=["POST"])
+@worker_auth
 def api_add():
     d=request.json
     month=d.get("month",cur_month())
@@ -3186,9 +3735,6 @@ def webhook():
                    f"<b>الأصناف:</b>\n{lines}\n\n"
                    f"💰 الإجمالي: {fmt_omr(total)}\n\n"
                    f"لعرض الفواتير: /فواتير_الورد")
-            else:
-                tg(chat, "⚠️ ما قدرت أقرأ فاتورة الورد بوضوح.\nجرّب صورة أوضح أو أضفها يدوياً من الموقع في قسم فواتير الورد.")
-            return "ok"  # فاتورة الورد لا تُضاف كمشتريات
 
         if caption_is_flowers:
             tg(chat,"🌸 جاري عد الورد وتحديد الأنواع...")
@@ -4365,7 +4911,7 @@ def api_del_flower_invoice(iid):
     return jsonify({"ok": True})
 
 @app.route("/api/flower_invoices", methods=["POST"])
-@auth
+@worker_auth
 def api_add_flower_invoice():
     d = request.json or {}
     company      = d.get("company","").strip() or "غير محدد"
@@ -4391,68 +4937,6 @@ def api_add_flower_invoice():
     db_run("INSERT INTO flower_invoices (company,invoice_number,inv_date,month,total,items) VALUES (?,?,?,?,?,?)",
            (company, invoice_number, inv_date, inv_month, total, items))
     return jsonify({"ok": True})
-
-@app.route("/api/flower_invoices/scan", methods=["POST"])
-@auth
-def api_scan_flower_invoice():
-    """قراءة صورة فاتورة ورد مرفوعة من الموقع وحفظها تلقائياً."""
-    import base64 as _b64
-    try:
-        if "file" not in request.files:
-            return jsonify({"error": "لم يتم رفع ملف"}), 400
-        f = request.files["file"]
-        if not f.filename:
-            return jsonify({"error": "ملف غير صالح"}), 400
-        img_bytes = f.read()
-        b64 = _b64.b64encode(img_bytes).decode()
-        if not GROQ_KEY:
-            return jsonify({"error": "GROQ_API_KEY غير مضبوط"}), 500
-        prompt = """This is a flower supplier invoice (may be handwritten, in Arabic or English). Extract ALL data carefully.
-Return ONLY a valid JSON object — no explanation, no markdown:
-{"invoice_number":"INV-001 or null","company":"supplier name","date":"date as written","items":[{"name":"flower name","count":10,"unit":"وردة","unit_price":0.500,"line_total":5.000}],"total":25.500,"found":true}
-Rules: invoice_number from header (null if absent). unit: "بندلة" for gypsophila/جبسون/limonium/ليموناي, else "وردة". found:false if not a flower invoice."""
-        mime = f.content_type or "image/jpeg"
-        res = requests.post("https://api.groq.com/openai/v1/chat/completions",
-            headers={"Authorization": f"Bearer {GROQ_KEY}", "Content-Type": "application/json"},
-            json={"model": "meta-llama/llama-4-scout-17b-16e-instruct",
-                  "messages": [{"role": "user", "content": [
-                      {"type": "image_url", "image_url": {"url": f"data:{mime};base64,{b64}"}},
-                      {"type": "text", "text": prompt}
-                  ]}],
-                  "max_tokens": 1200, "temperature": 0}, timeout=35)
-        resp = res.json()
-        if "error" in resp:
-            return jsonify({"error": str(resp["error"])}), 500
-        raw = resp["choices"][0]["message"]["content"]
-        raw = re.sub(r"```json\s*","",raw); raw = re.sub(r"```\s*","",raw).strip()
-        match = re.search(r'\{.*\}', raw, re.DOTALL)
-        if not match:
-            return jsonify({"error": "ما قدرت أقرأ الفاتورة، جرب صورة أوضح"}), 422
-        data = json.loads(match.group())
-        data = _normalize_invoice_data(data)
-        if not data.get("found"):
-            return jsonify({"error": "الصورة لا تبدو فاتورة ورد"}), 422
-        company = data.get("company","").strip() or "غير محدد"
-        invoice_number = data.get("invoice_number") or None
-        std_date = data.get("date","").strip()
-        if std_date:
-            try:
-                dt = datetime.strptime(std_date, "%Y-%m-%d")
-                inv_date_display = dt.strftime("%d/%m/%Y"); inv_month = dt.strftime("%Y-%m")
-            except:
-                inv_date_display = std_date; inv_month = cur_month()
-        else:
-            inv_date_display = datetime.now().strftime("%d/%m/%Y"); inv_month = cur_month()
-        items = data.get("items", [])
-        total = float(data.get("total") or 0) or sum(float(i.get("line_total",0)) for i in items)
-        items_json = json.dumps(items, ensure_ascii=False)
-        db_run("INSERT INTO flower_invoices (company,invoice_number,inv_date,month,total,items) VALUES (?,?,?,?,?,?)",
-               (company, invoice_number, inv_date_display, inv_month, total, items_json))
-        return jsonify({"ok": True, "company": company, "inv_date": inv_date_display,
-                        "total": total, "items": items, "invoice_number": invoice_number})
-    except Exception as e:
-        print("scan flower invoice error:", e)
-        return jsonify({"error": str(e)}), 500
 
 if __name__=="__main__":
     port=int(os.environ.get("PORT",5000))
