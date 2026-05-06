@@ -28,9 +28,10 @@ _t.start()
 
 
 # ── Config ────────────────────────────────────────────────
-BOT_TOKEN    = os.environ.get("BOT_TOKEN", "")
-GROQ_KEY     = os.environ.get("GROQ_API_KEY", "")
-DB_PATH      = os.environ.get("DB_PATH", "fairuz.db")
+BOT_TOKEN      = os.environ.get("BOT_TOKEN", "")
+GROQ_KEY       = os.environ.get("GROQ_API_KEY", "")
+ANTHROPIC_KEY  = os.environ.get("ANTHROPIC_API_KEY", "")
+DB_PATH        = os.environ.get("DB_PATH", "fairuz.db")
 TURSO_URL    = os.environ.get("TURSO_URL", "")
 TURSO_TOKEN  = os.environ.get("TURSO_TOKEN", "")
 USE_TURSO    = bool(TURSO_URL and TURSO_TOKEN)
@@ -831,10 +832,6 @@ input[type="date"]{width:100%;padding:10px 12px;border:1px solid var(--border);b
         <input id="fi-date" type="date" style="background:rgba(255,255,255,0.7);border:1px solid var(--border);border-radius:10px;padding:10px 12px;font-family:'Tajawal',sans-serif;font-size:14px;color:var(--text);outline:none;width:100%;"/>
       </div>
     </div>
-    <div class="fld" style="margin-bottom:14px;">
-      <label>🔖 رقم الفاتورة <span style="font-weight:400;color:var(--text3);">(اختياري)</span></label>
-      <input id="fi-invno" type="text" placeholder="مثال: INV-2024-001" style="background:rgba(255,255,255,0.7);border:1px solid var(--border);border-radius:10px;padding:10px 12px;font-family:'Tajawal',sans-serif;font-size:14px;color:var(--text);outline:none;width:100%;direction:ltr;text-align:left;letter-spacing:.5px;"/>
-    </div>
 
     <!-- الأصناف -->
     <div style="font-size:10px;font-weight:700;color:var(--text3);letter-spacing:1px;margin-bottom:8px;">🌹 الأصناف</div>
@@ -1599,7 +1596,6 @@ async function loadFlowerInvPage(){
         <div style="display:flex;justify-content:space-between;align-items:center;padding:12px 14px;border-bottom:1px solid var(--border);">
           <div>
             <div style="font-size:13px;font-weight:800;">🏪 ${inv.company||'غير محدد'}</div>
-            ${inv.invoice_number?`<div style="font-size:10px;color:var(--gold);margin-top:2px;letter-spacing:.5px;direction:ltr;text-align:right;">🔖 ${inv.invoice_number}</div>`:''}
             <div style="font-size:11px;color:var(--text3);margin-top:2px;">📅 ${inv.inv_date}</div>
           </div>
           <div style="display:flex;align-items:center;gap:10px;">
@@ -1632,7 +1628,6 @@ function openAddFlowerInvModal(){
   document.getElementById('fi-date').value=`${yyyy}-${mm}-${dd}`;
   document.getElementById('fi-company').value='';
   document.getElementById('fi-total-input').value='';
-  document.getElementById('fi-invno').value='';
   renderFiItems();
   document.getElementById('addFlowerInvOv').classList.add('open');
   setTimeout(()=>document.getElementById('fi-company').focus(),300);
@@ -1707,7 +1702,6 @@ async function saveFlowerInvManual(){
   const company=(document.getElementById('fi-company').value||'').trim()||'غير محدد';
   const dateRaw=document.getElementById('fi-date').value;
   const totalRaw=document.getElementById('fi-total-input').value;
-  const invNo=(document.getElementById('fi-invno').value||'').trim()||null;
   if(!dateRaw){showToast('⚠️ اختر تاريخ الفاتورة');return;}
   if(!totalRaw||parseFloat(totalRaw)<=0){showToast('⚠️ أدخل الإجمالي');return;}
   // تحويل التاريخ من yyyy-mm-dd إلى dd/mm/yyyy
@@ -1721,7 +1715,7 @@ async function saveFlowerInvManual(){
   const total=parseFloat(totalRaw)||0;
   try{
     await api('/api/flower_invoices',{method:'POST',headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({company,invoice_number:invNo,inv_date,total,items})});
+      body:JSON.stringify({company,inv_date,total,items})});
     closeAddFlowerInvModal();
     loadFlowerInvPage();
     showToast('✅ تم حفظ الفاتورة بنجاح');
@@ -2088,7 +2082,6 @@ def init_db():
     flower_inv_sql = """CREATE TABLE IF NOT EXISTS flower_invoices (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         company TEXT DEFAULT '',
-        invoice_number TEXT DEFAULT NULL,
         inv_date TEXT DEFAULT '',
         month TEXT DEFAULT '',
         total REAL DEFAULT 0,
@@ -2099,16 +2092,11 @@ def init_db():
         turso_run(flower_inv_sql)
         try: turso_run("ALTER TABLE flowers ADD COLUMN unit TEXT DEFAULT 'وردة'")
         except: pass
-        try: turso_run("ALTER TABLE flower_invoices ADD COLUMN invoice_number TEXT DEFAULT NULL")
-        except: pass
     else:
         for _sql in (flowers_sql, flower_inv_sql):
             try:
                 conn4=sqlite3.connect(DB_PATH); conn4.execute(_sql); conn4.commit(); conn4.close()
             except: pass
-        try:
-            conn4=sqlite3.connect(DB_PATH); conn4.execute("ALTER TABLE flower_invoices ADD COLUMN invoice_number TEXT DEFAULT NULL"); conn4.commit(); conn4.close()
-        except: pass
         try:
             conn4=sqlite3.connect(DB_PATH); conn4.execute("ALTER TABLE flowers ADD COLUMN unit TEXT DEFAULT 'وردة'"); conn4.commit(); conn4.close()
         except: pass
@@ -2470,88 +2458,8 @@ def groq_count_flowers(file_id):
     except Exception as e:
         print("Groq flower error:", e); return None
 
-def _normalize_invoice_data(data):
-    """
-    معالجة بيانات الفاتورة بعد استخراجها من الذكاء الاصطناعي:
-    1. رقم الفاتورة: يُحفظ كما هو أو null
-    2. اسم الشركة: Title Case
-    3. المبالغ: 4 أرقام بدون فاصلة → كسر عشري (7200 → 7.200)
-    4. التاريخ: أي صيغة → YYYY-MM-DD
-    """
-    import re as _re
-
-    # ── 1. رقم الفاتورة ──────────────────────────────────────
-    inv_no = data.get("invoice_number") or data.get("invoice_no") or data.get("inv_no")
-    data["invoice_number"] = str(inv_no).strip() if inv_no else None
-
-    # ── 2. توحيد اسم الشركة (Title Case) ────────────────────
-    company = data.get("company") or ""
-    if company:
-        # Title Case مع الحفاظ على الأرقام والرموز
-        data["company"] = " ".join(w.capitalize() for w in company.split())
-
-    # ── 3. معالجة المبالغ (قاعدة الـ 3 خانات) ───────────────
-    def fix_amount(val):
-        """4 أرقام صحيحة بدون كسر → اقسم على 1000 (7200 → 7.200)"""
-        if val is None:
-            return 0.0
-        try:
-            f = float(val)
-            # لو الرقم صحيح (بدون كسر) و≥ 1000 → نعتبره فلوس بالبيسة
-            if f == int(f) and f >= 1000:
-                f = f / 1000.0
-            return round(f, 3)
-        except:
-            return 0.0
-
-    # إجمالي الفاتورة
-    data["total"] = fix_amount(data.get("total"))
-
-    # أسعار وإجماليات الأصناف
-    for item in data.get("items", []):
-        item["unit_price"]  = fix_amount(item.get("unit_price"))
-        item["line_total"]  = fix_amount(item.get("line_total"))
-        # إعادة حساب line_total لو كان صفر وعندنا unit_price × count
-        if item["line_total"] == 0 and item["unit_price"] > 0:
-            try:
-                item["line_total"] = round(item["unit_price"] * float(item.get("count", 0)), 3)
-            except:
-                pass
-
-    # ── 4. توحيد التاريخ → YYYY-MM-DD ───────────────────────
-    raw_date = data.get("date") or ""
-    std_date = ""
-    if raw_date:
-        # جرب صيغ مختلفة
-        patterns = [
-            (r'(\d{4})[\/\-\.](\d{1,2})[\/\-\.](\d{1,2})', '{}-{:02d}-{:02d}', lambda m: (int(m[0]), int(m[1]), int(m[2]))),  # YYYY-MM-DD
-            (r'(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{4})',  '{}-{:02d}-{:02d}', lambda m: (int(m[2]), int(m[1]), int(m[0]))),  # DD/MM/YYYY
-            (r'(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{2})$', '{}-{:02d}-{:02d}', lambda m: (2000+int(m[2]), int(m[1]), int(m[0]))),  # DD/MM/YY
-        ]
-        for pat, fmt_str, extractor in patterns:
-            m = _re.search(pat, raw_date)
-            if m:
-                try:
-                    y, mo, d = extractor(m.groups())
-                    std_date = f"{y}-{mo:02d}-{d:02d}"
-                    break
-                except:
-                    pass
-        if not std_date:
-            std_date = raw_date  # لو فشل التحويل احتفظ بالأصل
-
-    data["date"] = std_date
-    return data
-
-
 def groq_read_flower_supplier_invoice(file_id):
-    """
-    قراءة فاتورة مورد الورد من صورة عبر Groq Vision مع:
-    - استخراج رقم الفاتورة
-    - توحيد اسم الشركة (Title Case)
-    - تصحيح المبالغ (قاعدة الـ 3 خانات)
-    - توحيد التاريخ (YYYY-MM-DD)
-    """
+    """Read a handwritten flower supplier invoice image using Groq vision."""
     if not GROQ_KEY or not BOT_TOKEN: return None
     try:
         import base64
@@ -2560,30 +2468,23 @@ def groq_read_flower_supplier_invoice(file_id):
         fp = r.json()["result"]["file_path"]
         img = requests.get(f"https://api.telegram.org/file/bot{BOT_TOKEN}/{fp}", timeout=15).content
         b64 = base64.b64encode(img).decode()
-
-        prompt = """This is a flower supplier invoice (may be handwritten, in Arabic or English). Extract ALL data carefully.
-
-Return ONLY a valid JSON object — no explanation, no markdown:
+        prompt = """This is a flower supplier invoice (possibly handwritten in Arabic). Extract ALL information carefully.
+Return ONLY a JSON object in this exact format:
 {
-  "invoice_number": "INV-2024-001 or null if not found",
-  "company": "Supplier / company name exactly as written",
-  "date": "date exactly as written on invoice (any format)",
+  "company": "company/supplier name or empty string",
+  "date": "date in DD/MM/YYYY format or empty string",
   "items": [
-    {"name": "flower name in Arabic", "count": 10, "unit": "وردة", "unit_price": 0.500, "line_total": 5.000}
+    {"name": "flower name in Arabic", "count": 10, "unit": "وردة", "unit_price": 0.5, "line_total": 5.0}
   ],
   "total": 25.500,
   "found": true
 }
-
 Rules:
-- invoice_number: look for "رقم الفاتورة", "Invoice No", "Invoice #", "ID", "Inv No". Keep original format (e.g. INV-2024-001). Set null if absent.
-- company: extract from header, stamp, or any label. Preserve the name as-is; post-processing will normalize casing.
-- date: copy the date exactly as printed — do NOT reformat it.
-- unit: use "بندلة" for bundle flowers (gypsophila/جبسون, limonium/ليموناي, statice, etc.), otherwise "وردة".
-- unit_price / line_total: if a number looks like 4 digits with no decimal (e.g. 7200), write it as-is and post-processing will fix it.
-- total: grand total of the invoice.
-- found: false if this is NOT a flower/plant invoice."""
-
+- unit is "بندلة" for bundle flowers (gypsophila/جبسون, limonium/ليموناي, etc), otherwise "وردة"
+- If price not visible set unit_price to 0
+- Extract company name from any header/stamp/handwriting on the invoice
+- found=false if this is NOT a flower invoice
+- All flower names in Arabic"""
         res = requests.post("https://api.groq.com/openai/v1/chat/completions",
             headers={"Authorization": f"Bearer {GROQ_KEY}", "Content-Type": "application/json"},
             json={"model": "meta-llama/llama-4-scout-17b-16e-instruct",
@@ -2591,24 +2492,15 @@ Rules:
                       {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{b64}"}},
                       {"type": "text", "text": prompt}
                   ]}],
-                  "max_tokens": 1200, "temperature": 0}, timeout=30)
-
+                  "max_tokens": 1000, "temperature": 0}, timeout=30)
         resp = res.json()
         if "error" in resp:
             print("Groq flower invoice error:", resp["error"]); return None
-
         raw = resp["choices"][0]["message"]["content"]
-        # تنظيف markdown
-        raw = re.sub(r"```json\s*", "", raw)
-        raw = re.sub(r"```\s*", "", raw).strip()
         match = re.search(r'\{.*\}', raw, re.DOTALL)
-        if not match:
-            return None
-
-        data = json.loads(match.group())
-        # تطبيق قواعد المعالجة الأربع
-        return _normalize_invoice_data(data)
-
+        if match:
+            return json.loads(match.group())
+        return None
     except Exception as e:
         print("Groq flower invoice error:", e); return None
 
@@ -3110,43 +3002,32 @@ def webhook():
             if inv and inv.get("found") and inv.get("items"):
                 items     = inv.get("items", [])
                 company   = inv.get("company","").strip() or "غير محدد"
-                inv_no    = inv.get("invoice_number")  # رقم الفاتورة (قد يكون None)
-                std_date  = inv.get("date","").strip()  # صيغة YYYY-MM-DD
-
-                # تحويل التاريخ لحفظه وعرضه
-                if std_date:
-                    try:
-                        # من YYYY-MM-DD إلى DD/MM/YYYY للعرض
-                        dt = datetime.strptime(std_date, "%Y-%m-%d")
-                        inv_date_display = dt.strftime("%d/%m/%Y")
-                        inv_month = dt.strftime("%Y-%m")
-                    except:
-                        inv_date_display = std_date
-                        inv_month = month
-                else:
-                    inv_date_display = date
-                    inv_month = month
-
+                inv_date  = inv.get("date","").strip()
+                if not inv_date: inv_date = date
+                try:
+                    inv_month = datetime.strptime(inv_date, "%d/%m/%Y").strftime("%Y-%m")
+                except: inv_month = month
                 total = float(inv.get("total") or sum(float(i.get("line_total",0)) for i in items))
                 items_json = json.dumps(items, ensure_ascii=False)
                 db_run(
                     "INSERT INTO flower_invoices (company,inv_date,month,total,items) VALUES (?,?,?,?,?)",
-                    (company, inv_date_display, inv_month, total, items_json))
-
+                    (company, inv_date, inv_month, total, items_json))
                 lines = "\n".join(
                     f"  🌹 {i['name']}: {i['count']} {i.get('unit','وردة')}"
                     + (f" × {i['unit_price']} = {fmt_omr(float(i.get('line_total',0)))}" if float(i.get('unit_price',0))>0 else "")
                     for i in items)
-
-                inv_no_line = f"🔖 رقم الفاتورة: <code>{inv_no}</code>\n" if inv_no else ""
                 tg(chat,
                    f"✅ <b>تم حفظ فاتورة الورد!</b>\n\n"
                    f"🏪 الشركة: <b>{company}</b>\n"
-                   f"{inv_no_line}"
-                   f"📅 التاريخ: {inv_date_display}\n\n"
+                   f"📅 التاريخ: {inv_date}\n\n"
                    f"<b>الأصناف:</b>\n{lines}\n\n"
                    f"💰 الإجمالي: {fmt_omr(total)}\n\n"
                    f"لعرض الفواتير: /فواتير_الورد")
+            else:
+                tg(chat,
+                   "⚠️ ما قدرت أقرأ الفاتورة بوضوح.\n\n"
+                   "تأكد أن التعليق يحتوي <code>فاتورة ورد</code> أو <code>فاتورة شركة</code>")
+            return "ok"
 
         if caption_is_flowers:
             tg(chat,"🌸 جاري عد الورد وتحديد الأنواع...")
@@ -4326,83 +4207,64 @@ def api_del_flower_invoice(iid):
 @auth
 def api_add_flower_invoice():
     d = request.json or {}
-    company      = d.get("company","").strip() or "غير محدد"
-    # توحيد اسم الشركة Title Case
-    company      = " ".join(w.capitalize() for w in company.split()) if company else "غير محدد"
-    invoice_number = d.get("invoice_number") or None
-    inv_date     = d.get("inv_date", datetime.now().strftime("%d/%m/%Y"))
+    company   = d.get("company","")
+    inv_date  = d.get("inv_date", datetime.now().strftime("%d/%m/%Y"))
     try: inv_month = datetime.strptime(inv_date,"%d/%m/%Y").strftime("%Y-%m")
     except: inv_month = cur_month()
-    total        = float(d.get("total",0))
-    # تصحيح المبالغ: 4 أرقام صحيحة → كسر عشري
-    if total == int(total) and total >= 1000:
-        total = total / 1000.0
-    raw_items = d.get("items",[])
-    for item in raw_items:
-        for key in ("unit_price","line_total"):
-            try:
-                v = float(item.get(key,0))
-                if v == int(v) and v >= 1000:
-                    item[key] = round(v / 1000.0, 3)
-            except: pass
-    items = json.dumps(raw_items, ensure_ascii=False)
-    db_run("INSERT INTO flower_invoices (company,invoice_number,inv_date,month,total,items) VALUES (?,?,?,?,?,?)",
-           (company, invoice_number, inv_date, inv_month, total, items))
+    total     = float(d.get("total",0))
+    items     = json.dumps(d.get("items",[]), ensure_ascii=False)
+    db_run("INSERT INTO flower_invoices (company,inv_date,month,total,items) VALUES (?,?,?,?,?)",
+           (company, inv_date, inv_month, total, items))
     return jsonify({"ok": True})
 
-# ── تحليل الفواتير بالذكاء الاصطناعي ────────────────────────
 @app.route("/api/analyze_invoice", methods=["POST"])
 @auth
 def api_analyze_invoice():
-    """تحليل صورة الفاتورة واستخراج البيانات تلقائياً"""
+    """تحليل صورة الفاتورة بالذكاء الاصطناعي واستخراج المبلغ والوصف"""
+    if not ANTHROPIC_KEY:
+        return jsonify({"error": "ANTHROPIC_API_KEY غير مضبوط"}), 500
+    d = request.json or {}
+    img_data = d.get("image_data", "")   # base64 بدون رأس data:...
+    media_type = d.get("media_type", "image/jpeg")
+    if not img_data:
+        return jsonify({"error": "لم يُرسل أي صورة"}), 400
+    payload = {
+        "model": "claude-sonnet-4-20250514",
+        "max_tokens": 300,
+        "messages": [{
+            "role": "user",
+            "content": [
+                {"type": "image", "source": {"type": "base64", "media_type": media_type, "data": img_data}},
+                {"type": "text", "text": (
+                    "أنت مساعد محاسبي. حلّل هذه الفاتورة واستخرج:\n"
+                    "1. المبلغ الإجمالي (رقم فقط بدون عملة)\n"
+                    "2. اسم المورد أو وصف مختصر للمشتريات\n\n"
+                    'أجب بـ JSON فقط بهذا الشكل بدون أي نص آخر:\n{"amount": "0.000", "description": "وصف"}'
+                )}
+            ]
+        }]
+    }
     try:
-        data = request.json or {}
-        file_data = data.get("file_data", "")
-        file_type = data.get("file_type", "")
-        month_param = data.get("month", cur_month())
-        
-        if not file_data or not file_type.startswith("image/"):
-            return jsonify({"error": "صيغة الملف غير صحيحة"}), 400
-        
-        # محاولة تحليل بـ Claude
+        r = requests.post(
+            "https://api.anthropic.com/v1/messages",
+            headers={
+                "Content-Type": "application/json",
+                "x-api-key": ANTHROPIC_KEY,
+                "anthropic-version": "2023-06-01"
+            },
+            json=payload,
+            timeout=30
+        )
+        data = r.json()
+        raw = "".join(c.get("text","") for c in data.get("content",[]))
+        raw = raw.replace("```json","").replace("```","").strip()
         try:
-            import anthropic
-            client = anthropic.Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY", ""))
-            
-            resp = client.messages.create(
-                model="claude-3-5-sonnet-20241022",
-                max_tokens=300,
-                messages=[{
-                    "role": "user",
-                    "content": [
-                        {"type": "image", "source": {"type": "base64", "media_type": file_type, "data": file_data}},
-                        {"type": "text", "text": 'استخرج من الفاتورة: {"company":"...","invoice_number":null,"inv_date":"dd/mm/yyyy","total":0}'}
-                    ]
-                }]
-            )
-            
-            extracted = json.loads(resp.content[0].text.strip())
-            company = extracted.get("company", "غير محدد").strip() or "غير محدد"
-            inv_date = extracted.get("inv_date", datetime.now().strftime("%d/%m/%Y"))
-            total = float(extracted.get("total", 0))
-            
-            try:
-                inv_month = datetime.strptime(inv_date, "%d/%m/%Y").strftime("%Y-%m")
-            except:
-                inv_month = month_param
-            
-            db_run("INSERT INTO flower_invoices (company,invoice_number,inv_date,month,total,items) VALUES (?,?,?,?,?,?)",
-                   (company, extracted.get("invoice_number"), inv_date, inv_month, total, json.dumps([])))
-            
-            return jsonify({"ok": True, "success": True})
-        except:
-            # إضافة بدون تحليل
-            db_run("INSERT INTO flower_invoices (company,invoice_number,inv_date,month,total,items) VALUES (?,?,?,?,?,?)",
-                   ("غير محدد", None, datetime.now().strftime("%d/%m/%Y"), month_param, 0, "[]"))
-            return jsonify({"ok": True, "success": True})
-            
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
+            result = json.loads(raw)
+        except Exception:
+            result = {"amount": "", "description": raw[:80]}
+        return jsonify(result)
+    except Exception as ex:
+        return jsonify({"error": str(ex)}), 500
 
 if __name__=="__main__":
     port=int(os.environ.get("PORT",5000))
