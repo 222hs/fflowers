@@ -699,6 +699,25 @@ input[type="date"]{width:100%;padding:10px 12px;border:1px solid var(--border);b
       <div class="kpi-sub"><span id="kNb" class="badge">—</span></div></div>
   </div>
 
+  <!-- ── ملخص فواتير الورد ── -->
+  <div class="slbl">🧾 فواتير الورد</div>
+  <div class="gc" style="padding:14px;margin-bottom:16px;">
+    <div class="kpi-row row2" style="margin-bottom:0;">
+      <div class="kpi gc" style="padding:12px 10px;">
+        <div class="kpi-ico">✅</div>
+        <div class="kpi-lbl">فواتير مدفوعة</div>
+        <div class="kpi-val" id="hFiPaidCount" style="color:var(--green2);font-size:15px;">0</div>
+        <div class="kpi-sub" id="hFiPaidTotal">0.000 ر.ع</div>
+      </div>
+      <div class="kpi gc" style="padding:12px 10px;">
+        <div class="kpi-ico">⏳</div>
+        <div class="kpi-lbl">فواتير غير مدفوعة</div>
+        <div class="kpi-val" id="hFiUnpaidCount" style="color:var(--accent);font-size:15px;">0</div>
+        <div class="kpi-sub" id="hFiUnpaidTotal">0.000 ر.ع</div>
+      </div>
+    </div>
+  </div>
+
   <div class="slbl"><span data-t="addNew">إضافة جديد</span></div>
   <div class="add-card gc">
     <div class="type-tabs">
@@ -1586,6 +1605,15 @@ async function loadFlowerInvPage(){
     document.getElementById('fi-count').textContent=invs.length;
     document.getElementById('fi-companies').textContent=companies.length;
     document.getElementById('fi-total').textContent=d.total?(+d.total).toFixed(3)+' ر.ع':'0.000 ر.ع';
+    // Update home page summary
+    const hPaidCount=document.getElementById('hFiPaidCount');
+    const hPaidTotal=document.getElementById('hFiPaidTotal');
+    const hUnpaidCount=document.getElementById('hFiUnpaidCount');
+    const hUnpaidTotal=document.getElementById('hFiUnpaidTotal');
+    if(hPaidCount){hPaidCount.textContent=d.paid_count||0;}
+    if(hPaidTotal){hPaidTotal.textContent=(+(d.paid_total||0)).toFixed(3)+' ر.ع';}
+    if(hUnpaidCount){hUnpaidCount.textContent=d.unpaid_count||0;}
+    if(hUnpaidTotal){hUnpaidTotal.textContent=(+(d.unpaid_total||0)).toFixed(3)+' ر.ع';}
     // List
     const list=document.getElementById('fi-list');
     if(!invs.length){
@@ -1598,22 +1626,22 @@ async function loadFlowerInvPage(){
     }
     list.innerHTML=invs.map(inv=>{
       const items=inv.items||[];
-      const isPaid=inv.paid===1||inv.paid===true;
+      const isPaid=inv.is_paid?1:0;
       const itemsHtml=items.map(i=>`
         <div style="display:flex;justify-content:space-between;align-items:center;padding:5px 12px;border-bottom:1px solid var(--border);">
           <span style="font-size:11px;color:var(--text2);">${i.unit==='بندلة'?'🌸':'🌹'} ${i.name}: <b>${i.count}</b> ${i.unit||'وردة'}</span>
           ${parseFloat(i.unit_price||0)>0?`<span style="font-size:11px;color:var(--text3);">${(+i.line_total||0).toFixed(3)} ر.ع</span>`:''}
         </div>`).join('');
-      return `<div class="gc" style="margin-bottom:12px;overflow:hidden;${isPaid?'opacity:0.8':''}">
+      return `<div class="gc" style="margin-bottom:12px;overflow:hidden;${isPaid?'opacity:0.85;':''}">
         <div style="display:flex;justify-content:space-between;align-items:center;padding:12px 14px;border-bottom:1px solid var(--border);">
           <div>
             <div style="font-size:13px;font-weight:800;">🏪 ${inv.company||'غير محدد'}</div>
             ${inv.invoice_number?`<div style="font-size:10px;color:var(--gold);margin-top:2px;letter-spacing:.5px;direction:ltr;text-align:right;">🔖 ${inv.invoice_number}</div>`:''}
             <div style="font-size:11px;color:var(--text3);margin-top:2px;">📅 ${inv.inv_date}</div>
           </div>
-          <div style="display:flex;align-items:center;gap:8px;">
+          <div style="display:flex;align-items:center;gap:7px;">
             <div style="font-size:15px;font-weight:900;color:var(--accent);">${(+inv.total||0).toFixed(3)} <span style="font-size:10px;font-weight:600;">ر.ع</span></div>
-            <button onclick="toggleInvPaid(${inv.id},${isPaid?0:1})" style="border:none;border-radius:8px;font-family:'Tajawal',sans-serif;font-size:11px;font-weight:700;cursor:pointer;padding:5px 10px;transition:.2s;background:${isPaid?'rgba(74,222,128,.15)':'rgba(251,113,133,.12)'};color:${isPaid?'#4ade80':'#fb7185'};">${isPaid?'✅ مدفوعة':'⏳ غير مدفوعة'}</button>
+            <button onclick="toggleFlowerInvPaid(${inv.id})" style="background:${isPaid?'rgba(90,138,106,.2)':'rgba(107,76,59,.08)'};border:1px solid ${isPaid?'rgba(90,138,106,.4)':'var(--border)'};border-radius:8px;color:${isPaid?'var(--green2)':'var(--text3)'};font-size:11px;font-weight:700;padding:4px 8px;cursor:pointer;white-space:nowrap;">${isPaid?'✅ مدفوعة':'⏳ غير مدفوعة'}</button>
             <button onclick="delFlowerInv(${inv.id})" style="background:rgba(232,121,138,.1);border:1px solid rgba(232,121,138,.2);border-radius:8px;color:var(--accent);font-size:13px;width:30px;height:30px;cursor:pointer;">🗑</button>
           </div>
         </div>
@@ -1622,16 +1650,18 @@ async function loadFlowerInvPage(){
     }).join('');
   }catch(e){console.error(e);}
 }
-async function toggleInvPaid(id,paid){
-  await api('/api/flower_invoices/'+id+'/paid',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({paid:paid===1})});
-  loadFlowerInvPage();
-  showToast(paid?'✅ تم تحديد الفاتورة كمدفوعة':'↩️ تم تحديد الفاتورة كغير مدفوعة');
-}
 async function delFlowerInv(id){
   if(!confirm('حذف هذه الفاتورة؟'))return;
   await api('/api/flower_invoices/'+id,{method:'DELETE'});
   loadFlowerInvPage();
   showToast('✅ تم حذف الفاتورة');
+}
+async function toggleFlowerInvPaid(id){
+  try{
+    const r=await api('/api/flower_invoices/'+id+'/toggle_paid',{method:'POST'});
+    loadFlowerInvPage();
+    showToast(r.is_paid?'✅ تم تحديدها كمدفوعة':'⏳ تم تحديدها كغير مدفوعة');
+  }catch(e){showToast('❌ خطأ في التحديث');}
 }
 
 /* ── رفع صورة فاتورة ورد للتحليل التلقائي ── */
@@ -1981,6 +2011,7 @@ function toggleLang(){
 setLang(lang);
 
 load(); // طلب واحد يجيب كل شيء
+loadFlowerInvPage(); // تحميل ملخص فواتير الورد في الصفحة الرئيسية
 </script>
 </body>
 </html>"""
@@ -2139,7 +2170,6 @@ def init_db():
         month TEXT DEFAULT '',
         total REAL DEFAULT 0,
         items TEXT DEFAULT '[]',
-        paid INTEGER DEFAULT 0,
         created TEXT DEFAULT (datetime('now')))"""
     if USE_TURSO:
         turso_run(flowers_sql)
@@ -2147,8 +2177,8 @@ def init_db():
         try: turso_run("ALTER TABLE flowers ADD COLUMN unit TEXT DEFAULT 'وردة'")
         except: pass
         try: turso_run("ALTER TABLE flower_invoices ADD COLUMN invoice_number TEXT DEFAULT NULL")
-        try: turso_run("ALTER TABLE flower_invoices ADD COLUMN paid INTEGER DEFAULT 0")
         except: pass
+        try: turso_run("ALTER TABLE flower_invoices ADD COLUMN is_paid INTEGER DEFAULT 0")
         except: pass
     else:
         for _sql in (flowers_sql, flower_inv_sql):
@@ -2157,9 +2187,9 @@ def init_db():
             except: pass
         try:
             conn4=sqlite3.connect(DB_PATH); conn4.execute("ALTER TABLE flower_invoices ADD COLUMN invoice_number TEXT DEFAULT NULL"); conn4.commit(); conn4.close()
-        try:
-            conn4=sqlite3.connect(DB_PATH); conn4.execute("ALTER TABLE flower_invoices ADD COLUMN paid INTEGER DEFAULT 0"); conn4.commit(); conn4.close()
         except: pass
+        try:
+            conn4=sqlite3.connect(DB_PATH); conn4.execute("ALTER TABLE flower_invoices ADD COLUMN is_paid INTEGER DEFAULT 0"); conn4.commit(); conn4.close()
         except: pass
         try:
             conn4=sqlite3.connect(DB_PATH); conn4.execute("ALTER TABLE flowers ADD COLUMN unit TEXT DEFAULT 'وردة'"); conn4.commit(); conn4.close()
@@ -4367,23 +4397,31 @@ def api_get_flower_invoices():
         try: inv["items"] = json.loads(inv["items"] or "[]")
         except: inv["items"] = []
     total = sum(float(i["total"]) for i in invs)
+    paid_invs = [i for i in invs if i.get("is_paid")]
+    unpaid_invs = [i for i in invs if not i.get("is_paid")]
     months = db_get("SELECT DISTINCT month FROM flower_invoices ORDER BY month DESC")
     return jsonify({"invoices": invs, "total": total, "month": m,
-                    "months": [r["month"] for r in months]})
+                    "months": [r["month"] for r in months],
+                    "paid_total": sum(float(i["total"]) for i in paid_invs),
+                    "unpaid_total": sum(float(i["total"]) for i in unpaid_invs),
+                    "paid_count": len(paid_invs),
+                    "unpaid_count": len(unpaid_invs)})
+
+@app.route("/api/flower_invoices/<int:iid>/toggle_paid", methods=["POST"])
+@auth
+def api_toggle_flower_invoice_paid(iid):
+    inv = db_one("SELECT * FROM flower_invoices WHERE id=?", (iid,))
+    if not inv:
+        return jsonify({"ok": False, "error": "not found"}), 404
+    new_val = 0 if inv.get("is_paid") else 1
+    db_run("UPDATE flower_invoices SET is_paid=? WHERE id=?", (new_val, iid))
+    return jsonify({"ok": True, "is_paid": new_val})
 
 @app.route("/api/flower_invoices/<int:iid>", methods=["DELETE"])
 @auth
 def api_del_flower_invoice(iid):
     db_run("DELETE FROM flower_invoices WHERE id=?", (iid,))
     return jsonify({"ok": True})
-
-@app.route("/api/flower_invoices/<int:iid>/paid", methods=["POST"])
-@auth
-def api_toggle_flower_invoice_paid(iid):
-    d = request.json or {}
-    paid = 1 if d.get("paid") else 0
-    db_run("UPDATE flower_invoices SET paid=? WHERE id=?", (paid, iid))
-    return jsonify({"ok": True, "paid": paid})
 
 @app.route("/api/flower_invoices", methods=["POST"])
 @auth
