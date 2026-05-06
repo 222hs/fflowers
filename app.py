@@ -1598,20 +1598,22 @@ async function loadFlowerInvPage(){
     }
     list.innerHTML=invs.map(inv=>{
       const items=inv.items||[];
+      const isPaid=inv.paid===1||inv.paid===true;
       const itemsHtml=items.map(i=>`
         <div style="display:flex;justify-content:space-between;align-items:center;padding:5px 12px;border-bottom:1px solid var(--border);">
           <span style="font-size:11px;color:var(--text2);">${i.unit==='بندلة'?'🌸':'🌹'} ${i.name}: <b>${i.count}</b> ${i.unit||'وردة'}</span>
           ${parseFloat(i.unit_price||0)>0?`<span style="font-size:11px;color:var(--text3);">${(+i.line_total||0).toFixed(3)} ر.ع</span>`:''}
         </div>`).join('');
-      return `<div class="gc" style="margin-bottom:12px;overflow:hidden;">
+      return `<div class="gc" style="margin-bottom:12px;overflow:hidden;${isPaid?'opacity:0.8':''}">
         <div style="display:flex;justify-content:space-between;align-items:center;padding:12px 14px;border-bottom:1px solid var(--border);">
           <div>
             <div style="font-size:13px;font-weight:800;">🏪 ${inv.company||'غير محدد'}</div>
             ${inv.invoice_number?`<div style="font-size:10px;color:var(--gold);margin-top:2px;letter-spacing:.5px;direction:ltr;text-align:right;">🔖 ${inv.invoice_number}</div>`:''}
             <div style="font-size:11px;color:var(--text3);margin-top:2px;">📅 ${inv.inv_date}</div>
           </div>
-          <div style="display:flex;align-items:center;gap:10px;">
+          <div style="display:flex;align-items:center;gap:8px;">
             <div style="font-size:15px;font-weight:900;color:var(--accent);">${(+inv.total||0).toFixed(3)} <span style="font-size:10px;font-weight:600;">ر.ع</span></div>
+            <button onclick="toggleInvPaid(${inv.id},${isPaid?0:1})" style="border:none;border-radius:8px;font-family:'Tajawal',sans-serif;font-size:11px;font-weight:700;cursor:pointer;padding:5px 10px;transition:.2s;background:${isPaid?'rgba(74,222,128,.15)':'rgba(251,113,133,.12)'};color:${isPaid?'#4ade80':'#fb7185'};">${isPaid?'✅ مدفوعة':'⏳ غير مدفوعة'}</button>
             <button onclick="delFlowerInv(${inv.id})" style="background:rgba(232,121,138,.1);border:1px solid rgba(232,121,138,.2);border-radius:8px;color:var(--accent);font-size:13px;width:30px;height:30px;cursor:pointer;">🗑</button>
           </div>
         </div>
@@ -1619,6 +1621,11 @@ async function loadFlowerInvPage(){
       </div>`;
     }).join('');
   }catch(e){console.error(e);}
+}
+async function toggleInvPaid(id,paid){
+  await api('/api/flower_invoices/'+id+'/paid',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({paid:paid===1})});
+  loadFlowerInvPage();
+  showToast(paid?'✅ تم تحديد الفاتورة كمدفوعة':'↩️ تم تحديد الفاتورة كغير مدفوعة');
 }
 async function delFlowerInv(id){
   if(!confirm('حذف هذه الفاتورة؟'))return;
@@ -2132,6 +2139,7 @@ def init_db():
         month TEXT DEFAULT '',
         total REAL DEFAULT 0,
         items TEXT DEFAULT '[]',
+        paid INTEGER DEFAULT 0,
         created TEXT DEFAULT (datetime('now')))"""
     if USE_TURSO:
         turso_run(flowers_sql)
@@ -2139,6 +2147,8 @@ def init_db():
         try: turso_run("ALTER TABLE flowers ADD COLUMN unit TEXT DEFAULT 'وردة'")
         except: pass
         try: turso_run("ALTER TABLE flower_invoices ADD COLUMN invoice_number TEXT DEFAULT NULL")
+        try: turso_run("ALTER TABLE flower_invoices ADD COLUMN paid INTEGER DEFAULT 0")
+        except: pass
         except: pass
     else:
         for _sql in (flowers_sql, flower_inv_sql):
@@ -2147,6 +2157,9 @@ def init_db():
             except: pass
         try:
             conn4=sqlite3.connect(DB_PATH); conn4.execute("ALTER TABLE flower_invoices ADD COLUMN invoice_number TEXT DEFAULT NULL"); conn4.commit(); conn4.close()
+        try:
+            conn4=sqlite3.connect(DB_PATH); conn4.execute("ALTER TABLE flower_invoices ADD COLUMN paid INTEGER DEFAULT 0"); conn4.commit(); conn4.close()
+        except: pass
         except: pass
         try:
             conn4=sqlite3.connect(DB_PATH); conn4.execute("ALTER TABLE flowers ADD COLUMN unit TEXT DEFAULT 'وردة'"); conn4.commit(); conn4.close()
@@ -4363,6 +4376,14 @@ def api_get_flower_invoices():
 def api_del_flower_invoice(iid):
     db_run("DELETE FROM flower_invoices WHERE id=?", (iid,))
     return jsonify({"ok": True})
+
+@app.route("/api/flower_invoices/<int:iid>/paid", methods=["POST"])
+@auth
+def api_toggle_flower_invoice_paid(iid):
+    d = request.json or {}
+    paid = 1 if d.get("paid") else 0
+    db_run("UPDATE flower_invoices SET paid=? WHERE id=?", (paid, iid))
+    return jsonify({"ok": True, "paid": paid})
 
 @app.route("/api/flower_invoices", methods=["POST"])
 @auth
