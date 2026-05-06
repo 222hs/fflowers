@@ -9,5 +9,3 @@ services:
         sync: false
       - key: DB_PATH
         value: /opt/render/project/src/fairuz.db
-      - key: WORKER_PASSWORD
-        sync: false
