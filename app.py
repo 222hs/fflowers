@@ -799,10 +799,17 @@ input[type="date"]{width:100%;padding:10px 12px;border:1px solid var(--border);b
     </div>
   </div>
 
-  <!-- زر إضافة يدوي -->
-  <button onclick="openAddFlowerInvModal()" style="width:100%;padding:13px;border:none;border-radius:14px;background:linear-gradient(135deg,var(--gold),#b8891f);color:white;font-family:'Tajawal',sans-serif;font-size:14px;font-weight:800;cursor:pointer;margin-bottom:16px;box-shadow:0 3px 14px rgba(212,168,67,.35);display:flex;align-items:center;justify-content:center;gap:8px;transition:transform .2s;" onmousedown="this.style.transform='scale(0.98)'" onmouseup="this.style.transform='scale(1)'">
-    ➕ إضافة فاتورة يدوياً
-  </button>
+  <!-- زر إضافة يدوي + زر رفع صورة -->
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px;">
+    <button onclick="openAddFlowerInvModal()" style="padding:13px;border:none;border-radius:14px;background:linear-gradient(135deg,var(--gold),#b8891f);color:white;font-family:'Tajawal',sans-serif;font-size:13px;font-weight:800;cursor:pointer;box-shadow:0 3px 14px rgba(212,168,67,.35);display:flex;align-items:center;justify-content:center;gap:6px;transition:transform .2s;" onmousedown="this.style.transform='scale(0.97)'" onmouseup="this.style.transform='scale(1)'">
+      ➕ إضافة يدوياً
+    </button>
+    <button onclick="triggerFlowerInvScan()" style="padding:13px;border:none;border-radius:14px;background:linear-gradient(135deg,var(--accent),var(--accent2));color:white;font-family:'Tajawal',sans-serif;font-size:13px;font-weight:800;cursor:pointer;box-shadow:0 3px 14px var(--accent-glow);display:flex;align-items:center;justify-content:center;gap:6px;transition:transform .2s;" onmousedown="this.style.transform='scale(0.97)'" onmouseup="this.style.transform='scale(1)'">
+      📷 رفع صورة فاتورة
+    </button>
+  </div>
+  <!-- Input مخفي لرفع الصورة -->
+  <input type="file" id="fi-scan-input" accept="image/*" style="display:none" onchange="handleFlowerInvScan(this)">
 
   <!-- قائمة الفواتير -->
   <div class="slbl">الفواتير</div>
@@ -1584,7 +1591,8 @@ async function loadFlowerInvPage(){
     if(!invs.length){
       list.innerHTML=`<div class="gc" style="padding:24px;text-align:center;color:var(--text3);font-size:12px;line-height:2;">
         لا توجد فواتير هذا الشهر<br>
-        📸 أرسل صورة الفاتورة للبوت مع تعليق <b>"فاتورة ورد"</b>
+        📸 أرسل صورة الفاتورة للبوت مع تعليق <b>"فاتورة ورد"</b><br>
+        أو استخدم زر <b>📷 رفع صورة</b> أعلاه لتحليل الفاتورة تلقائياً
       </div>`;
       return;
     }
@@ -1617,6 +1625,37 @@ async function delFlowerInv(id){
   await api('/api/flower_invoices/'+id,{method:'DELETE'});
   loadFlowerInvPage();
   showToast('✅ تم حذف الفاتورة');
+}
+
+/* ── رفع صورة فاتورة ورد للتحليل التلقائي ── */
+function triggerFlowerInvScan(){
+  const inp = document.getElementById('fi-scan-input');
+  if(inp) inp.click();
+}
+
+async function handleFlowerInvScan(input){
+  const file = input.files && input.files[0];
+  if(!file) return;
+  input.value='';
+  showToast('⏳ جاري تحليل الفاتورة...');
+  try{
+    const fd = new FormData();
+    fd.append('file', file);
+    const res = await fetch('/api/flower_invoices/scan', {
+      method:'POST',
+      credentials:'same-origin',
+      body: fd
+    });
+    const d = await res.json();
+    if(!res.ok || d.error){
+      showToast('❌ ' + (d.error||'خطأ في التحليل'));
+      return;
+    }
+    showToast('✅ تم حفظ الفاتورة: ' + (d.company||'') + ' — ' + (d.total||0).toFixed(3) + ' ر.ع');
+    loadFlowerInvPage();
+  }catch(e){
+    showToast('❌ خطأ في الرفع');
+  }
 }
 
 /* ── إضافة فاتورة ورد يدوياً ── */
@@ -3147,6 +3186,9 @@ def webhook():
                    f"<b>الأصناف:</b>\n{lines}\n\n"
                    f"💰 الإجمالي: {fmt_omr(total)}\n\n"
                    f"لعرض الفواتير: /فواتير_الورد")
+            else:
+                tg(chat, "⚠️ ما قدرت أقرأ فاتورة الورد بوضوح.\nجرّب صورة أوضح أو أضفها يدوياً من الموقع في قسم فواتير الورد.")
+            return "ok"  # فاتورة الورد لا تُضاف كمشتريات
 
         if caption_is_flowers:
             tg(chat,"🌸 جاري عد الورد وتحديد الأنواع...")
@@ -4349,6 +4391,68 @@ def api_add_flower_invoice():
     db_run("INSERT INTO flower_invoices (company,invoice_number,inv_date,month,total,items) VALUES (?,?,?,?,?,?)",
            (company, invoice_number, inv_date, inv_month, total, items))
     return jsonify({"ok": True})
+
+@app.route("/api/flower_invoices/scan", methods=["POST"])
+@auth
+def api_scan_flower_invoice():
+    """قراءة صورة فاتورة ورد مرفوعة من الموقع وحفظها تلقائياً."""
+    import base64 as _b64
+    try:
+        if "file" not in request.files:
+            return jsonify({"error": "لم يتم رفع ملف"}), 400
+        f = request.files["file"]
+        if not f.filename:
+            return jsonify({"error": "ملف غير صالح"}), 400
+        img_bytes = f.read()
+        b64 = _b64.b64encode(img_bytes).decode()
+        if not GROQ_KEY:
+            return jsonify({"error": "GROQ_API_KEY غير مضبوط"}), 500
+        prompt = """This is a flower supplier invoice (may be handwritten, in Arabic or English). Extract ALL data carefully.
+Return ONLY a valid JSON object — no explanation, no markdown:
+{"invoice_number":"INV-001 or null","company":"supplier name","date":"date as written","items":[{"name":"flower name","count":10,"unit":"وردة","unit_price":0.500,"line_total":5.000}],"total":25.500,"found":true}
+Rules: invoice_number from header (null if absent). unit: "بندلة" for gypsophila/جبسون/limonium/ليموناي, else "وردة". found:false if not a flower invoice."""
+        mime = f.content_type or "image/jpeg"
+        res = requests.post("https://api.groq.com/openai/v1/chat/completions",
+            headers={"Authorization": f"Bearer {GROQ_KEY}", "Content-Type": "application/json"},
+            json={"model": "meta-llama/llama-4-scout-17b-16e-instruct",
+                  "messages": [{"role": "user", "content": [
+                      {"type": "image_url", "image_url": {"url": f"data:{mime};base64,{b64}"}},
+                      {"type": "text", "text": prompt}
+                  ]}],
+                  "max_tokens": 1200, "temperature": 0}, timeout=35)
+        resp = res.json()
+        if "error" in resp:
+            return jsonify({"error": str(resp["error"])}), 500
+        raw = resp["choices"][0]["message"]["content"]
+        raw = re.sub(r"```json\s*","",raw); raw = re.sub(r"```\s*","",raw).strip()
+        match = re.search(r'\{.*\}', raw, re.DOTALL)
+        if not match:
+            return jsonify({"error": "ما قدرت أقرأ الفاتورة، جرب صورة أوضح"}), 422
+        data = json.loads(match.group())
+        data = _normalize_invoice_data(data)
+        if not data.get("found"):
+            return jsonify({"error": "الصورة لا تبدو فاتورة ورد"}), 422
+        company = data.get("company","").strip() or "غير محدد"
+        invoice_number = data.get("invoice_number") or None
+        std_date = data.get("date","").strip()
+        if std_date:
+            try:
+                dt = datetime.strptime(std_date, "%Y-%m-%d")
+                inv_date_display = dt.strftime("%d/%m/%Y"); inv_month = dt.strftime("%Y-%m")
+            except:
+                inv_date_display = std_date; inv_month = cur_month()
+        else:
+            inv_date_display = datetime.now().strftime("%d/%m/%Y"); inv_month = cur_month()
+        items = data.get("items", [])
+        total = float(data.get("total") or 0) or sum(float(i.get("line_total",0)) for i in items)
+        items_json = json.dumps(items, ensure_ascii=False)
+        db_run("INSERT INTO flower_invoices (company,invoice_number,inv_date,month,total,items) VALUES (?,?,?,?,?,?)",
+               (company, invoice_number, inv_date_display, inv_month, total, items_json))
+        return jsonify({"ok": True, "company": company, "inv_date": inv_date_display,
+                        "total": total, "items": items, "invoice_number": invoice_number})
+    except Exception as e:
+        print("scan flower invoice error:", e)
+        return jsonify({"error": str(e)}), 500
 
 if __name__=="__main__":
     port=int(os.environ.get("PORT",5000))
