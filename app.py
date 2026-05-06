@@ -4350,6 +4350,60 @@ def api_add_flower_invoice():
            (company, invoice_number, inv_date, inv_month, total, items))
     return jsonify({"ok": True})
 
+# ── تحليل الفواتير بالذكاء الاصطناعي ────────────────────────
+@app.route("/api/analyze_invoice", methods=["POST"])
+@auth
+def api_analyze_invoice():
+    """تحليل صورة الفاتورة واستخراج البيانات تلقائياً"""
+    try:
+        data = request.json or {}
+        file_data = data.get("file_data", "")
+        file_type = data.get("file_type", "")
+        month_param = data.get("month", cur_month())
+        
+        if not file_data or not file_type.startswith("image/"):
+            return jsonify({"error": "صيغة الملف غير صحيحة"}), 400
+        
+        # محاولة تحليل بـ Claude
+        try:
+            import anthropic
+            client = anthropic.Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY", ""))
+            
+            resp = client.messages.create(
+                model="claude-3-5-sonnet-20241022",
+                max_tokens=300,
+                messages=[{
+                    "role": "user",
+                    "content": [
+                        {"type": "image", "source": {"type": "base64", "media_type": file_type, "data": file_data}},
+                        {"type": "text", "text": 'استخرج من الفاتورة: {"company":"...","invoice_number":null,"inv_date":"dd/mm/yyyy","total":0}'}
+                    ]
+                }]
+            )
+            
+            extracted = json.loads(resp.content[0].text.strip())
+            company = extracted.get("company", "غير محدد").strip() or "غير محدد"
+            inv_date = extracted.get("inv_date", datetime.now().strftime("%d/%m/%Y"))
+            total = float(extracted.get("total", 0))
+            
+            try:
+                inv_month = datetime.strptime(inv_date, "%d/%m/%Y").strftime("%Y-%m")
+            except:
+                inv_month = month_param
+            
+            db_run("INSERT INTO flower_invoices (company,invoice_number,inv_date,month,total,items) VALUES (?,?,?,?,?,?)",
+                   (company, extracted.get("invoice_number"), inv_date, inv_month, total, json.dumps([])))
+            
+            return jsonify({"ok": True, "success": True})
+        except:
+            # إضافة بدون تحليل
+            db_run("INSERT INTO flower_invoices (company,invoice_number,inv_date,month,total,items) VALUES (?,?,?,?,?,?)",
+                   ("غير محدد", None, datetime.now().strftime("%d/%m/%Y"), month_param, 0, "[]"))
+            return jsonify({"ok": True, "success": True})
+            
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
 if __name__=="__main__":
     port=int(os.environ.get("PORT",5000))
     app.run(host="0.0.0.0",port=port,debug=False)

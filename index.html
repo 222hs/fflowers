@@ -313,6 +313,49 @@ async function loadAllMonths(){
 
 async function addEntryAPI(type,desc,amt,img){
   await apiFetch('/api/entries',{
+      <button class="abtn ab" onclick="addBuy()"><span>+</span> إضافة</button>
+      </div>
+    </div>
+  </div>
+  <div class="sec-lbl">🧾 فواتير الورود</div>
+  <div class="upload-card">
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:18px;">
+      <span style="font-size:22px">📸</span>
+      <div style="text-align:right;"><div style="font-size:14px;font-weight:800;">رفع فاتورة للتحليل الذكي</div><div style="font-size:11px;color:var(--text3);">الذكاء الاصطناعي سيستخرج البيانات تلقائياً</div></div>
+    </div>
+    <div id="invoiceDz" class="dzone">
+      <input type="file" id="invFileInput" accept="image/*,.pdf" onchange="onInvoiceFile(event)"/>
+      <div class="dz-ico">📄</div>
+      <div class="dz-txt"><strong>اسحب الفاتورة هنا</strong><br>أو اضغط لاختيار صورة/PDF</div>
+      <div class="dz-hint">PNG · JPG · PDF مدعومة</div>
+    </div>
+    <div id="invProcessing" style="display:none;text-align:center;padding:20px;">
+      <div class="spin"></div>
+      <div style="font-size:13px;color:var(--text2);">🤖 جاري تحليل الفاتورة بالذكاء الاصطناعي...</div>
+    </div>
+  </div>
+
+  <div class="panel" style="animation:fadeUp .6s .54s ease both;margin-bottom:32px;">
+    <div class="ph">
+      <div class="ph-l">
+        <div class="pico" style="background:rgba(245,200,66,.14);">🧾</div>
+        <div><div class="ptitle" style="color:var(--gold);">الفواتير المسجلة</div></div>
+      </div>
+      <span class="pcnt" id="invCnt" style="background:rgba(245,200,66,.14);color:var(--gold);">0</span>
+    </div>
+    <div class="pbody" id="invPanel" style="max-height:400px;"><div class="empty"><div class="ei">🧾</div><p>لا توجد فواتير بعد</p></div></div>
+  </div>
+  <div class="sec-lbl">السجلات</div>
+  <div class="panels">
+    <div class="panel ps">
+      <div class="ph"><div class="ph-l"><div class="pico">🌸</div><div class="ptitle">المبيعات</div></div><div class="pcnt" id="sb">0</div></div>
+      <div class="pbody" id="sl"></div>
+    </div>
+    <div class="panel pb">
+      <div class="ph"><div class="ph-l"><div class="pico">📦</div><div class="ptitle">المشتريات</div></div><div class="pcnt" id="bb">0</div></div>
+      <div class="pbody" id="bl"></div>
+    </div>
+  </div>
     method:'POST',
     headers:{'Content-Type':'application/json'},
     body:JSON.stringify({type,desc,amt,img,month})
@@ -506,6 +549,124 @@ dz.addEventListener('drop',e=>{e.preventDefault();dz.classList.remove('drag');co
 // Init
 loadEntries();
 loadAllMonths();
+loadInvoices();
+
+// ── Invoice Management ────────────────────────────────────
+let invoices = [];
+
+async function loadInvoices() {
+  try {
+    const data = await apiFetch(`/api/flower_invoices?month=${month}`);
+    invoices = data.invoices || [];
+    renderInvoices();
+  } catch (e) {
+    console.error('خطأ في تحميل الفواتير:', e);
+  }
+}
+
+function renderInvoices() {
+  const panel = document.getElementById('invPanel');
+  if (!invoices.length) {
+    panel.innerHTML = '<div class="empty"><div class="ei">🧾</div><p>لا توجد فواتير بعد<br>رفّع صورة فاتورة الآن</p></div>';
+    document.getElementById('invCnt').textContent = '0';
+    return;
+  }
+
+  panel.innerHTML = invoices.map(inv => `
+    <div class="entry" style="border-right:3px solid var(--gold);padding-right:8px;">
+      <div class="entry-img-ph" style="background:rgba(245,200,66,.14);color:var(--gold);">🧾</div>
+      <div class="einfo">
+        <div class="edesc">${inv.company || 'غير محدد'}</div>
+        <div class="edate">${inv.inv_date}${inv.invoice_number ? ' • ' + inv.invoice_number : ''}</div>
+      </div>
+      <div class="eamt inc" style="color:var(--gold);">ر.ع ${fmt(inv.total)}</div>
+      <button class="delbtn" onclick="delInvoice(${inv.id})">🗑</button>
+    </div>
+  `).join('');
+  
+  document.getElementById('invCnt').textContent = invoices.length;
+}
+
+async function onInvoiceFile(ev) {
+  const file = ev.target.files[0];
+  if (!file) return;
+  
+  ev.target.value = '';
+  document.getElementById('invoiceDz').style.display = 'none';
+  document.getElementById('invProcessing').style.display = 'block';
+
+  try {
+    const base64 = await fileToBase64(file);
+    const response = await apiFetch('/api/analyze_invoice', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        file_name: file.name,
+        file_type: file.type,
+        file_data: base64,
+        month: month
+      })
+    });
+
+    if (response.ok || response.success) {
+      await loadInvoices();
+      showToast('✅ تم تحليل وإضافة الفاتورة بنجاح!');
+    } else {
+      showToast('⚠️ خطأ: ' + (response.error || 'خطأ غير معروف'));
+    }
+  } catch (e) {
+    showToast('❌ خطأ: ' + e.message);
+  } finally {
+    document.getElementById('invoiceDz').style.display = '';
+    document.getElementById('invProcessing').style.display = 'none';
+  }
+}
+
+async function delInvoice(id) {
+  if (!confirm('هل تريد حذف هذه الفاتورة؟')) return;
+  try {
+    await apiFetch(`/api/flower_invoices/${id}`, { method: 'DELETE' });
+    await loadInvoices();
+    showToast('🗑️ تم حذف الفاتورة');
+  } catch (e) {
+    showToast('❌ خطأ في الحذف');
+  }
+}
+
+function fileToBase64(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result.split(',')[1]);
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
+// Drag-drop for invoices
+const invDz = document.getElementById('invoiceDz');
+if (invDz) {
+  invDz.addEventListener('dragover', e => {
+    e.preventDefault();
+    invDz.classList.add('drag');
+  });
+  invDz.addEventListener('dragleave', () => invDz.classList.remove('drag'));
+  invDz.addEventListener('drop', e => {
+    e.preventDefault();
+    invDz.classList.remove('drag');
+    const f = e.dataTransfer.files[0];
+    if (f) onInvoiceFile({ target: { files: [f], value: '' } });
+  });
+}
+
+// Hook into changeMonth
+const origChangeMonth = window.changeMonth;
+window.changeMonth = function() {
+  origChangeMonth.call(this);
+  loadInvoices();
+};
+
+// Auto-refresh invoices
+setInterval(() => { loadInvoices(); }, 15000);
 </script>
 </body>
 </html>
