@@ -700,6 +700,29 @@ input[type="date"]{width:100%;padding:10px 12px;border:1px solid var(--border);b
       <div class="kpi-sub"><span id="kNb" class="badge">—</span></div></div>
   </div>
 
+  <!-- ── فواتير الورد ── -->
+  <div class="slbl"><span>🌹 فواتير الورد</span></div>
+  <div class="gc" style="padding:14px;margin-bottom:16px;" id="home-flower-inv-card">
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px;">
+      <div style="background:rgba(90,138,106,0.08);border:1px solid rgba(90,138,106,0.2);border-radius:14px;padding:13px;text-align:center;">
+        <div style="font-size:20px;margin-bottom:5px;">✅</div>
+        <div style="font-size:9px;color:var(--text3);margin-bottom:4px;">مدفوعة</div>
+        <div style="font-size:16px;font-weight:900;color:var(--green2);" id="h-fi-paid-amt">— ر.ع</div>
+        <div style="font-size:10px;color:var(--text3);margin-top:3px;" id="h-fi-paid-cnt">0 فاتورة</div>
+      </div>
+      <div style="background:rgba(232,121,138,0.08);border:1px solid rgba(232,121,138,0.2);border-radius:14px;padding:13px;text-align:center;">
+        <div style="font-size:20px;margin-bottom:5px;">⏳</div>
+        <div style="font-size:9px;color:var(--text3);margin-bottom:4px;">غير مدفوعة</div>
+        <div style="font-size:16px;font-weight:900;color:var(--accent);" id="h-fi-unpaid-amt">— ر.ع</div>
+        <div style="font-size:10px;color:var(--text3);margin-top:3px;" id="h-fi-unpaid-cnt">0 فاتورة</div>
+      </div>
+    </div>
+    <div style="display:flex;justify-content:space-between;align-items:center;padding:9px 12px;background:rgba(212,165,87,0.08);border:1px solid rgba(212,165,87,0.2);border-radius:10px;">
+      <span style="font-size:11px;color:var(--text2);font-weight:700;">إجمالي فواتير الشهر</span>
+      <span style="font-size:14px;font-weight:900;color:var(--gold);" id="h-fi-total">— ر.ع</span>
+    </div>
+  </div>
+
   <div class="slbl"><span data-t="addNew">إضافة جديد</span></div>
   <div class="add-card gc">
     <div class="type-tabs">
@@ -793,9 +816,12 @@ input[type="date"]{width:100%;padding:10px 12px;border:1px solid var(--border);b
       <button onclick="loadFlowerInvPage()" style="padding:9px 14px;border:1px solid var(--border);border-radius:10px;background:var(--glass);color:var(--text2);font-family:'Tajawal',sans-serif;font-size:12px;cursor:pointer;">🔄</button>
     </div>
     <!-- KPIs -->
-    <div class="kpi-row row3" id="fi-kpis">
+    <div class="kpi-row row2" id="fi-kpis" style="margin-bottom:10px;">
+      <div class="kpi gc green"><div class="kpi-ico">✅</div><div class="kpi-lbl">مدفوعة</div><div class="kpi-val" id="fi-paid-total" style="color:var(--green2);">—</div><div class="kpi-sub" id="fi-paid-count">0 فاتورة</div></div>
+      <div class="kpi gc"><div class="kpi-ico">⏳</div><div class="kpi-lbl">غير مدفوعة</div><div class="kpi-val" id="fi-unpaid-total" style="color:var(--accent);">—</div><div class="kpi-sub" id="fi-unpaid-count">0 فاتورة</div></div>
+    </div>
+    <div class="kpi-row row2" id="fi-kpis2">
       <div class="kpi gc"><div class="kpi-ico">🧾</div><div class="kpi-lbl">عدد الفواتير</div><div class="kpi-val" id="fi-count">—</div></div>
-      <div class="kpi gc"><div class="kpi-ico">🏪</div><div class="kpi-lbl">عدد الشركات</div><div class="kpi-val" id="fi-companies">—</div></div>
       <div class="kpi gc gold"><div class="kpi-ico">💰</div><div class="kpi-lbl">إجمالي الشهر</div><div class="kpi-val" id="fi-total">—</div></div>
     </div>
   </div>
@@ -1575,11 +1601,21 @@ async function loadFlowerInvPage(){
       sel.innerHTML=`<option value="${mo}">${mo}</option>`;
     }
     const invs=d.invoices||[];
+
+    // حساب المدفوعة وغير المدفوعة
+    const paid   = invs.filter(i=>i.paid);
+    const unpaid = invs.filter(i=>!i.paid);
+    const paidTotal   = paid.reduce((a,i)=>a+(+i.total||0),0);
+    const unpaidTotal = unpaid.reduce((a,i)=>a+(+i.total||0),0);
+
     // KPIs
-    const companies=[...new Set(invs.map(i=>i.company).filter(Boolean))];
     document.getElementById('fi-count').textContent=invs.length;
-    document.getElementById('fi-companies').textContent=companies.length;
     document.getElementById('fi-total').textContent=d.total?(+d.total).toFixed(3)+' ر.ع':'0.000 ر.ع';
+    document.getElementById('fi-paid-total').textContent=paidTotal.toFixed(3)+' ر.ع';
+    document.getElementById('fi-paid-count').textContent=paid.length+' فاتورة';
+    document.getElementById('fi-unpaid-total').textContent=unpaidTotal.toFixed(3)+' ر.ع';
+    document.getElementById('fi-unpaid-count').textContent=unpaid.length+' فاتورة';
+
     // List
     const list=document.getElementById('fi-list');
     if(!invs.length){
@@ -1590,22 +1626,40 @@ async function loadFlowerInvPage(){
       return;
     }
     list.innerHTML=invs.map(inv=>{
+      const isPaid = !!inv.paid;
       const items=inv.items||[];
       const itemsHtml=items.map(i=>`
         <div style="display:flex;justify-content:space-between;align-items:center;padding:5px 12px;border-bottom:1px solid var(--border);">
           <span style="font-size:11px;color:var(--text2);">${i.unit==='بندلة'?'🌸':'🌹'} ${i.name}: <b>${i.count}</b> ${i.unit||'وردة'}</span>
           ${parseFloat(i.unit_price||0)>0?`<span style="font-size:11px;color:var(--text3);">${(+i.line_total||0).toFixed(3)} ر.ع</span>`:''}
         </div>`).join('');
-      return `<div class="gc" style="margin-bottom:12px;overflow:hidden;">
-        <div style="display:flex;justify-content:space-between;align-items:center;padding:12px 14px;border-bottom:1px solid var(--border);">
-          <div>
-            <div style="font-size:13px;font-weight:800;">🏪 ${inv.company||'غير محدد'}</div>
+
+      const paidBadge = isPaid
+        ? `<span style="display:inline-flex;align-items:center;gap:3px;padding:3px 10px;border-radius:20px;font-size:10px;font-weight:800;background:rgba(90,138,106,0.15);color:var(--green2);border:1px solid rgba(90,138,106,0.3);">✅ مدفوعة</span>`
+        : `<span style="display:inline-flex;align-items:center;gap:3px;padding:3px 10px;border-radius:20px;font-size:10px;font-weight:800;background:rgba(232,121,138,0.12);color:var(--accent);border:1px solid rgba(232,121,138,0.25);">⏳ غير مدفوعة</span>`;
+
+      const toggleBtn = isPaid
+        ? `<button onclick="toggleFlowerInvPaid(${inv.id},0)" title="تحديد كغير مدفوعة"
+            style="background:rgba(90,138,106,0.12);border:1px solid rgba(90,138,106,0.25);border-radius:8px;color:var(--green2);font-size:11px;padding:5px 10px;cursor:pointer;font-family:'Tajawal',sans-serif;font-weight:700;white-space:nowrap;">↩ تراجع</button>`
+        : `<button onclick="toggleFlowerInvPaid(${inv.id},1)" title="تحديد كمدفوعة"
+            style="background:rgba(90,138,106,0.9);border:none;border-radius:8px;color:white;font-size:11px;padding:5px 10px;cursor:pointer;font-family:'Tajawal',sans-serif;font-weight:700;white-space:nowrap;">✅ دفع</button>`;
+
+      return `<div class="gc" style="margin-bottom:12px;overflow:hidden;${isPaid?'opacity:0.85;':''}" id="fi-card-${inv.id}">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;padding:12px 14px;border-bottom:1px solid var(--border);">
+          <div style="flex:1;min-width:0;">
+            <div style="display:flex;align-items:center;gap:7px;flex-wrap:wrap;margin-bottom:4px;">
+              <div style="font-size:13px;font-weight:800;">🏪 ${inv.company||'غير محدد'}</div>
+              ${paidBadge}
+            </div>
             ${inv.invoice_number?`<div style="font-size:10px;color:var(--gold);margin-top:2px;letter-spacing:.5px;direction:ltr;text-align:right;">🔖 ${inv.invoice_number}</div>`:''}
             <div style="font-size:11px;color:var(--text3);margin-top:2px;">📅 ${inv.inv_date}</div>
           </div>
-          <div style="display:flex;align-items:center;gap:10px;">
-            <div style="font-size:15px;font-weight:900;color:var(--accent);">${(+inv.total||0).toFixed(3)} <span style="font-size:10px;font-weight:600;">ر.ع</span></div>
-            <button onclick="delFlowerInv(${inv.id})" style="background:rgba(232,121,138,.1);border:1px solid rgba(232,121,138,.2);border-radius:8px;color:var(--accent);font-size:13px;width:30px;height:30px;cursor:pointer;">🗑</button>
+          <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;flex-shrink:0;margin-right:10px;">
+            <div style="font-size:15px;font-weight:900;color:${isPaid?'var(--green2)':'var(--accent)'};">${(+inv.total||0).toFixed(3)} <span style="font-size:10px;font-weight:600;">ر.ع</span></div>
+            <div style="display:flex;gap:5px;">
+              ${toggleBtn}
+              <button onclick="delFlowerInv(${inv.id})" style="background:rgba(232,121,138,.1);border:1px solid rgba(232,121,138,.2);border-radius:8px;color:var(--accent);font-size:13px;width:30px;height:30px;cursor:pointer;">🗑</button>
+            </div>
           </div>
         </div>
         ${items.length?`<div style="padding:4px 0;">${itemsHtml}</div>`:''}
@@ -1613,7 +1667,18 @@ async function loadFlowerInvPage(){
     }).join('');
   }catch(e){console.error(e);}
 }
-async function delFlowerInv(id){
+
+async function toggleFlowerInvPaid(id, val){
+  try{
+    await api('/api/flower_invoices/'+id+'/paid',{method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({paid:val})});
+    loadFlowerInvPage();
+    // أيضاً حدّث الرئيسية إذا كانت مفتوحة
+    loadHomeFlowerInv();
+    showToast(val ? '✅ تم تحديدها كمدفوعة' : '↩ تم التراجع');
+  }catch(e){showToast('❌ خطأ في التحديث');}
+}
   if(!confirm('حذف هذه الفاتورة؟'))return;
   await api('/api/flower_invoices/'+id,{method:'DELETE'});
   loadFlowerInvPage();
@@ -1806,7 +1871,7 @@ function changeMonth(){
   month = document.getElementById('msel').value;
   // امسح الـ cache لو تغيرت السنة
   if(prev.split('-')[0] !== month.split('-')[0]){ _chartsCache={}; _chartsCacheYear=null; }
-  load();loadFlowers();
+  load();loadFlowers();loadHomeFlowerInv();
   if(document.getElementById('tab-shelves').classList.contains('active'))loadShelves();
 }
 function showToast(msg){const el=document.getElementById('toast');el.textContent=msg;el.classList.add('show');setTimeout(()=>el.classList.remove('show'),3000);}
@@ -1932,10 +1997,30 @@ function toggleLang(){
   setLang(lang === 'ar' ? 'en' : 'ar');
 }
 
+/* ── HOME FLOWER INVOICES SUMMARY ── */
+async function loadHomeFlowerInv(){
+  try{
+    const d = await api('/api/flower_invoices?month='+month);
+    const invs = d.invoices||[];
+    const paid   = invs.filter(i=>i.paid);
+    const unpaid = invs.filter(i=>!i.paid);
+    const paidTotal   = paid.reduce((a,i)=>a+(+i.total||0),0);
+    const unpaidTotal = unpaid.reduce((a,i)=>a+(+i.total||0),0);
+    const grandTotal  = paidTotal + unpaidTotal;
+    const setEl = (id,v)=>{ const el=document.getElementById(id); if(el)el.textContent=v; };
+    setEl('h-fi-paid-amt',   paidTotal.toFixed(3)+' ر.ع');
+    setEl('h-fi-paid-cnt',   paid.length+' فاتورة');
+    setEl('h-fi-unpaid-amt', unpaidTotal.toFixed(3)+' ر.ع');
+    setEl('h-fi-unpaid-cnt', unpaid.length+' فاتورة');
+    setEl('h-fi-total',      grandTotal.toFixed(3)+' ر.ع');
+  }catch(e){console.error('flower inv home',e);}
+}
+
 // Init language
 setLang(lang);
 
 load(); // طلب واحد يجيب كل شيء
+loadHomeFlowerInv(); // فواتير الورد في الرئيسية
 </script>
 </body>
 </html>"""
@@ -2102,6 +2187,8 @@ def init_db():
         except: pass
         try: turso_run("ALTER TABLE flower_invoices ADD COLUMN invoice_number TEXT DEFAULT NULL")
         except: pass
+        try: turso_run("ALTER TABLE flower_invoices ADD COLUMN paid INTEGER DEFAULT 0")
+        except: pass
     else:
         for _sql in (flowers_sql, flower_inv_sql):
             try:
@@ -2109,6 +2196,9 @@ def init_db():
             except: pass
         try:
             conn4=sqlite3.connect(DB_PATH); conn4.execute("ALTER TABLE flower_invoices ADD COLUMN invoice_number TEXT DEFAULT NULL"); conn4.commit(); conn4.close()
+        except: pass
+        try:
+            conn4=sqlite3.connect(DB_PATH); conn4.execute("ALTER TABLE flower_invoices ADD COLUMN paid INTEGER DEFAULT 0"); conn4.commit(); conn4.close()
         except: pass
         try:
             conn4=sqlite3.connect(DB_PATH); conn4.execute("ALTER TABLE flowers ADD COLUMN unit TEXT DEFAULT 'وردة'"); conn4.commit(); conn4.close()
@@ -4908,6 +4998,14 @@ def api_get_flower_invoices():
 @auth
 def api_del_flower_invoice(iid):
     db_run("DELETE FROM flower_invoices WHERE id=?", (iid,))
+    return jsonify({"ok": True})
+
+@app.route("/api/flower_invoices/<int:iid>/paid", methods=["POST"])
+@auth
+def api_flower_invoice_paid(iid):
+    d = request.json or {}
+    paid = 1 if d.get("paid") else 0
+    db_run("UPDATE flower_invoices SET paid=? WHERE id=?", (paid, iid))
     return jsonify({"ok": True})
 
 @app.route("/api/flower_invoices", methods=["POST"])
