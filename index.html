@@ -185,21 +185,9 @@ main{max-width:1180px;margin:0 auto;padding:36px 22px 64px;}
 /* Telegram badge */
 .tg-badge{display:flex;align-items:center;gap:8px;background:rgba(37,211,102,.08);border:1px solid rgba(37,211,102,.2);border-radius:10px;padding:8px 14px;font-size:12px;color:#4ade80;margin-bottom:20px;}
 .tg-badge span{font-size:16px;}
-/* Invoice paid status */
-.inv-paid-row{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-bottom:34px;}
-.kpi-inv-paid{border-color:rgba(74,222,128,.2)!important;}.kpi-inv-paid:hover{border-color:var(--pos)!important;box-shadow:0 10px 44px rgba(74,222,128,.15)!important;}
-.kpi-inv-paid .kpi-ico{background:rgba(74,222,128,.12);box-shadow:0 0 0 1px rgba(74,222,128,.2);}
-.kpi-inv-paid .kpi-val{color:var(--pos);}
-.kpi-inv-unpaid{border-color:rgba(251,113,133,.2)!important;}.kpi-inv-unpaid:hover{border-color:var(--neg)!important;box-shadow:0 10px 44px rgba(251,113,133,.15)!important;}
-.kpi-inv-unpaid .kpi-ico{background:rgba(251,113,133,.12);box-shadow:0 0 0 1px rgba(251,113,133,.2);}
-.kpi-inv-unpaid .kpi-val{color:var(--neg);}
-.pay-toggle-btn{border:none;border-radius:8px;font-family:'Tajawal',sans-serif;font-size:11px;font-weight:700;cursor:pointer;padding:4px 10px;transition:.2s;}
-.pay-toggle-btn.unpaid{background:rgba(251,113,133,.12);color:var(--neg);}
-.pay-toggle-btn.paid{background:rgba(74,222,128,.12);color:var(--pos);}
-.pay-toggle-btn:hover{transform:scale(1.05);}
 @media(max-width:760px){
   header{padding:0 14px;}main{padding:22px 12px 52px;}
-  .kpi-row,.panels,.inv-paid-row{grid-template-columns:1fr;gap:10px;}
+  .kpi-row,.panels{grid-template-columns:1fr;gap:10px;}
   .mrow,.sale-upload-row,.inv-layout{grid-template-columns:1fr;}
   .kpi-val{font-size:24px;}.upload-card{padding:18px;}
 }
@@ -231,11 +219,6 @@ main{max-width:1180px;margin:0 auto;padding:36px 22px 64px;}
     <div class="kpi kpi-s"><div class="kpi-shine"></div><div class="kpi-ico">💰</div><div class="kpi-lbl">إجمالي المبيعات</div><div class="kpi-val" id="kS">0 ر.ع</div><div class="kpi-sub" id="kSc">0 عملية</div></div>
     <div class="kpi kpi-b"><div class="kpi-shine"></div><div class="kpi-ico">🛒</div><div class="kpi-lbl">إجمالي المشتريات</div><div class="kpi-val" id="kB">0 ر.ع</div><div class="kpi-sub" id="kBc">0 عملية</div></div>
     <div class="kpi kpi-p"><div class="kpi-shine"></div><div class="kpi-ico">📊</div><div class="kpi-lbl">صافي الربح</div><div class="kpi-val" id="kP">0 ر.ع</div><div class="kpi-sub"><span id="kPb" class="badge">—</span></div></div>
-  </div>
-  <div class="sec-lbl">فواتير الورد</div>
-  <div class="inv-paid-row">
-    <div class="kpi kpi-inv-paid"><div class="kpi-shine"></div><div class="kpi-ico">✅</div><div class="kpi-lbl">فواتير مدفوعة</div><div class="kpi-val" id="kInvPaid">0 ر.ع</div><div class="kpi-sub" id="kInvPaidC">0 فاتورة</div></div>
-    <div class="kpi kpi-inv-unpaid"><div class="kpi-shine"></div><div class="kpi-ico">⏳</div><div class="kpi-lbl">فواتير غير مدفوعة</div><div class="kpi-val" id="kInvUnpaid">0 ر.ع</div><div class="kpi-sub" id="kInvUnpaidC">0 فاتورة</div></div>
   </div>
   <div class="sec-lbl">إضافة إيصال</div>
   <div class="upload-card">
@@ -520,27 +503,9 @@ dz.addEventListener('dragover',e=>{e.preventDefault();dz.classList.add('drag');}
 dz.addEventListener('dragleave',()=>dz.classList.remove('drag'));
 dz.addEventListener('drop',e=>{e.preventDefault();dz.classList.remove('drag');const f=e.dataTransfer.files[0];if(f)pickFile({target:{files:[f],value:''}});});
 
-// ── Invoice Summary ──────────────────────────────────────
-async function loadInvoiceSummary(){
-  try{
-    const data=await apiFetch(`/api/flower_invoices?month=${month}`);
-    const invs=data.invoices||[];
-    const paid=invs.filter(i=>i.paid);
-    const unpaid=invs.filter(i=>!i.paid);
-    const paidAmt=paid.reduce((a,i)=>a+(+i.total||0),0);
-    const unpaidAmt=unpaid.reduce((a,i)=>a+(+i.total||0),0);
-    document.getElementById('kInvPaid').textContent=fmt(paidAmt)+' ر.ع';
-    document.getElementById('kInvPaidC').textContent=paid.length+' فاتورة';
-    document.getElementById('kInvUnpaid').textContent=fmt(unpaidAmt)+' ر.ع';
-    document.getElementById('kInvUnpaidC').textContent=unpaid.length+' فاتورة';
-  }catch(e){}
-}
-
 // Init
 loadEntries();
 loadAllMonths();
-loadInvoiceSummary();
-setInterval(loadInvoiceSummary, 15000);
 </script>
 </body>
 </html>
