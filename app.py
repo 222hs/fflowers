@@ -700,6 +700,23 @@ input[type="date"]{width:100%;padding:10px 12px;border:1px solid var(--border);b
       <div class="kpi-sub"><span id="kNb" class="badge">—</span></div></div>
   </div>
 
+  <!-- ── فواتير الورد ── -->
+  <div class="gc" style="padding:14px;margin-bottom:16px;">
+    <div style="font-size:10px;font-weight:700;color:var(--text3);letter-spacing:1.5px;text-transform:uppercase;margin-bottom:12px;">🧾 فواتير الورد — الشهر</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+      <div style="background:rgba(90,138,106,.08);border:1px solid rgba(90,138,106,.2);border-radius:12px;padding:12px;">
+        <div style="font-size:10px;color:var(--text3);margin-bottom:4px;">✅ مدفوعة</div>
+        <div style="font-family:'Playfair Display',serif;font-size:18px;font-weight:700;color:var(--green2);" id="home-fi-paid">0.000 ر.ع</div>
+        <div style="font-size:10px;color:var(--text3);margin-top:2px;" id="home-fi-paid-count">0 فاتورة</div>
+      </div>
+      <div style="background:rgba(232,121,138,.08);border:1px solid rgba(232,121,138,.2);border-radius:12px;padding:12px;">
+        <div style="font-size:10px;color:var(--text3);margin-bottom:4px;">⏳ غير مدفوعة</div>
+        <div style="font-family:'Playfair Display',serif;font-size:18px;font-weight:700;color:var(--accent);" id="home-fi-unpaid">0.000 ر.ع</div>
+        <div style="font-size:10px;color:var(--text3);margin-top:2px;" id="home-fi-unpaid-count">0 فاتورة</div>
+      </div>
+    </div>
+  </div>
+
   <div class="slbl"><span data-t="addNew">إضافة جديد</span></div>
   <div class="add-card gc">
     <div class="type-tabs">
@@ -1170,6 +1187,15 @@ document.getElementById('bPayer').addEventListener('change',function(){
 });
 
 /* ── LOAD ── */
+async function loadHomeFlowerInvSummary(){
+  try{
+    const d=await api('/api/flower_invoices?month='+month);
+    document.getElementById('home-fi-paid').textContent=(+(d.paid_total||0)).toFixed(3)+' ر.ع';
+    document.getElementById('home-fi-paid-count').textContent=(d.paid_count||0)+' فاتورة';
+    document.getElementById('home-fi-unpaid').textContent=(+(d.unpaid_total||0)).toFixed(3)+' ر.ع';
+    document.getElementById('home-fi-unpaid-count').textContent=(d.unpaid_count||0)+' فاتورة';
+  }catch(e){console.error('fi summary error',e);}
+}
 function showSkeleton(){
   // skeleton يظهر فوراً بينما تجي البيانات
   const skl = `<div class="skl-row"><div class="skl"></div><div class="skl skl-sm"></div></div>`;
@@ -1209,6 +1235,8 @@ async function load(){
     const cur = all[parseInt(month.split('-')[1])-1];
     if(cur){ renderPayChart(cur.sales); renderPayerChart(cur.buys.filter(e=>e.type!=='expense')); }
     if(dash.flowers) document.getElementById('flowerCount').textContent = dash.flowers.total || 0;
+    // تحديث ملخص فواتير الورد في الرئيسية
+    loadHomeFlowerInvSummary();
   } catch(e){ hideSkeleton(); console.error('load error', e); }
 }
 
@@ -1591,6 +1619,7 @@ async function loadFlowerInvPage(){
     }
     list.innerHTML=invs.map(inv=>{
       const items=inv.items||[];
+      const isPaid=inv.is_paid;
       const itemsHtml=items.map(i=>`
         <div style="display:flex;justify-content:space-between;align-items:center;padding:5px 12px;border-bottom:1px solid var(--border);">
           <span style="font-size:11px;color:var(--text2);">${i.unit==='بندلة'?'🌸':'🌹'} ${i.name}: <b>${i.count}</b> ${i.unit||'وردة'}</span>
@@ -1603,8 +1632,9 @@ async function loadFlowerInvPage(){
             ${inv.invoice_number?`<div style="font-size:10px;color:var(--gold);margin-top:2px;letter-spacing:.5px;direction:ltr;text-align:right;">🔖 ${inv.invoice_number}</div>`:''}
             <div style="font-size:11px;color:var(--text3);margin-top:2px;">📅 ${inv.inv_date}</div>
           </div>
-          <div style="display:flex;align-items:center;gap:10px;">
+          <div style="display:flex;align-items:center;gap:8px;">
             <div style="font-size:15px;font-weight:900;color:var(--accent);">${(+inv.total||0).toFixed(3)} <span style="font-size:10px;font-weight:600;">ر.ع</span></div>
+            <button onclick="toggleFlowerInvPaid(${inv.id},this)" style="background:${isPaid?'rgba(90,138,106,.15)':'rgba(232,121,138,.1)'};border:1px solid ${isPaid?'rgba(90,138,106,.3)':'rgba(232,121,138,.2)'};border-radius:8px;color:${isPaid?'var(--green2)':'var(--accent)'};font-size:11px;font-weight:700;padding:4px 8px;cursor:pointer;white-space:nowrap;" data-paid="${isPaid?1:0}">${isPaid?'✅ مدفوعة':'⏳ غير مدفوعة'}</button>
             <button onclick="delFlowerInv(${inv.id})" style="background:rgba(232,121,138,.1);border:1px solid rgba(232,121,138,.2);border-radius:8px;color:var(--accent);font-size:13px;width:30px;height:30px;cursor:pointer;">🗑</button>
           </div>
         </div>
@@ -1618,6 +1648,19 @@ async function delFlowerInv(id){
   await api('/api/flower_invoices/'+id,{method:'DELETE'});
   loadFlowerInvPage();
   showToast('✅ تم حذف الفاتورة');
+}
+
+async function toggleFlowerInvPaid(id,btn){
+  const d=await api('/api/flower_invoices/'+id+'/toggle_paid',{method:'POST'});
+  if(d.ok){
+    const isPaid=d.is_paid;
+    btn.dataset.paid=isPaid;
+    btn.textContent=isPaid?'✅ مدفوعة':'⏳ غير مدفوعة';
+    btn.style.background=isPaid?'rgba(90,138,106,.15)':'rgba(232,121,138,.1)';
+    btn.style.border='1px solid '+(isPaid?'rgba(90,138,106,.3)':'rgba(232,121,138,.2)');
+    btn.style.color=isPaid?'var(--green2)':'var(--accent)';
+    loadFlowerInvPage();
+  }
 }
 
 /* ── إضافة فاتورة ورد يدوياً ── */
@@ -2094,7 +2137,6 @@ def init_db():
         month TEXT DEFAULT '',
         total REAL DEFAULT 0,
         items TEXT DEFAULT '[]',
-        is_paid INTEGER DEFAULT 0,
         created TEXT DEFAULT (datetime('now')))"""
     if USE_TURSO:
         turso_run(flowers_sql)
@@ -3562,26 +3604,13 @@ def api_dashboard():
 
     flowers_total = sum(f["count"] for f in flowers) if flowers else 0
 
-    # فواتير الورد — مدفوعة وغير مدفوعة
-    inv_rows = db_get("SELECT total, is_paid FROM flower_invoices WHERE month=?", (month,))
-    inv_paid_total   = sum(float(r["total"]) for r in inv_rows if r.get("is_paid"))
-    inv_unpaid_total = sum(float(r["total"]) for r in inv_rows if not r.get("is_paid"))
-    inv_paid_count   = sum(1 for r in inv_rows if r.get("is_paid"))
-    inv_unpaid_count = sum(1 for r in inv_rows if not r.get("is_paid"))
-
     return jsonify({
         "month":    month,
         "sales":    s,
         "buys":     b,
         "expenses": {"expenses": expenses, "paid": paid},
         "charts":   months_data,
-        "flowers":  {"flowers": flowers, "total": flowers_total},
-        "flower_invoices_summary": {
-            "paid_total":    inv_paid_total,
-            "unpaid_total":  inv_unpaid_total,
-            "paid_count":    inv_paid_count,
-            "unpaid_count":  inv_unpaid_count,
-        }
+        "flowers":  {"flowers": flowers, "total": flowers_total}
     })
 
 @app.route("/api/entries")
@@ -4918,14 +4947,15 @@ def api_get_flower_invoices():
     for inv in invs:
         try: inv["items"] = json.loads(inv["items"] or "[]")
         except: inv["items"] = []
-        inv["is_paid"] = bool(inv.get("is_paid", 0))
-    total       = sum(float(i["total"]) for i in invs)
-    total_paid  = sum(float(i["total"]) for i in invs if i["is_paid"])
-    total_unpaid= sum(float(i["total"]) for i in invs if not i["is_paid"])
+    total = sum(float(i["total"]) for i in invs)
+    paid_invs = [i for i in invs if i.get("is_paid")]
+    unpaid_invs = [i for i in invs if not i.get("is_paid")]
     months = db_get("SELECT DISTINCT month FROM flower_invoices ORDER BY month DESC")
-    return jsonify({"invoices": invs, "total": total,
-                    "total_paid": total_paid, "total_unpaid": total_unpaid,
-                    "month": m, "months": [r["month"] for r in months]})
+    return jsonify({"invoices": invs, "total": total, "month": m,
+                    "paid_total": sum(float(i["total"]) for i in paid_invs),
+                    "unpaid_total": sum(float(i["total"]) for i in unpaid_invs),
+                    "paid_count": len(paid_invs), "unpaid_count": len(unpaid_invs),
+                    "months": [r["month"] for r in months]})
 
 @app.route("/api/flower_invoices/<int:iid>", methods=["DELETE"])
 @auth
@@ -4933,26 +4963,28 @@ def api_del_flower_invoice(iid):
     db_run("DELETE FROM flower_invoices WHERE id=?", (iid,))
     return jsonify({"ok": True})
 
-@app.route("/api/flower_invoices/<int:iid>/paid", methods=["PATCH"])
+@app.route("/api/flower_invoices/<int:iid>/toggle_paid", methods=["POST"])
 @auth
-def api_toggle_flower_invoice_paid(iid):
-    """تبديل حالة الدفع للفاتورة."""
-    d = request.json or {}
-    is_paid = 1 if d.get("is_paid") else 0
-    db_run("UPDATE flower_invoices SET is_paid=? WHERE id=?", (is_paid, iid))
-    return jsonify({"ok": True, "id": iid, "is_paid": bool(is_paid)})
+def api_toggle_flower_inv_paid(iid):
+    row = db_one("SELECT is_paid FROM flower_invoices WHERE id=?", (iid,))
+    if not row: return jsonify({"error": "not found"}), 404
+    new_val = 0 if row["is_paid"] else 1
+    db_run("UPDATE flower_invoices SET is_paid=? WHERE id=?", (new_val, iid))
+    return jsonify({"ok": True, "is_paid": new_val})
 
 @app.route("/api/flower_invoices", methods=["POST"])
 @worker_auth
 def api_add_flower_invoice():
     d = request.json or {}
     company      = d.get("company","").strip() or "غير محدد"
+    # توحيد اسم الشركة Title Case
     company      = " ".join(w.capitalize() for w in company.split()) if company else "غير محدد"
     invoice_number = d.get("invoice_number") or None
     inv_date     = d.get("inv_date", datetime.now().strftime("%d/%m/%Y"))
     try: inv_month = datetime.strptime(inv_date,"%d/%m/%Y").strftime("%Y-%m")
     except: inv_month = cur_month()
     total        = float(d.get("total",0))
+    # تصحيح المبالغ: 4 أرقام صحيحة → كسر عشري
     if total == int(total) and total >= 1000:
         total = total / 1000.0
     raw_items = d.get("items",[])
@@ -4964,9 +4996,8 @@ def api_add_flower_invoice():
                     item[key] = round(v / 1000.0, 3)
             except: pass
     items = json.dumps(raw_items, ensure_ascii=False)
-    is_paid = 1 if d.get("is_paid") else 0
-    db_run("INSERT INTO flower_invoices (company,invoice_number,inv_date,month,total,items,is_paid) VALUES (?,?,?,?,?,?,?)",
-           (company, invoice_number, inv_date, inv_month, total, items, is_paid))
+    db_run("INSERT INTO flower_invoices (company,invoice_number,inv_date,month,total,items) VALUES (?,?,?,?,?,?)",
+           (company, invoice_number, inv_date, inv_month, total, items))
     return jsonify({"ok": True})
 
 if __name__=="__main__":
