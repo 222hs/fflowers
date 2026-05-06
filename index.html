@@ -182,28 +182,6 @@ main{max-width:1180px;margin:0 auto;padding:36px 22px 64px;}
 .lightbox img{max-width:90vw;max-height:88vh;border-radius:16px;}
 .toast{position:fixed;bottom:30px;left:50%;transform:translateX(-50%) translateY(90px);background:var(--card2);border:1px solid var(--border2);color:var(--text);padding:11px 26px;border-radius:40px;font-size:14px;font-weight:600;box-shadow:0 14px 44px rgba(0,0,0,.5);transition:transform .4s cubic-bezier(.34,1.56,.64,1);z-index:9999;white-space:nowrap;}
 .toast.show{transform:translateX(-50%) translateY(0);}
-/* AI Invoice Analysis */
-.ai-inv-zone{background:linear-gradient(135deg,rgba(183,148,244,.07),rgba(232,84,122,.05));border:1px solid rgba(183,148,244,.25);border-radius:18px;padding:18px;margin-bottom:16px;}
-.ai-inv-header{display:flex;align-items:center;gap:10px;margin-bottom:14px;}
-.ai-inv-pick{border:2px dashed rgba(183,148,244,.3);border-radius:13px;padding:20px 14px;display:flex;flex-direction:column;align-items:center;gap:7px;cursor:pointer;position:relative;transition:.3s;text-align:center;}
-.ai-inv-pick input[type=file]{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%;}
-.ai-inv-pick:hover{border-color:var(--lavender);background:rgba(183,148,244,.06);}
-.ai-inv-pick:hover #aiInvIcon{transform:scale(1.2);}
-.ai-result-card{background:var(--deep);border:1px solid rgba(183,148,244,.2);border-radius:14px;padding:16px;margin-top:4px;}
-.ai-result-img{width:100%;max-height:140px;object-fit:cover;border-radius:10px;border:1px solid var(--border2);margin-bottom:12px;display:block;}
-.ai-result-fields{display:flex;flex-direction:column;gap:10px;}
-.ai-result-fields label{font-size:10px;font-weight:700;color:var(--text3);letter-spacing:1px;text-transform:uppercase;display:block;margin-bottom:4px;}
-.ai-result-fields input{background:var(--surface);border:1px solid var(--border2);border-radius:10px;padding:10px 14px;font-family:'Tajawal',sans-serif;font-size:14px;color:var(--text);outline:none;transition:.2s;width:100%;}
-.ai-result-fields input:focus{border-color:var(--lavender);box-shadow:0 0 0 3px rgba(183,148,244,.2);}
-.ai-thinking{display:flex;align-items:center;gap:10px;padding:14px;color:var(--lavender);font-size:13px;}
-.ai-dots span{display:inline-block;animation:blink 1.2s ease-in-out infinite;}
-.ai-dots span:nth-child(2){animation-delay:.2s;}
-.ai-dots span:nth-child(3){animation-delay:.4s;}
-@keyframes blink{0%,80%,100%{opacity:.2;}40%{opacity:1;}}
-.ai-add-btn{width:100%;margin-top:10px;padding:12px;border:none;border-radius:11px;font-family:'Tajawal',sans-serif;font-size:15px;font-weight:700;cursor:pointer;background:linear-gradient(135deg,var(--lavender),#8b5cf6);color:#fff;box-shadow:0 4px 18px rgba(183,148,244,.3);transition:all .3s cubic-bezier(.34,1.56,.64,1);}
-.ai-add-btn:hover{transform:translateY(-2px) scale(1.03);box-shadow:0 8px 28px rgba(183,148,244,.5);}
-.ai-retry-btn{background:none;border:1px solid var(--border2);border-radius:8px;color:var(--text3);font-family:'Tajawal',sans-serif;font-size:12px;padding:5px 12px;cursor:pointer;margin-top:8px;transition:.2s;}
-.ai-retry-btn:hover{border-color:var(--lavender);color:var(--lavender);}
 /* Telegram badge */
 .tg-badge{display:flex;align-items:center;gap:8px;background:rgba(37,211,102,.08);border:1px solid rgba(37,211,102,.2);border-radius:10px;padding:8px 14px;font-size:12px;color:#4ade80;margin-bottom:20px;}
 .tg-badge span{font-size:16px;}
@@ -269,22 +247,6 @@ main{max-width:1180px;margin:0 auto;padding:36px 22px 64px;}
         <div class="dz-ico">🧾</div>
         <div class="dz-txt"><strong>ارفع صورة الفاتورة</strong><br>اعرضها وأدخل التفاصيل</div>
         <div class="dz-hint">PNG · JPG · PDF</div>
-      </div>
-      <!-- AI Invoice Analysis Zone -->
-      <div class="ai-inv-zone" id="aiInvZone">
-        <div class="ai-inv-header">
-          <span style="font-size:20px">🤖</span>
-          <div>
-            <div style="font-size:13px;font-weight:700;color:var(--lavender);">تحليل الفاتورة بالذكاء الاصطناعي</div>
-            <div style="font-size:11px;color:var(--text3);">ارفع صورة وسيستخرج المبلغ والوصف تلقائياً</div>
-          </div>
-        </div>
-        <div class="ai-inv-pick" id="aiInvPick">
-          <input type="file" accept="image/*" onchange="onAIInvoice(event)" id="aiInvInput"/>
-          <div style="font-size:28px;transition:transform .3s cubic-bezier(.34,1.56,.64,1);" id="aiInvIcon">📄</div>
-          <div style="font-size:12px;color:var(--text2);"><strong style="color:var(--text);">اضغط لرفع صورة الفاتورة</strong><br>PNG · JPG</div>
-        </div>
-        <div id="aiInvResult" style="display:none;"></div>
       </div>
       <div class="divor">— أو أدخل يدوياً —</div>
       <div class="mrow">
@@ -483,68 +445,6 @@ function resetImgZone(){
     <input type="file" accept="image/*" onchange="onSaleImg(event)"/>
     <div class="ipz-icon">📸</div>
     <div class="ipz-txt"><strong>صورة المنتج</strong><br>باقة، عطر، هدية...</div>`;
-}
-
-// ── AI Invoice Analysis ─────────────────────────────────
-async function onAIInvoice(ev){
-  const file=ev.target.files[0];if(!file)return;
-  ev.target.value='';
-  const reader=new FileReader();
-  reader.onload=async e=>{
-    const base64=e.target.result;
-    const imgSrc=e.target.result;
-    document.getElementById('aiInvPick').style.display='none';
-    document.getElementById('aiInvResult').style.display='block';
-    document.getElementById('aiInvResult').innerHTML=`
-      <div class="ai-thinking">
-        <span style="font-size:22px;animation:pulse 1.5s ease-in-out infinite;">🤖</span>
-        <div>جاري تحليل الفاتورة<div class="ai-dots"><span>.</span><span>.</span><span>.</span></div></div>
-      </div>`;
-    try{
-      const imgData=base64.split(',')[1];
-      const mediaType=file.type||'image/jpeg';
-      const resp=await fetch('/api/analyze_invoice',{
-        method:'POST',
-        headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({image_data:imgData,media_type:mediaType})
-      });
-      const parsed=await resp.json();
-      showAIResult(imgSrc, parsed.amount||'', parsed.description||'');
-    }catch(err){
-      document.getElementById('aiInvResult').innerHTML=`
-        <div style="padding:14px;color:var(--neg);font-size:13px;text-align:center;">⚠️ حدث خطأ أثناء التحليل<br><button class="ai-retry-btn" onclick="resetAIZone()">حاول مجدداً</button></div>`;
-    }
-  };
-  reader.readAsDataURL(file);
-}
-
-function showAIResult(imgSrc, amount, description){
-  document.getElementById('aiInvResult').innerHTML=`
-    <div class="ai-result-card">
-      <div style="display:inline-flex;align-items:center;gap:5px;background:rgba(183,148,244,.12);border:1px solid rgba(183,148,244,.2);border-radius:20px;padding:3px 10px;font-size:11px;color:var(--lavender);margin-bottom:10px;">✨ استُخرج بالذكاء الاصطناعي</div>
-      <img class="ai-result-img" src="${imgSrc}" onclick="openLightbox('${imgSrc}')" style="cursor:zoom-in;"/>
-      <div class="ai-result-fields">
-        <div><label>المورد / الوصف</label><input type="text" id="aiDesc" value="${description}" placeholder="اسم المورد أو الوصف"/></div>
-        <div><label>المبلغ الإجمالي (ر.ع)</label><input type="number" id="aiAmt" value="${amount}" placeholder="0.000" step="0.001"/></div>
-      </div>
-      <button class="ai-add-btn" onclick="addFromAI()">➕ إضافة للمشتريات</button>
-      <div style="text-align:center;"><button class="ai-retry-btn" onclick="resetAIZone()">🔄 رفع فاتورة أخرى</button></div>
-    </div>`;
-}
-
-async function addFromAI(){
-  const amt=parseFloat(document.getElementById('aiAmt').value);
-  const desc=document.getElementById('aiDesc').value.trim()||'مشتريات';
-  if(!amt||amt<=0){showToast('⚠️ أدخل مبلغاً صحيحاً');return;}
-  await addEntryAPI('b',desc,amt,null);
-  resetAIZone();
-}
-
-function resetAIZone(){
-  document.getElementById('aiInvPick').style.display='flex';
-  document.getElementById('aiInvResult').style.display='none';
-  document.getElementById('aiInvResult').innerHTML='';
-  document.getElementById('aiInvInput').value='';
 }
 
 async function pickFile(ev){
