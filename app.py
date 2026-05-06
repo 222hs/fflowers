@@ -799,6 +799,11 @@ input[type="date"]{width:100%;padding:10px 12px;border:1px solid var(--border);b
     </div>
   </div>
 
+  <!-- زر إضافة يدوي -->
+  <button onclick="openAddFlowerInvModal()" style="width:100%;padding:13px;border:none;border-radius:14px;background:linear-gradient(135deg,var(--gold),#b8891f);color:white;font-family:'Tajawal',sans-serif;font-size:14px;font-weight:800;cursor:pointer;margin-bottom:16px;box-shadow:0 3px 14px rgba(212,168,67,.35);display:flex;align-items:center;justify-content:center;gap:8px;transition:transform .2s;" onmousedown="this.style.transform='scale(0.98)'" onmouseup="this.style.transform='scale(1)'">
+    ➕ إضافة فاتورة يدوياً
+  </button>
+
   <!-- قائمة الفواتير -->
   <div class="slbl">الفواتير</div>
   <div id="fi-list"></div>
@@ -806,6 +811,47 @@ input[type="date"]{width:100%;padding:10px 12px;border:1px solid var(--border);b
   <div style="font-size:10px;color:var(--text3);text-align:center;margin-top:12px;line-height:1.9;">
     📸 أرسل للبوت صورة الفاتورة + تعليق <b>"فاتورة ورد"</b><br>
     البوت يقرأ الأصناف والأسعار والشركة تلقائياً
+  </div>
+</div>
+
+<!-- MODAL: إضافة فاتورة ورد يدوياً -->
+<div class="overlay" id="addFlowerInvOv" onclick="if(event.target===this)closeAddFlowerInvModal()">
+  <div class="modal" style="max-height:92vh;">
+    <div class="modal-handle"></div>
+    <div class="mico">🧾</div>
+    <h3>إضافة فاتورة ورد</h3>
+
+    <div class="fgrid fg2" style="margin-bottom:10px;">
+      <div class="fld">
+        <label>🏪 اسم الشركة / المورد</label>
+        <input id="fi-company" type="text" placeholder="مثال: نانا هايبر" style="background:rgba(255,255,255,0.7);border:1px solid var(--border);border-radius:10px;padding:10px 12px;font-family:'Tajawal',sans-serif;font-size:14px;color:var(--text);outline:none;width:100%;"/>
+      </div>
+      <div class="fld">
+        <label>📅 تاريخ الفاتورة</label>
+        <input id="fi-date" type="date" style="background:rgba(255,255,255,0.7);border:1px solid var(--border);border-radius:10px;padding:10px 12px;font-family:'Tajawal',sans-serif;font-size:14px;color:var(--text);outline:none;width:100%;"/>
+      </div>
+    </div>
+
+    <!-- الأصناف -->
+    <div style="font-size:10px;font-weight:700;color:var(--text3);letter-spacing:1px;margin-bottom:8px;">🌹 الأصناف</div>
+    <div id="fi-items-list" style="margin-bottom:8px;"></div>
+    <button onclick="addFlowerInvItem()" style="width:100%;padding:9px;border:1px dashed var(--border);border-radius:10px;background:transparent;color:var(--text3);font-family:'Tajawal',sans-serif;font-size:12px;font-weight:600;cursor:pointer;margin-bottom:14px;">+ إضافة صنف</button>
+
+    <!-- الإجمالي -->
+    <div style="background:rgba(212,168,67,.08);border:1px solid rgba(212,168,67,.25);border-radius:12px;padding:12px 14px;margin-bottom:16px;display:flex;align-items:center;justify-content:space-between;">
+      <span style="font-size:12px;font-weight:700;color:var(--text2);">💰 الإجمالي</span>
+      <div style="display:flex;align-items:center;gap:6px;">
+        <input id="fi-total-input" type="number" step="0.001" placeholder="0.000" inputmode="decimal"
+          style="width:110px;background:rgba(255,255,255,0.7);border:1px solid rgba(212,168,67,.4);border-radius:8px;padding:7px 10px;font-family:'Tajawal',sans-serif;font-size:15px;font-weight:800;color:var(--gold);outline:none;text-align:center;"
+          oninput="syncFlowerInvTotal()"/>
+        <span style="font-size:11px;font-weight:700;color:var(--text3);">ر.ع</span>
+      </div>
+    </div>
+
+    <div class="mbtns">
+      <button class="bc" onclick="closeAddFlowerInvModal()">إلغاء</button>
+      <button class="bcp" onclick="saveFlowerInvManual()" style="background:linear-gradient(135deg,var(--gold),#b8891f);">💾 حفظ الفاتورة</button>
+    </div>
   </div>
 </div>
 
@@ -1566,6 +1612,113 @@ async function delFlowerInv(id){
   await api('/api/flower_invoices/'+id,{method:'DELETE'});
   loadFlowerInvPage();
   showToast('✅ تم حذف الفاتورة');
+}
+
+/* ── إضافة فاتورة ورد يدوياً ── */
+let fiItems=[];
+
+function openAddFlowerInvModal(){
+  fiItems=[];
+  // تاريخ اليوم
+  const now=new Date();
+  const dd=String(now.getDate()).padStart(2,'0');
+  const mm=String(now.getMonth()+1).padStart(2,'0');
+  const yyyy=now.getFullYear();
+  document.getElementById('fi-date').value=`${yyyy}-${mm}-${dd}`;
+  document.getElementById('fi-company').value='';
+  document.getElementById('fi-total-input').value='';
+  renderFiItems();
+  document.getElementById('addFlowerInvOv').classList.add('open');
+  setTimeout(()=>document.getElementById('fi-company').focus(),300);
+}
+
+function closeAddFlowerInvModal(){
+  document.getElementById('addFlowerInvOv').classList.remove('open');
+}
+
+function renderFiItems(){
+  const cont=document.getElementById('fi-items-list');
+  if(!fiItems.length){
+    cont.innerHTML=`<div style="text-align:center;color:var(--text3);font-size:11px;padding:10px 0;">لا توجد أصناف — اضغط "إضافة صنف"</div>`;
+    return;
+  }
+  cont.innerHTML=fiItems.map((it,i)=>`
+    <div style="display:flex;gap:6px;align-items:center;margin-bottom:8px;background:rgba(255,255,255,0.4);border:1px solid var(--border);border-radius:10px;padding:8px 10px;">
+      <div style="flex:2;">
+        <input type="text" value="${it.name||''}" placeholder="اسم الصنف" 
+          oninput="fiItems[${i}].name=this.value"
+          style="width:100%;background:transparent;border:none;outline:none;font-family:'Tajawal',sans-serif;font-size:13px;font-weight:600;color:var(--text);" />
+        <div style="display:flex;gap:6px;margin-top:4px;">
+          <select onchange="fiItems[${i}].unit=this.value;renderFiItems()" 
+            style="flex:1;background:var(--bg2);border:1px solid var(--border);border-radius:6px;padding:4px 6px;font-family:'Tajawal',sans-serif;font-size:11px;color:var(--text2);">
+            <option value="وردة"${it.unit==='وردة'?' selected':''}>🌹 وردة</option>
+            <option value="بندلة"${it.unit==='بندلة'?' selected':''}>🌸 بندلة</option>
+            <option value="علبة"${it.unit==='علبة'?' selected':''}>📦 علبة</option>
+          </select>
+          <input type="number" min="0" value="${it.count||''}" placeholder="العدد"
+            oninput="fiItems[${i}].count=+this.value;calcFiItemTotal(${i})"
+            style="width:60px;background:var(--bg2);border:1px solid var(--border);border-radius:6px;padding:4px 6px;font-family:'Tajawal',sans-serif;font-size:12px;text-align:center;" />
+          <input type="number" step="0.001" value="${it.unit_price||''}" placeholder="السعر"
+            oninput="fiItems[${i}].unit_price=+this.value;calcFiItemTotal(${i})"
+            style="width:75px;background:var(--bg2);border:1px solid var(--border);border-radius:6px;padding:4px 6px;font-family:'Tajawal',sans-serif;font-size:12px;text-align:center;" />
+        </div>
+      </div>
+      <div style="text-align:center;min-width:52px;">
+        <div style="font-size:11px;font-weight:800;color:var(--gold);">${((it.line_total)||0).toFixed(3)}</div>
+        <div style="font-size:9px;color:var(--text3);">ر.ع</div>
+      </div>
+      <button onclick="fiItems.splice(${i},1);renderFiItems();recalcFiTotal()" 
+        style="background:rgba(232,121,138,.12);border:1px solid rgba(232,121,138,.2);border-radius:8px;color:var(--accent);font-size:14px;width:28px;height:28px;cursor:pointer;flex-shrink:0;">🗑</button>
+    </div>
+  `).join('');
+}
+
+function addFlowerInvItem(){
+  fiItems.push({name:'',unit:'وردة',count:0,unit_price:0,line_total:0});
+  renderFiItems();
+  // focus على آخر input اسم
+  setTimeout(()=>{
+    const inputs=document.querySelectorAll('#fi-items-list input[type="text"]');
+    if(inputs.length) inputs[inputs.length-1].focus();
+  },50);
+}
+
+function calcFiItemTotal(i){
+  const it=fiItems[i];
+  it.line_total=(it.count||0)*(it.unit_price||0);
+  recalcFiTotal();
+  renderFiItems();
+}
+
+function recalcFiTotal(){
+  const sum=fiItems.reduce((a,it)=>a+(it.line_total||0),0);
+  if(sum>0) document.getElementById('fi-total-input').value=sum.toFixed(3);
+}
+
+function syncFlowerInvTotal(){/* يسمح للمستخدم يغير الإجمالي يدوياً */}
+
+async function saveFlowerInvManual(){
+  const company=(document.getElementById('fi-company').value||'').trim()||'غير محدد';
+  const dateRaw=document.getElementById('fi-date').value;
+  const totalRaw=document.getElementById('fi-total-input').value;
+  if(!dateRaw){showToast('⚠️ اختر تاريخ الفاتورة');return;}
+  if(!totalRaw||parseFloat(totalRaw)<=0){showToast('⚠️ أدخل الإجمالي');return;}
+  // تحويل التاريخ من yyyy-mm-dd إلى dd/mm/yyyy
+  const [y,m,d]=dateRaw.split('-');
+  const inv_date=`${d}/${m}/${y}`;
+  // تحضير الأصناف
+  const items=fiItems.filter(it=>it.name||it.count).map(it=>({
+    name:it.name||'—',unit:it.unit||'وردة',count:it.count||0,
+    unit_price:it.unit_price||0,line_total:it.line_total||0
+  }));
+  const total=parseFloat(totalRaw)||0;
+  try{
+    await api('/api/flower_invoices',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({company,inv_date,total,items})});
+    closeAddFlowerInvModal();
+    loadFlowerInvPage();
+    showToast('✅ تم حفظ الفاتورة بنجاح');
+  }catch(e){showToast('❌ خطأ في الحفظ');}
 }
 
 /* ── REPORTS ── */
