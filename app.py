@@ -801,22 +801,16 @@ input[type="date"]{width:100%;padding:10px 12px;border:1px solid var(--border);b
 
   <!-- أزرار الإضافة -->
   <div style="display:flex;flex-direction:column;gap:10px;margin-bottom:16px;">
-
-    <!-- زر رفع صورة فاتورة -->
     <label id="fi-upload-label" style="width:100%;padding:13px;border:none;border-radius:14px;background:linear-gradient(135deg,#7aab8a,#5a8a6a);color:white;font-family:'Tajawal',sans-serif;font-size:14px;font-weight:800;cursor:pointer;box-shadow:0 3px 14px rgba(90,138,106,.35);display:flex;align-items:center;justify-content:center;gap:8px;transition:transform .2s;" onmousedown="this.style.transform='scale(0.98)'" onmouseup="this.style.transform='scale(1)'">
       📸 رفع صورة فاتورة (تحليل تلقائي)
       <input type="file" id="fi-img-input" accept="image/*" style="display:none;" onchange="uploadFlowerInvoiceImage(this)"/>
     </label>
-
-    <!-- شريط تقدم التحليل -->
     <div id="fi-upload-progress" style="display:none;background:var(--glass);border:1px solid var(--border);border-radius:12px;padding:12px 14px;">
       <div style="display:flex;align-items:center;gap:10px;">
         <span style="font-size:20px;animation:spin 1s linear infinite;display:inline-block;">⏳</span>
         <span id="fi-upload-msg" style="font-size:13px;font-weight:600;color:var(--text2);">جاري تحليل الفاتورة...</span>
       </div>
     </div>
-
-    <!-- زر إضافة يدوي -->
     <button onclick="openAddFlowerInvModal()" style="width:100%;padding:13px;border:1px solid var(--border);border-radius:14px;background:var(--glass);color:var(--text2);font-family:'Tajawal',sans-serif;font-size:13px;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;transition:transform .2s;" onmousedown="this.style.transform='scale(0.98)'" onmouseup="this.style.transform='scale(1)'">
       ✏️ إضافة فاتورة يدوياً
     </button>
@@ -931,34 +925,6 @@ input[type="date"]{width:100%;padding:10px 12px;border:1px solid var(--border);b
 </div>
 </div>
 
-<!-- THEME PANEL -->
-<div id="themePanel" style="display:none;position:fixed;top:62px;left:50%;transform:translateX(-50%);
-  z-index:300;background:var(--bg);border:1px solid var(--border2);border-radius:16px;
-  padding:16px;box-shadow:0 8px 32px var(--shadow);min-width:280px;">
-  <div style="font-size:10px;font-weight:700;color:var(--text3);letter-spacing:2px;text-transform:uppercase;text-align:center;margin-bottom:12px;">اختر الثيم</div>
-  <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:8px;">
-    <div onclick="setTheme('rose')" id="th-rose" style="cursor:pointer;text-align:center;padding:8px 4px;border-radius:10px;border:2px solid transparent;transition:.2s;">
-      <div style="width:36px;height:36px;border-radius:50%;background:linear-gradient(135deg,#f9c8d0,#e8798a);margin:0 auto 4px;box-shadow:0 2px 8px rgba(0,0,0,.2);"></div>
-      <span style="font-size:9px;color:var(--text3);font-weight:600;">وردي</span>
-    </div>
-    <div onclick="setTheme('ocean')" id="th-ocean" style="cursor:pointer;text-align:center;padding:8px 4px;border-radius:10px;border:2px solid transparent;transition:.2s;">
-      <div style="width:36px;height:36px;border-radius:50%;background:linear-gradient(135deg,#0d2233,#4eaccd);margin:0 auto 4px;box-shadow:0 2px 8px rgba(0,0,0,.2);"></div>
-      <span style="font-size:9px;color:var(--text3);font-weight:600;">أزرق</span>
-    </div>
-    <div onclick="setTheme('forest')" id="th-forest" style="cursor:pointer;text-align:center;padding:8px 4px;border-radius:10px;border:2px solid transparent;transition:.2s;">
-      <div style="width:36px;height:36px;border-radius:50%;background:linear-gradient(135deg,#e4ede4,#5a8a6a);margin:0 auto 4px;box-shadow:0 2px 8px rgba(0,0,0,.2);"></div>
-      <span style="font-size:9px;color:var(--text3);font-weight:600;">أخضر</span>
-    </div>
-    <div onclick="setTheme('gold')" id="th-gold" style="cursor:pointer;text-align:center;padding:8px 4px;border-radius:10px;border:2px solid transparent;transition:.2s;">
-      <div style="width:36px;height:36px;border-radius:50%;background:linear-gradient(135deg,#1a1208,#d4a843);margin:0 auto 4px;box-shadow:0 2px 8px rgba(0,0,0,.2);"></div>
-      <span style="font-size:9px;color:var(--text3);font-weight:600;">ذهبي</span>
-    </div>
-    <div onclick="setTheme('lavender')" id="th-lavender" style="cursor:pointer;text-align:center;padding:8px 4px;border-radius:10px;border:2px solid transparent;transition:.2s;">
-      <div style="width:36px;height:36px;border-radius:50%;background:linear-gradient(135deg,#f5f0ff,#9664dc);margin:0 auto 4px;box-shadow:0 2px 8px rgba(0,0,0,.2);"></div>
-      <span style="font-size:9px;color:var(--text3);font-weight:600;">بنفسجي</span>
-    </div>
-  </div>
-</div>
 
 <!-- MODALS -->
 <div class="overlay" id="addProdOv">
@@ -1581,47 +1547,28 @@ async function delFlower(id){await api(`/api/flowers/${id}`,{method:'DELETE'});l
 async function uploadFlowerInvoiceImage(input){
   const file = input.files[0];
   if(!file) return;
-
   const progress = document.getElementById('fi-upload-progress');
   const msg      = document.getElementById('fi-upload-msg');
   const label    = document.getElementById('fi-upload-label');
-
   progress.style.display = 'block';
   label.style.opacity = '0.6';
   label.style.pointerEvents = 'none';
   msg.textContent = '📸 جاري رفع الصورة...';
-
   try{
     const formData = new FormData();
     formData.append('image', file);
-
     msg.textContent = '🤖 جاري تحليل الفاتورة بالذكاء الاصطناعي...';
-
-    const resp = await fetch('/api/flower_invoices/upload_image', {
-      method: 'POST',
-      body: formData
-    });
+    const resp = await fetch('/api/flower_invoices/upload_image', { method: 'POST', body: formData });
     const d = await resp.json();
-
-    if(!resp.ok || d.error){
-      showToast('❌ ' + (d.error || 'فشل التحليل'));
-      return;
-    }
-
-    // نجح التحليل
+    if(!resp.ok || d.error){ showToast('❌ ' + (d.error || 'فشل التحليل')); return; }
     const itemLines = (d.items||[]).map(i=>
-      `${i.unit==='بندلة'?'🌸':'🌹'} ${i.name}: ${i.count} ${i.unit||'وردة'}`
-      + (parseFloat(i.line_total||0)>0 ? ` — ${(+i.line_total).toFixed(3)} ر.ع` : '')
+      (i.unit==='بندلة'?'🌸':'🌹')+' '+i.name+': '+i.count+' '+(i.unit||'وردة')
+      +(parseFloat(i.line_total||0)>0?' — '+(+i.line_total).toFixed(3)+' ر.ع':'')
     ).join('\n');
-
-    const summary = `✅ تم حفظ الفاتورة!\n\n🏪 ${d.company}\n📅 ${d.inv_date}${d.invoice_number?'\n🔖 '+d.invoice_number:''}\n\n${itemLines}\n\n💰 الإجمالي: ${(+d.total).toFixed(3)} ر.ع`;
-
+    const summary = '✅ تم حفظ الفاتورة!\n\n🏪 '+d.company+'\n📅 '+d.inv_date+(d.invoice_number?'\n🔖 '+d.invoice_number:'')+'\n\n'+itemLines+'\n\n💰 الإجمالي: '+(+d.total).toFixed(3)+' ر.ع';
     showToast('✅ تم حفظ فاتورة الورد!');
     alert(summary);
-
-    // تحديث الصفحة
     loadFlowerInvPage();
-
   }catch(e){
     console.error(e);
     showToast('❌ خطأ في رفع الصورة');
@@ -1629,7 +1576,7 @@ async function uploadFlowerInvoiceImage(input){
     progress.style.display = 'none';
     label.style.opacity = '1';
     label.style.pointerEvents = 'auto';
-    input.value = ''; // reset input
+    input.value = '';
   }
 }
 
@@ -1894,26 +1841,6 @@ function showToast(msg){const el=document.getElementById('toast');el.textContent
   }
 })();
 
-/* ── THEMES ── */
-function setTheme(t){
-  document.documentElement.setAttribute('data-theme',t);
-  localStorage.setItem('fairuz_theme',t);
-  document.querySelectorAll('[id^="th-"]').forEach(el=>{
-    el.style.borderColor=el.id==='th-'+t?'var(--accent)':'transparent';
-    el.style.background=el.id==='th-'+t?'rgba(255,255,255,0.15)':'transparent';
-  });
-}
-function toggleThemePanel(){
-  const p=document.getElementById('themePanel');
-  p.style.display=p.style.display==='none'?'block':'none';
-}
-document.addEventListener('click',e=>{
-  if(!e.target.closest('#themePanel')&&!e.target.closest('button[onclick*="toggleThemePanel"]'))
-    document.getElementById('themePanel').style.display='none';
-});
-// Init saved theme
-const savedTheme=localStorage.getItem('fairuz_theme')||'rose';
-setTheme(savedTheme);
 
 /* ── BILINGUAL ── */
 const T = {
@@ -2689,7 +2616,6 @@ Rules:
 def groq_read_flower_invoice_from_bytes(img_bytes):
     """
     قراءة فاتورة مورد الورد من bytes (رفع مباشر من الصفحة بدون Telegram)
-    نفس منطق groq_read_flower_supplier_invoice لكن يستقبل bytes بدل file_id
     """
     if not GROQ_KEY: return None
     try:
@@ -2710,11 +2636,11 @@ Return ONLY a valid JSON object — no explanation, no markdown:
 }
 
 Rules:
-- invoice_number: look for "رقم الفاتورة", "Invoice No", "Invoice #", "ID", "Inv No". Keep original format (e.g. INV-2024-001). Set null if absent.
-- company: extract from header, stamp, or any label. Preserve the name as-is; post-processing will normalize casing.
-- date: copy the date exactly as printed — do NOT reformat it.
+- invoice_number: look for "رقم الفاتورة", "Invoice No", "Invoice #", "ID", "Inv No". Keep original format. Set null if absent.
+- company: extract from header, stamp, or any label.
+- date: copy the date exactly as printed.
 - unit: use "بندلة" for bundle flowers (gypsophila/جبسون, limonium/ليموناي, statice, etc.), otherwise "وردة".
-- unit_price / line_total: if a number looks like 4 digits with no decimal (e.g. 7200), write it as-is and post-processing will fix it.
+- unit_price / line_total: if a number looks like 4 digits with no decimal (e.g. 7200), write it as-is.
 - total: grand total of the invoice.
 - found: false if this is NOT a flower/plant invoice."""
 
@@ -4461,30 +4387,21 @@ def api_upload_flower_invoice_image():
     try:
         if "image" not in request.files:
             return jsonify({"error": "لا توجد صورة"}), 400
-
         img_file = request.files["image"]
         img_bytes = img_file.read()
-
         if len(img_bytes) == 0:
             return jsonify({"error": "الصورة فارغة"}), 400
-
         if not GROQ_KEY:
             return jsonify({"error": "خدمة الذكاء الاصطناعي غير مفعّلة (GROQ_API_KEY مفقود)"}), 503
-
         inv = groq_read_flower_invoice_from_bytes(img_bytes)
-
         if not inv:
             return jsonify({"error": "فشل تحليل الصورة، تأكد أنها صورة واضحة"}), 422
-
         if not inv.get("found"):
             return jsonify({"error": "الصورة لا تبدو فاتورة ورد"}), 422
-
-        # حفظ الفاتورة
         company        = inv.get("company","").strip() or "غير محدد"
         company        = " ".join(w.capitalize() for w in company.split())
         invoice_number = inv.get("invoice_number") or None
         std_date       = inv.get("date","").strip()
-
         if std_date:
             try:
                 dt = datetime.strptime(std_date, "%Y-%m-%d")
@@ -4496,25 +4413,14 @@ def api_upload_flower_invoice_image():
         else:
             inv_date_display = datetime.now().strftime("%d/%m/%Y")
             inv_month = cur_month()
-
-        items    = inv.get("items", [])
-        total    = float(inv.get("total") or sum(float(i.get("line_total",0)) for i in items))
+        items      = inv.get("items", [])
+        total      = float(inv.get("total") or sum(float(i.get("line_total",0)) for i in items))
         items_json = json.dumps(items, ensure_ascii=False)
-
         db_run(
             "INSERT INTO flower_invoices (company,invoice_number,inv_date,month,total,items) VALUES (?,?,?,?,?,?)",
             (company, invoice_number, inv_date_display, inv_month, total, items_json))
-
-        return jsonify({
-            "ok": True,
-            "company": company,
-            "invoice_number": invoice_number,
-            "inv_date": inv_date_display,
-            "month": inv_month,
-            "total": total,
-            "items": items
-        })
-
+        return jsonify({"ok": True, "company": company, "invoice_number": invoice_number,
+                        "inv_date": inv_date_display, "month": inv_month, "total": total, "items": items})
     except Exception as e:
         print("upload_flower_invoice error:", e)
         return jsonify({"error": str(e)}), 500
