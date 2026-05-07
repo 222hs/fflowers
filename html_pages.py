@@ -2542,27 +2542,17 @@ html,body{height:100%;overflow:hidden;font-family:'Tajawal',sans-serif;}
   100%{transform:translateY(105vh) translateX(60px) rotate(540deg);opacity:0;}
 }
 
-/* Login card */
+/* Login layout */
 .wrap{
   position:relative;z-index:10;
-  height:100vh;display:flex;align-items:center;justify-content:center;padding:20px;
+  min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px 16px;
+  gap:20px;
 }
-.card{
-  width:min(380px,100%);
-  background:rgba(255,255,255,0.12);
-  backdrop-filter:blur(28px) saturate(1.8);
-  -webkit-backdrop-filter:blur(28px) saturate(1.8);
-  border:1px solid rgba(255,255,255,0.25);
-  border-radius:28px;
-  padding:40px 32px;
-  text-align:center;
-  box-shadow:0 24px 80px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.3);
-  animation:cardIn .8s cubic-bezier(.34,1.56,.64,1) both;
-}
-@keyframes cardIn{from{opacity:0;transform:translateY(30px) scale(.95);}to{opacity:1;transform:translateY(0) scale(1);}}
 
+/* Brand header */
+.brand-header{text-align:center;}
 .logo{
-  width:70px;height:70px;margin:0 auto 18px;
+  width:70px;height:70px;margin:0 auto 14px;
   background:linear-gradient(135deg,#d4a843,#b8891f);
   border-radius:20px;display:flex;align-items:center;justify-content:center;
   font-size:32px;
@@ -2570,54 +2560,111 @@ html,body{height:100%;overflow:hidden;font-family:'Tajawal',sans-serif;}
   animation:logoFloat 4s ease-in-out infinite;
 }
 @keyframes logoFloat{0%,100%{transform:translateY(0);}50%{transform:translateY(-6px);}}
-
 .shop-name{
   font-family:'Playfair Display',serif;
-  font-size:32px;font-weight:700;letter-spacing:4px;
+  font-size:30px;font-weight:700;
   color:#ffffff;
   text-shadow:0 2px 20px rgba(0,0,0,0.3);
-  margin-bottom:4px;letter-spacing:1px;
+  margin-bottom:4px;
 }
 .shop-sub{
-  font-size:12px;color:rgba(255,255,255,0.6);
-  letter-spacing:3px;text-transform:uppercase;margin-bottom:28px;
+  font-size:11px;color:rgba(255,255,255,0.55);
+  letter-spacing:3px;text-transform:uppercase;
 }
 
-.err{color:#ffb3b3;font-size:12px;min-height:18px;margin-bottom:10px;}
+/* Two cards row */
+.login-row{
+  display:flex;gap:14px;width:100%;max-width:700px;
+  flex-wrap:wrap;justify-content:center;
+}
 
-.pw-wrap{position:relative;margin-bottom:20px;}
-input[type=password]{
+@keyframes cardIn{from{opacity:0;transform:translateY(30px) scale(.95);}to{opacity:1;transform:translateY(0) scale(1);}}
+
+.login-panel{
+  flex:1;min-width:270px;max-width:320px;
+  border-radius:24px;
+  padding:30px 24px;
+  text-align:center;
+  backdrop-filter:blur(28px) saturate(1.8);
+  -webkit-backdrop-filter:blur(28px) saturate(1.8);
+  box-shadow:0 20px 60px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.2);
+  animation:cardIn .8s cubic-bezier(.34,1.56,.64,1) both;
+  transition:transform .3s, box-shadow .3s;
+}
+.login-panel:hover{transform:translateY(-4px);}
+
+/* Owner panel — gold */
+.panel-owner{
+  background:rgba(255,255,255,0.10);
+  border:1px solid rgba(212,168,67,0.4);
+  animation-delay:.05s;
+}
+/* Worker panel — rose */
+.panel-worker{
+  background:rgba(255,255,255,0.08);
+  border:1px solid rgba(232,121,138,0.4);
+  animation-delay:.15s;
+}
+
+.panel-icon{
+  width:56px;height:56px;margin:0 auto 12px;
+  border-radius:16px;display:flex;align-items:center;justify-content:center;font-size:26px;
+}
+.panel-owner .panel-icon{background:linear-gradient(135deg,rgba(212,168,67,0.3),rgba(184,137,31,0.2));box-shadow:0 6px 20px rgba(212,168,67,0.35);}
+.panel-worker .panel-icon{background:linear-gradient(135deg,rgba(232,121,138,0.3),rgba(180,70,100,0.2));box-shadow:0 6px 20px rgba(232,121,138,0.3);}
+
+.panel-title{font-size:17px;font-weight:900;color:#fff;margin-bottom:3px;}
+.panel-desc{font-size:11px;color:rgba(255,255,255,0.5);margin-bottom:18px;}
+
+.err{color:#ffb3b3;font-size:11px;min-height:16px;margin-bottom:8px;}
+
+.pw-wrap{position:relative;margin-bottom:14px;}
+.pw-wrap input[type=password]{
   width:100%;
-  background:rgba(255,255,255,0.15);
-  border:1px solid rgba(255,255,255,0.3);
-  border-radius:14px;padding:14px 50px 14px 16px;
-  font-family:'Tajawal',sans-serif;font-size:16px;
+  background:rgba(255,255,255,0.13);
+  border:1px solid rgba(255,255,255,0.25);
+  border-radius:12px;padding:13px 44px 13px 14px;
+  font-family:'Tajawal',sans-serif;font-size:15px;
   color:white;outline:none;transition:.3s;
   text-align:center;letter-spacing:3px;
 }
-input[type=password]:focus{
+.panel-owner .pw-wrap input[type=password]:focus{
   border-color:rgba(212,168,67,0.8);
-  background:rgba(255,255,255,0.2);
   box-shadow:0 0 0 3px rgba(212,168,67,0.2);
 }
-input[type=password]::placeholder{color:rgba(255,255,255,0.4);letter-spacing:1px;font-size:14px;}
+.panel-worker .pw-wrap input[type=password]:focus{
+  border-color:rgba(232,121,138,0.8);
+  box-shadow:0 0 0 3px rgba(232,121,138,0.2);
+}
+.pw-wrap input[type=password]::placeholder{color:rgba(255,255,255,0.35);letter-spacing:1px;font-size:13px;}
 .eye-btn{
-  position:absolute;left:14px;top:50%;transform:translateY(-50%);
-  background:none;border:none;color:rgba(255,255,255,0.5);cursor:pointer;font-size:18px;
+  position:absolute;left:12px;top:50%;transform:translateY(-50%);
+  background:none;border:none;color:rgba(255,255,255,0.45);cursor:pointer;font-size:16px;
 }
 
 .login-btn{
-  width:100%;padding:15px;
-  background:linear-gradient(135deg,#d4a843,#c49030);
-  border:none;border-radius:14px;
-  color:#1a1208;font-family:'Tajawal',sans-serif;
-  font-size:16px;font-weight:900;letter-spacing:1px;
+  width:100%;padding:13px;
+  border:none;border-radius:12px;
+  font-family:'Tajawal',sans-serif;
+  font-size:15px;font-weight:900;letter-spacing:1px;
   cursor:pointer;
-  box-shadow:0 6px 24px rgba(212,168,67,0.4);
   transition:all .3s cubic-bezier(.34,1.56,.64,1);
 }
-.login-btn:hover{transform:translateY(-2px) scale(1.02);box-shadow:0 10px 32px rgba(212,168,67,0.55);}
-.login-btn:active{transform:scale(0.98);}
+.login-btn:active{transform:scale(0.97);}
+
+.panel-owner .login-btn{
+  background:linear-gradient(135deg,#d4a843,#c49030);
+  color:#1a1208;
+  box-shadow:0 6px 20px rgba(212,168,67,0.4);
+}
+.panel-owner .login-btn:hover{transform:translateY(-2px) scale(1.02);box-shadow:0 10px 28px rgba(212,168,67,0.55);}
+
+.panel-worker .login-btn{
+  background:linear-gradient(135deg,#e8798a,#c4566a);
+  color:#fff;
+  box-shadow:0 6px 20px rgba(232,121,138,0.4);
+}
+.panel-worker .login-btn:hover{transform:translateY(-2px) scale(1.02);box-shadow:0 10px 28px rgba(232,121,138,0.5);}
 </style>
 </head>
 <body>
@@ -2626,20 +2673,37 @@ input[type=password]::placeholder{color:rgba(255,255,255,0.4);letter-spacing:1px
 <div class="petals" id="petals"></div>
 
 <div class="wrap">
-  <div class="card">
+  <div class="brand-header">
     <div class="logo">🌹</div>
     <div class="shop-name">FAIROSE</div>
     <div class="shop-sub">FLOWERS & MORE</div>
-    <div class="err" id="err"></div>
-    <div class="pw-wrap">
-      <input type="password" id="pw" placeholder="كلمة المرور" onkeydown="if(event.key==='Enter')go()"/>
-      <button class="eye-btn" type="button" onclick="toggleEye()">👁</button>
+  </div>
+
+  <div class="login-row">
+    <!-- Owner Panel -->
+    <div class="login-panel panel-owner">
+      <div class="panel-icon">👑</div>
+      <div class="panel-title">المالك</div>
+      <div class="panel-desc">صلاحيات كاملة</div>
+      <div class="err" id="err-owner"></div>
+      <div class="pw-wrap">
+        <input type="password" id="pw-owner" placeholder="كلمة المرور" onkeydown="if(event.key==='Enter')goOwner()"/>
+        <button class="eye-btn" type="button" onclick="toggleEye('pw-owner')">👁</button>
+      </div>
+      <button class="login-btn" onclick="goOwner()">دخول</button>
     </div>
-    <button class="login-btn" onclick="go()">دخول</button>
-    <div style="margin-top:14px;text-align:center;">
-      <button onclick="goWorker()" style="background:transparent;border:1px solid rgba(255,255,255,0.25);border-radius:12px;color:rgba(255,255,255,0.7);font-family:'Tajawal',sans-serif;font-size:14px;font-weight:700;padding:10px 24px;cursor:pointer;width:100%;transition:.2s;" onmouseover="this.style.background='rgba(255,255,255,0.1)'" onmouseout="this.style.background='transparent'">
-        👷 دخول العامل
-      </button>
+
+    <!-- Worker Panel -->
+    <div class="login-panel panel-worker">
+      <div class="panel-icon">🌸</div>
+      <div class="panel-title">العامل</div>
+      <div class="panel-desc">تسجيل المبيعات</div>
+      <div class="err" id="err-worker"></div>
+      <div class="pw-wrap">
+        <input type="password" id="pw-worker" placeholder="كلمة المرور" onkeydown="if(event.key==='Enter')goWorker()"/>
+        <button class="eye-btn" type="button" onclick="toggleEye('pw-worker')">👁</button>
+      </div>
+      <button class="login-btn" onclick="goWorker()">دخول</button>
     </div>
   </div>
 </div>
@@ -2666,15 +2730,16 @@ input[type=password]::placeholder{color:rgba(255,255,255,0.4);letter-spacing:1px
   }
 })();
 
-function toggleEye(){
-  const inp=document.getElementById('pw');
+function toggleEye(id){
+  const inp=document.getElementById(id);
   inp.type=inp.type==='password'?'text':'password';
 }
 
-async function go(){
-  const pw=document.getElementById('pw').value.trim();
+async function goOwner(){
+  const pw=document.getElementById('pw-owner').value.trim();
+  const err=document.getElementById('err-owner');
   if(!pw)return;
-  const btn=document.querySelector('.login-btn');
+  const btn=document.querySelector('.panel-owner .login-btn');
   btn.textContent='...';btn.disabled=true;
   try{
     const r=await fetch('/auth',{method:'POST',
@@ -2683,27 +2748,37 @@ async function go(){
     const d=await r.json();
     if(d.ok){location.href='/';}
     else{
-      document.getElementById('err').textContent='❌ كلمة المرور غير صحيحة';
-      document.getElementById('pw').value='';
+      err.textContent='❌ كلمة المرور غير صحيحة';
+      document.getElementById('pw-owner').value='';
       btn.textContent='دخول';btn.disabled=false;
     }
   }catch(e){
-    document.getElementById('err').textContent='❌ خطأ في الاتصال';
+    err.textContent='❌ خطأ في الاتصال';
     btn.textContent='دخول';btn.disabled=false;
   }
 }
 
 async function goWorker(){
-  const pw=prompt('كلمة مرور العامل:');
+  const pw=document.getElementById('pw-worker').value.trim();
+  const err=document.getElementById('err-worker');
   if(!pw)return;
+  const btn=document.querySelector('.panel-worker .login-btn');
+  btn.textContent='...';btn.disabled=true;
   try{
     const r=await fetch('/worker-auth',{method:'POST',
       headers:{'Content-Type':'application/json'},
       body:JSON.stringify({p:pw})});
     const d=await r.json();
     if(d.ok){location.href='/worker';}
-    else{document.getElementById('err').textContent='❌ كلمة المرور غير صحيحة';}
-  }catch(e){document.getElementById('err').textContent='❌ خطأ في الاتصال';}
+    else{
+      err.textContent='❌ كلمة المرور غير صحيحة';
+      document.getElementById('pw-worker').value='';
+      btn.textContent='دخول';btn.disabled=false;
+    }
+  }catch(e){
+    err.textContent='❌ خطأ في الاتصال';
+    btn.textContent='دخول';btn.disabled=false;
+  }
 }
 </script>
 </body>
