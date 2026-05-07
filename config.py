@@ -6,9 +6,12 @@ import requests
 import threading
 import time
 from datetime import datetime
-from flask import Flask, request, jsonify, Response
+from flask import Flask, request, jsonify, Response, session
 
 app = Flask(__name__)
+
+# ── Secret Key (للـ session) ──────────────────────────────────
+app.secret_key = os.environ.get("SECRET_KEY", "fairuz-secret-2026-xK9m")
 
 # ── Keep-Alive ────────────────────────────────────────────────
 APP_URL = os.environ.get("RENDER_EXTERNAL_URL", "")
