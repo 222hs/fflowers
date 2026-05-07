@@ -2227,33 +2227,30 @@ body{font-family:'Tajawal',sans-serif;background:#fdf8f2;color:#3d2c24;min-heigh
     <div class="sc-title" style="color:#9664dc;">🧾 فاتورة ورد</div>
   </div>
 
-  <div class="done-card" id="inv-done">
+  <!-- حالة النجاح -->
+  <div class="done-card" id="inv-done" style="display:none;">
     <div class="done-ico">✅</div>
     <div class="done-txt">تم حفظ الفاتورة!</div>
     <div class="done-sub" id="inv-done-sub"></div>
-    <button class="done-again" onclick="resetInvoice()">➕ إضافة فاتورة أخرى</button>
+    <button class="done-again" onclick="resetInvoice()">📷 رفع فاتورة أخرى</button>
   </div>
 
-  <div id="inv-form">
-    <span class="choice-lbl">🏪 اسم الشركة / المورد</span>
-    <div class="choice-grid g2" id="company-grid"></div>
+  <!-- زر الرفع -->
+  <div id="inv-upload-area" style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:40px 20px;gap:20px;">
+    <div style="font-size:72px;line-height:1;">📷</div>
+    <div style="text-align:center;color:var(--text2);font-size:15px;font-weight:700;">ارفع صورة فاتورة الورد</div>
+    <div style="text-align:center;color:var(--text3);font-size:12px;">سيتم تحليلها تلقائياً وتسجيلها في فواتير الورد</div>
+    <input type="file" id="inv-img-input" accept="image/*" capture="environment" style="display:none;" onchange="handleInvImage(this)"/>
+    <button class="sub-btn sub-purple" style="max-width:280px;width:100%;" onclick="document.getElementById('inv-img-input').click()">
+      📸 اختر صورة / التقط
+    </button>
+  </div>
 
-    <div class="big-field">
-      <label>🏪 أو اكتب اسماً آخر (اختياري)</label>
-      <input type="text" id="inv-company-other" placeholder="اكتب الاسم..."/>
-    </div>
-
-    <div class="big-field">
-      <label>💰 المبلغ الإجمالي (ر.ع)</label>
-      <input type="number" id="inv-total" placeholder="0.000" step="0.001" inputmode="decimal"/>
-    </div>
-
-    <div class="big-field">
-      <label>🔖 رقم الفاتورة (اختياري)</label>
-      <input type="text" id="inv-num" placeholder="مثال: 1234" style="direction:ltr;text-align:left;"/>
-    </div>
-
-    <button class="sub-btn sub-purple" onclick="submitInvoice()">💾 حفظ الفاتورة</button>
+  <!-- حالة التحليل -->
+  <div id="inv-scanning" style="display:none;flex-direction:column;align-items:center;justify-content:center;padding:60px 20px;gap:16px;">
+    <div style="font-size:48px;animation:spin 1s linear infinite;display:inline-block;">⏳</div>
+    <div style="color:var(--text2);font-weight:700;font-size:15px;">جاري تحليل الفاتورة...</div>
+    <div style="color:var(--text3);font-size:12px;">لحظة من فضلك</div>
   </div>
 </div>
 
@@ -2341,6 +2338,7 @@ function buildCatGrid(){
     <button class="choice-btn" style="--sel-clr:#c4566a;--sel-bg:#fce4ec;" data-cat="${c.val}" onclick="selBuyCat(this)">
       <div class="cb-ico">${c.ico}</div>${c.name}
     </button>`).join('');
+  if(document.getElementById('company-grid'))
   document.getElementById('company-grid').innerHTML=COMPANIES.map(c=>`
     <button class="choice-btn" style="--sel-clr:#9664dc;--sel-bg:#f3e5ff;" data-company="${c.val}" onclick="selCompanyBtn(this)">
       <div class="cb-ico">${c.ico}</div>${c.name}
@@ -2463,32 +2461,45 @@ function resetFlower(){
   loadFlowerTypes();
 }
 
-// ── SUBMIT INVOICE ──
-async function submitInvoice(){
-  const total=parseFloat(document.getElementById('inv-total').value);
-  if(!total||total<=0){showToast('⚠️ أدخل المبلغ');return;}
-  const otherName=document.getElementById('inv-company-other').value.trim();
-  const company=otherName||selCompany;
-  if(!company){showToast('⚠️ اختر الشركة أو اكتب الاسم');return;}
-  const invNum=document.getElementById('inv-num').value.trim()||null;
-  const now=new Date();
-  const inv_date=String(now.getDate()).padStart(2,'0')+'/'+String(now.getMonth()+1).padStart(2,'0')+'/'+now.getFullYear();
+// ── SUBMIT INVOICE via image scan ──
+async function handleInvImage(input){
+  const file=input.files[0];
+  if(!file)return;
+  document.getElementById('inv-upload-area').style.display='none';
+  document.getElementById('inv-scanning').style.display='flex';
   try{
-    await api('/api/flower_invoices',{method:'POST',headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({company,total,invoice_number:invNum,inv_date,items:[]})});
-    document.getElementById('inv-done-sub').textContent=company+' — '+fmt(total)+' ر.ع';
-    document.getElementById('inv-form').style.display='none';
-    document.getElementById('inv-done').style.display='block';
-  }catch(e){showToast('❌ خطأ في الحفظ');}
+    const b64=await new Promise((res,rej)=>{
+      const r=new FileReader();
+      r.onload=()=>res(r.result.split(',')[1]);
+      r.onerror=()=>rej(new Error('read error'));
+      r.readAsDataURL(file);
+    });
+    const resp=await fetch('/api/flower_invoices/scan',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({image:b64})
+    });
+    const d=await resp.json();
+    if(d.ok||d.id){
+      const company=d.company||'';
+      const total=parseFloat(d.total||0);
+      document.getElementById('inv-done-sub').textContent=(company||'مورد')+(total?' — '+fmt(total)+' ر.ع':'');
+      document.getElementById('inv-scanning').style.display='none';
+      document.getElementById('inv-done').style.display='flex';
+    }else{
+      showToast('❌ '+(d.error||'فشل التحليل، حاول مرة أخرى'));
+      resetInvoice();
+    }
+  }catch(e){
+    showToast('❌ خطأ في الاتصال');
+    resetInvoice();
+  }
+  input.value='';
 }
 
 function resetInvoice(){
-  selCompany='';
-  document.getElementById('inv-total').value='';
-  document.getElementById('inv-num').value='';
-  document.getElementById('inv-company-other').value='';
-  document.querySelectorAll('[data-company]').forEach(b=>b.classList.remove('sel'));
-  document.getElementById('inv-form').style.display='block';
+  document.getElementById('inv-upload-area').style.display='flex';
+  document.getElementById('inv-scanning').style.display='none';
   document.getElementById('inv-done').style.display='none';
 }
 
