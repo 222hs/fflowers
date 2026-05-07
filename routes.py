@@ -1546,23 +1546,30 @@ def api_add_flower_invoice():
 @app.route("/api/flower_invoices/scan", methods=["POST"])
 @auth
 def api_scan_flower_invoice():
-    """قراءة صورة فاتورة ورد مرفوعة من الموقع وحفظها تلقائياً."""
+    """قراءة صورة فاتورة ورد مرفوعة (multipart أو base64 JSON) وحفظها تلقائياً."""
     import base64 as _b64
     try:
-        if "file" not in request.files:
+        # دعم الرفع بـ base64 JSON أو multipart
+        if request.is_json:
+            b64 = request.json.get("image","")
+            mime = "image/jpeg"
+            if not b64:
+                return jsonify({"error": "لم يتم إرسال صورة"}), 400
+        elif "file" in request.files:
+            f = request.files["file"]
+            if not f.filename:
+                return jsonify({"error": "ملف غير صالح"}), 400
+            img_bytes = f.read()
+            b64 = _b64.b64encode(img_bytes).decode()
+            mime = f.content_type or "image/jpeg"
+        else:
             return jsonify({"error": "لم يتم رفع ملف"}), 400
-        f = request.files["file"]
-        if not f.filename:
-            return jsonify({"error": "ملف غير صالح"}), 400
-        img_bytes = f.read()
-        b64 = _b64.b64encode(img_bytes).decode()
         if not GROQ_KEY:
             return jsonify({"error": "GROQ_API_KEY غير مضبوط"}), 500
         prompt = """This is a flower supplier invoice (may be handwritten, in Arabic or English). Extract ALL data carefully.
 Return ONLY a valid JSON object — no explanation, no markdown:
 {"invoice_number":"INV-001 or null","company":"supplier name","date":"date as written","items":[{"name":"flower name","count":10,"unit":"وردة","unit_price":0.500,"line_total":5.000}],"total":25.500,"found":true}
 Rules: invoice_number from header (null if absent). unit: "بندلة" for gypsophila/جبسون/limonium/ليموناي, else "وردة". found:false if not a flower invoice."""
-        mime = f.content_type or "image/jpeg"
         res = requests.post("https://api.groq.com/openai/v1/chat/completions",
             headers={"Authorization": f"Bearer {GROQ_KEY}", "Content-Type": "application/json"},
             json={"model": "meta-llama/llama-4-scout-17b-16e-instruct",
@@ -1603,6 +1610,46 @@ Rules: invoice_number from header (null if absent). unit: "بندلة" for gypso
                         "total": total, "items": items, "invoice_number": invoice_number})
     except Exception as e:
         print("scan flower invoice error:", e)
+        return jsonify({"error": str(e)}), 500
+
+@app.route("/api/flowers/scan", methods=["POST"])
+@auth
+def api_scan_flowers():
+    """تحليل صورة الورد وإرجاع عدد كل نوع تلقائياً."""
+    import base64 as _b64
+    try:
+        b64 = request.json.get("image","")
+        if not b64:
+            return jsonify({"error": "لم يتم إرسال صورة"}), 400
+        if not GROQ_KEY:
+            return jsonify({"error": "GROQ_API_KEY غير مضبوط"}), 500
+        prompt = """This is a photo of flowers in a flower shop. Count each type of flower visible.
+Return ONLY a valid JSON object — no explanation, no markdown:
+{"flowers":[{"name":"ورد أحمر","count":20,"unit":"وردة"},{"name":"ورد أبيض","count":15,"unit":"وردة"}],"found":true}
+Flower name must be one of: ورد أحمر, ورد وردي, ورد أبيض, ورد أصفر, ورد برتقالي, ورد بنفسجي, جبسون (بندلة), ليموناي (بندلة).
+unit: "بندلة" for جبسون/ليموناي, else "وردة". Only include flowers you can see. found:false if no flowers visible."""
+        res = requests.post("https://api.groq.com/openai/v1/chat/completions",
+            headers={"Authorization": f"Bearer {GROQ_KEY}", "Content-Type": "application/json"},
+            json={"model": "meta-llama/llama-4-scout-17b-16e-instruct",
+                  "messages": [{"role": "user", "content": [
+                      {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{b64}"}},
+                      {"type": "text", "text": prompt}
+                  ]}],
+                  "max_tokens": 600, "temperature": 0}, timeout=35)
+        resp = res.json()
+        if "error" in resp:
+            return jsonify({"error": str(resp["error"])}), 500
+        raw = resp["choices"][0]["message"]["content"]
+        raw = re.sub(r"```json\s*","",raw); raw = re.sub(r"```\s*","",raw).strip()
+        match = re.search(r'\{.*\}', raw, re.DOTALL)
+        if not match:
+            return jsonify({"error": "ما قدرت أحلل الصورة"}), 422
+        data = json.loads(match.group())
+        if not data.get("found"):
+            return jsonify({"error": "ما شُفت ورد في الصورة، أدخل العدد يدوياً"}), 422
+        return jsonify({"ok": True, "flowers": data.get("flowers", [])})
+    except Exception as e:
+        print("scan flowers error:", e)
         return jsonify({"error": str(e)}), 500
 
 if __name__=="__main__":

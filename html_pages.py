@@ -2036,9 +2036,11 @@ body{font-family:'Tajawal',sans-serif;background:#fdf8f2;color:#3d2c24;min-heigh
 .choice-grid{display:grid;gap:10px;margin-bottom:16px;}
 .choice-grid.g2{grid-template-columns:1fr 1fr;}
 .choice-grid.g3{grid-template-columns:1fr 1fr 1fr;}
-.choice-btn{border:2px solid #f9c8d0;border-radius:16px;background:#fff;padding:14px 8px;cursor:pointer;font-family:'Tajawal',sans-serif;font-size:13px;font-weight:800;color:#7a6458;display:flex;flex-direction:column;align-items:center;gap:6px;transition:.2s;-webkit-appearance:none;}
+.choice-btn{border:2px solid #f9c8d0;border-radius:16px;background:#fff;padding:12px 8px;cursor:pointer;font-family:'Tajawal',sans-serif;font-size:13px;font-weight:800;color:#7a6458;display:flex;flex-direction:column;align-items:center;gap:7px;transition:.2s;-webkit-appearance:none;}
 .choice-btn .cb-ico{font-size:28px;}
+.choice-btn .cb-img{width:54px;height:54px;border-radius:12px;object-fit:cover;display:block;background:#f5ede0;}
 .choice-btn.sel{border-color:var(--sel-clr,#e8798a);background:var(--sel-bg,#fce4ec);color:var(--sel-clr,#c4566a);}
+.choice-btn.sel .cb-img{box-shadow:0 0 0 3px var(--sel-clr,#e8798a);}
 
 /* Submit button */
 .sub-btn{width:100%;padding:18px;border:none;border-radius:16px;font-family:'Tajawal',sans-serif;font-size:18px;font-weight:900;cursor:pointer;transition:all .3s cubic-bezier(.34,1.56,.64,1);-webkit-appearance:none;display:flex;align-items:center;justify-content:center;gap:8px;margin-top:6px;}
@@ -2212,8 +2214,19 @@ body{font-family:'Tajawal',sans-serif;background:#fdf8f2;color:#3d2c24;min-heigh
   </div>
 
   <div id="flower-form">
+    <!-- زر رفع صورة الورد -->
+    <div style="background:#fff7f0;border:2px dashed #f9c8d0;border-radius:16px;padding:16px;margin-bottom:16px;text-align:center;">
+      <div style="font-size:13px;font-weight:800;color:#7a6458;margin-bottom:10px;">📷 رفع صورة الورد للتحليل التلقائي</div>
+      <div style="font-size:11px;color:#b09888;margin-bottom:12px;">صوّر الورد وسيتم احتساب العدد تلقائياً</div>
+      <input type="file" id="flower-img-input" accept="image/*" capture="environment" style="display:none;" onchange="handleFlowerImage(this)"/>
+      <button class="sub-btn sub-gold" style="margin:0;padding:12px 20px;font-size:13px;" onclick="document.getElementById('flower-img-input').click()">
+        📸 التقط / اختر صورة
+      </button>
+      <div id="flower-scan-status" style="margin-top:10px;font-size:12px;color:#9664dc;min-height:18px;"></div>
+    </div>
+
     <div style="font-size:12px;color:#b09888;margin-bottom:14px;text-align:center;line-height:1.8;">
-      اكتب عدد كل نوع من الورد الموجود الآن
+      أو أدخل العدد يدوياً 👇
     </div>
     <div id="flower-list"></div>
     <button class="sub-btn sub-gold" onclick="submitFlower()">💾 حفظ العدد</button>
@@ -2258,14 +2271,14 @@ body{font-family:'Tajawal',sans-serif;background:#fdf8f2;color:#3d2c24;min-heigh
 
 <script>
 const CAT_SALE=[
-  {ico:'🌸',name:'ورد وباقات',val:'ورد وباقات'},
-  {ico:'👑',name:'تاجات',val:'تاجات'},
-  {ico:'🎁',name:'هدايا',val:'هدايا'},
-  {ico:'🌿',name:'عطور',val:'عطور'},
-  {ico:'💍',name:'اكسسوارات',val:'اكسسوارات'},
-  {ico:'🖨️',name:'طباعة',val:'طباعة'},
-  {ico:'🌾',name:'مجفف',val:'تجفيف'},
-  {ico:'✨',name:'أخرى',val:'أخرى'},
+  {img:'https://images.unsplash.com/photo-1490750967868-88df5691cc41?w=120&q=70',name:'ورد وباقات',val:'ورد وباقات'},
+  {img:'https://images.unsplash.com/photo-1519225421980-715cb0215aed?w=120&q=70',name:'تاجات',val:'تاجات'},
+  {img:'https://images.unsplash.com/photo-1549465220-1a8b9238cd48?w=120&q=70',name:'هدايا',val:'هدايا'},
+  {img:'https://images.unsplash.com/photo-1541643600914-78b084683702?w=120&q=70',name:'عطور',val:'عطور'},
+  {img:'https://images.unsplash.com/photo-1611085583191-a3b181a88401?w=120&q=70',name:'اكسسوارات',val:'اكسسوارات'},
+  {img:'https://images.unsplash.com/photo-1612838320302-4b3b3996765e?w=120&q=70',name:'طباعة',val:'طباعة'},
+  {img:'https://images.unsplash.com/photo-1501004318641-b39e6451bec6?w=120&q=70',name:'مجفف',val:'تجفيف'},
+  {img:'https://images.unsplash.com/photo-1556742049-0cfed4f6a45d?w=120&q=70',name:'أخرى',val:'أخرى'},
 ];
 const CAT_BUY=[
   {ico:'🌹',name:'ورد طازج',val:'ورد طازج'},
@@ -2332,7 +2345,7 @@ async function loadDaySummary(){
 function buildCatGrid(){
   document.getElementById('cat-grid').innerHTML=CAT_SALE.map(c=>`
     <button class="choice-btn" style="--sel-clr:#5a8a6a;--sel-bg:#e8f5e9;" data-cat="${c.val}" onclick="selCatBtn(this)">
-      <div class="cb-ico">${c.ico}</div>${c.name}
+      <img class="cb-img" src="${c.img}" alt="${c.name}" loading="lazy" onerror="this.style.display='none';this.nextElementSibling.style.display='block'"/><span class="cb-ico" style="display:none">🌸</span>${c.name}
     </button>`).join('');
   document.getElementById('buy-cat-grid').innerHTML=CAT_BUY.map(c=>`
     <button class="choice-btn" style="--sel-clr:#c4566a;--sel-bg:#fce4ec;" data-cat="${c.val}" onclick="selBuyCat(this)">
@@ -2438,6 +2451,52 @@ function resetBuy(){
   document.querySelectorAll('#sc-buy .choice-btn').forEach(b=>b.classList.remove('sel'));
   document.getElementById('buy-form').style.display='block';
   document.getElementById('buy-done').style.display='none';
+}
+
+// ── FLOWER IMAGE SCAN ──
+async function handleFlowerImage(input){
+  const file=input.files[0];
+  if(!file)return;
+  const status=document.getElementById('flower-scan-status');
+  status.textContent='⏳ جاري تحليل الصورة...';
+  const scanBtn=input.previousElementSibling;
+  scanBtn.disabled=true;
+  try{
+    const b64=await new Promise((res,rej)=>{
+      const r=new FileReader();
+      r.onload=()=>res(r.result.split(',')[1]);
+      r.onerror=()=>rej(new Error('read error'));
+      r.readAsDataURL(file);
+    });
+    const resp=await fetch('/api/flowers/scan',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({image:b64})
+    });
+    const d=await resp.json();
+    if(d.ok||d.flowers){
+      const flowers=d.flowers||[];
+      // ملء الحقول تلقائياً
+      FLOWER_TYPES.forEach((ft,i)=>{
+        const found=flowers.find(f=>f.name===ft.name||f.name.includes(ft.name.split(' ')[0]));
+        if(found){
+          const inp=document.getElementById('fq-'+i);
+          if(inp) inp.value=found.count||0;
+        }
+      });
+      const total=flowers.reduce((a,f)=>a+(f.count||0),0);
+      status.textContent='✅ تم التحليل! '+(total>0?'عُد '+total+' وردة':'تحقق من الأرقام يدوياً');
+      status.style.color='#5a8a6a';
+    }else{
+      status.textContent='⚠️ '+(d.error||'لم يتمكن من التحليل، أدخل العدد يدوياً');
+      status.style.color='#c4566a';
+    }
+  }catch(e){
+    status.textContent='❌ خطأ في الاتصال';
+    status.style.color='#c4566a';
+  }
+  scanBtn.disabled=false;
+  input.value='';
 }
 
 // ── SUBMIT FLOWER ──
