@@ -6,7 +6,7 @@ from html_pages import HTML_PAGE, WORKER_PAGE, LOGIN_PAGE
 
 
 from functools import wraps
-from flask import make_response, redirect
+from flask import make_response, redirect, send_from_directory
 import hashlib
 
 def get_token():
@@ -40,6 +40,10 @@ def worker_auth(f):
 @app.route("/ping")
 def ping():
     return "ok", 200
+
+@app.route('/background.jpg')
+def background_image():
+    return send_from_directory('.', 'background.jpg', mimetype='image/jpeg')
 
 @app.route("/login")
 def login():
