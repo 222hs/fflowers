@@ -6,7 +6,7 @@ from html_pages import HTML_PAGE, WORKER_PAGE, LOGIN_PAGE
 
 
 from functools import wraps
-from flask import make_response, redirect, send_from_directory
+from flask import make_response, redirect, send_from_directory, request as flask_request
 import hashlib
 
 def get_token():
@@ -44,6 +44,28 @@ def ping():
 @app.route('/background.jpg')
 def background_image():
     return send_from_directory('.', 'background.jpg', mimetype='image/jpeg')
+
+@app.route('/upload-background', methods=['POST'])
+@auth
+def upload_background():
+    """Upload a new background image"""
+    try:
+        if 'file' not in request.files:
+            return jsonify({"ok": False, "error": "No file provided"}), 400
+        
+        file = request.files['file']
+        if file.filename == '':
+            return jsonify({"ok": False, "error": "No file selected"}), 400
+        
+        # Check if file is an image
+        if not file.content_type or not file.content_type.startswith('image/'):
+            return jsonify({"ok": False, "error": "File must be an image"}), 400
+        
+        # Save as background.jpg
+        file.save('background.jpg')
+        return jsonify({"ok": True, "message": "Background updated successfully"}), 200
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 500
 
 @app.route("/login")
 def login():

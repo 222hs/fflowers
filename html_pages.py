@@ -565,6 +565,7 @@ input[type="date"]{width:100%;padding:10px 12px;border:1px solid var(--border);b
       </div>
       <button class="theme-btn" id="refreshBtn" onclick="refreshData()" title="تحديث البيانات">🔄</button>
       <button class="theme-btn" onclick="toggleThemePanel()" title="تغيير الثيم">🎨</button>
+      <button class="theme-btn" onclick="toggleBgPanel()" title="تغيير الخلفية">🖼️</button>
       <button class="theme-btn" id="langBtn" onclick="toggleLang()" title="تغيير اللغة" style="font-size:12px;font-weight:700;font-family:'Tajawal',sans-serif;">EN</button>
       <a href="/logout" class="logout-btn" title="خروج">🔒</a>
     </div>
@@ -598,6 +599,16 @@ input[type="date"]{width:100%;padding:10px 12px;border:1px solid var(--border);b
         <div class="th-circle" style="background:linear-gradient(135deg,#fff0f5,#e8789a);border:2px solid #e8789a;"></div>
         <span class="th-name">🌸 ورود</span>
       </div>
+    </div>
+  </div>
+
+  <!-- Background Image Upload Section -->
+  <div class="theme-panel" id="bgPanel" style="display:none;margin-top:12px;">
+    <h4>تغيير خلفية التطبيق</h4>
+    <div style="padding:12px 0;">
+      <input type="file" id="bgFileInput" accept="image/*" style="display:none;" onchange="uploadBackground(event)"/>
+      <button class="login-btn" onclick="document.getElementById('bgFileInput').click()" style="width:100%;margin-bottom:8px;background:linear-gradient(135deg,#d4a843,#c49030);color:#1a1208;border:none;padding:12px;border-radius:8px;font-family:'Tajawal',sans-serif;font-weight:700;cursor:pointer;">📁 اختر صورة</button>
+      <div id="bgStatus" style="font-size:12px;text-align:center;margin-top:8px;color:rgba(255,255,255,0.7);"></div>
     </div>
   </div>
 
@@ -1034,11 +1045,53 @@ function toggleThemePanel(){
   document.getElementById('themePanel').classList.toggle('open');
 }
 
+function toggleBgPanel(){
+  document.getElementById('bgPanel').classList.toggle('open');
+}
+
+async function uploadBackground(event){
+  const file = event.target.files[0];
+  if(!file) return;
+  
+  const statusEl = document.getElementById('bgStatus');
+  statusEl.textContent = 'جارٍ التحميل...';
+  statusEl.style.color = 'rgba(255,255,255,0.7)';
+  
+  const formData = new FormData();
+  formData.append('file', file);
+  
+  try{
+    const response = await fetch('/upload-background', {
+      method: 'POST',
+      body: formData
+    });
+    
+    const data = await response.json();
+    if(data.ok){
+      statusEl.textContent = '✓ تم تحديث الخلفية بنجاح';
+      statusEl.style.color = '#7aab8a';
+      document.getElementById('bgFileInput').value = '';
+      setTimeout(() => {
+        document.getElementById('bgFileInput').value = '';
+      }, 2000);
+    } else {
+      statusEl.textContent = '✗ خطأ: ' + (data.error || 'فشل التحميل');
+      statusEl.style.color = '#ffb3b3';
+    }
+  } catch(e){
+    statusEl.textContent = '✗ خطأ في الاتصال';
+    statusEl.style.color = '#ffb3b3';
+  }
+}
+
+
 // Init theme
 setTheme(currentTheme);
 document.addEventListener('click', e => {
-  if(!e.target.closest('.theme-btn') && !e.target.closest('.theme-panel'))
+  if(!e.target.closest('.theme-btn') && !e.target.closest('.theme-panel')){
     document.getElementById('themePanel').classList.remove('open');
+    document.getElementById('bgPanel').classList.remove('open');
+  }
 });
 
 /* ── STATE ── */
