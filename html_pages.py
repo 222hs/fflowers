@@ -2581,10 +2581,14 @@ LOGIN_PAGE = """<!DOCTYPE html>
 :root{
   --primary-color:#d4a843;
   --accent-color:#e8798a;
+  --accent-rgb:212,168,67;
+  --bg-overlay:rgba(10,10,10,0.58);
   --dark-overlay:rgba(10,10,10,0.58);
   --light-overlay:rgba(10,10,10,0.28);
   --card-bg:rgba(255,255,255,0.08);
   --text-primary:#ffffff;
+  --panel-radius:24px;
+  --button-radius:50%;
   --border-style:24px;
 }
 *{margin:0;padding:0;box-sizing:border-box;}
@@ -2621,7 +2625,7 @@ html,body{min-height:100%;overflow-x:hidden;overflow-y:auto;font-family:'Tajawal
   position:fixed;
   inset:0;
   z-index:1;
-  background: linear-gradient(180deg, var(--light-overlay), var(--dark-overlay));
+  background: linear-gradient(180deg, var(--light-overlay), var(--bg-overlay));
   pointer-events:none;
 }
 /* Petals */
@@ -2654,10 +2658,10 @@ html,body{min-height:100%;overflow-x:hidden;overflow-y:auto;font-family:'Tajawal
 .brand-header{text-align:center;}
 .logo{
   width:70px;height:70px;margin:0 auto 14px;
-  background:linear-gradient(135deg,#d4a843,#b8891f);
+  background:linear-gradient(135deg,var(--primary-color),rgba(255,255,255,0.85));
   border-radius:20px;display:flex;align-items:center;justify-content:center;
   font-size:32px;
-  box-shadow:0 8px 32px rgba(212,168,67,0.5);
+  box-shadow:0 8px 32px rgba(0,0,0,0.2);
   animation:logoFloat 4s ease-in-out infinite;
 }
 @keyframes logoFloat{0%,100%{transform:translateY(0);}50%{transform:translateY(-6px);}}
@@ -2691,7 +2695,7 @@ html,body{min-height:100%;overflow-x:hidden;overflow-y:auto;font-family:'Tajawal
   flex:1 1 260px;
   min-width:240px;
   max-width:320px;
-  border-radius:24px;
+  border-radius:var(--panel-radius,24px);
   padding:22px 18px;
   text-align:center;
   backdrop-filter:blur(28px) saturate(1.8);
@@ -2784,9 +2788,10 @@ html,body{min-height:100%;overflow-x:hidden;overflow-y:auto;font-family:'Tajawal
   z-index:100;
   width:50px;
   height:50px;
-  border-radius:50%;
+  border-radius:var(--button-radius,50%);
   border:2px solid rgba(255,255,255,0.3);
-  background:rgba(255,255,255,0.08);
+  background:rgba(255,255,255,0.12);
+  color:var(--text-primary);
   backdrop-filter:blur(16px) saturate(1.5);
   -webkit-backdrop-filter:blur(16px) saturate(1.5);
   font-size:24px;
@@ -2799,9 +2804,9 @@ html,body{min-height:100%;overflow-x:hidden;overflow-y:auto;font-family:'Tajawal
 }
 .theme-switcher:hover{
   transform:translateX(-50%) scale(1.1);
-  border-color:rgba(255,255,255,0.6);
-  background:rgba(255,255,255,0.12);
-  box-shadow:0 12px 40px rgba(0,0,0,0.3);
+  border-color:var(--accent-color);
+  background:rgba(255,255,255,0.18);
+  box-shadow:0 12px 40px rgba(0,0,0,0.28);
 }
 .theme-switcher:active{
   transform:translateX(-50%) scale(0.95);
@@ -2935,61 +2940,99 @@ async function goWorker(){
 }
 
 // ── Dynamic Theme System ────────────────────────
+const backgrounds = [
+  `url('/background.jpg?t=0') center top / cover no-repeat fixed`,
+  `url('/background.jpg?t=1') center center / cover no-repeat fixed`,
+  `url('/background.jpg?t=2') center bottom / cover no-repeat fixed`
+];
+let bgIndex = 0;
+
+function setBackground(index){
+  const bgImg = document.querySelector('.bg-img');
+  if(!bgImg) return;
+  bgImg.style.background = backgrounds[index];
+}
+
 function extractDominantColor(){
-  const canvas=document.createElement('canvas');
-  const img=new Image();
-  img.crossOrigin='anonymous';
-  img.src='/background.jpg?t='+Date.now();
-  img.onload=function(){
-    canvas.width=100;
-    canvas.height=100;
-    const ctx=canvas.getContext('2d');
-    ctx.drawImage(img,0,0,100,100);
-    const imageData=ctx.getImageData(0,0,100,100);
-    const data=imageData.data;
-    let r=0,g=0,b=0;
-    for(let i=0;i<data.length;i+=4){
-      r+=data[i];g+=data[i+1];b+=data[i+2];
+  const canvas = document.createElement('canvas');
+  const img = new Image();
+  img.crossOrigin = 'anonymous';
+  img.src = '/background.jpg?t=' + Date.now();
+  img.onload = function(){
+    const w = 120;
+    const h = 120;
+    canvas.width = w;
+    canvas.height = h;
+    const ctx = canvas.getContext('2d');
+    ctx.drawImage(img, 0, 0, w, h);
+    const imageData = ctx.getImageData(0, 0, w, h).data;
+    let r = 0, g = 0, b = 0, edgeSum = 0;
+    const getIdx = (x,y) => (y*w + x) * 4;
+    for(let y = 0; y < h; y++){
+      for(let x = 0; x < w; x++){
+        const idx = getIdx(x,y);
+        const cr = imageData[idx];
+        const cg = imageData[idx+1];
+        const cb = imageData[idx+2];
+        r += cr; g += cg; b += cb;
+        if(x > 0){
+          const li = getIdx(x-1,y);
+          edgeSum += Math.abs(cr - imageData[li]) + Math.abs(cg - imageData[li+1]) + Math.abs(cb - imageData[li+2]);
+        }
+        if(y > 0){
+          const ui = getIdx(x,y-1);
+          edgeSum += Math.abs(cr - imageData[ui]) + Math.abs(cg - imageData[ui+1]) + Math.abs(cb - imageData[ui+2]);
+        }
+      }
     }
-    const pixelCount=data.length/4;
-    r=Math.round(r/pixelCount);
-    g=Math.round(g/pixelCount);
-    b=Math.round(b/pixelCount);
-    updateThemeColors(r,g,b);
+    const pixelCount = w * h;
+    r = Math.round(r / pixelCount);
+    g = Math.round(g / pixelCount);
+    b = Math.round(b / pixelCount);
+    const edgeDensity = edgeSum / (pixelCount * 255 * 2);
+    updateThemeColors(r, g, b, edgeDensity > 0.12);
+  };
+  img.onerror = function(){
+    updateThemeColors(212,168,67, false);
   };
 }
 
-function updateThemeColors(r,g,b){
-  const isDark=(r+g+b)/3<128;
-  const primary=`rgb(${r},${g},${b})`;
-  const contrast=isDark?'rgba(255,255,255,0.9)':'rgba(10,10,10,0.9)';
-  const overlay=isDark?'rgba(20,20,20,0.6)':'rgba(200,200,200,0.3)';
-  const lightOverlay=isDark?'rgba(20,20,20,0.28)':'rgba(200,200,200,0.15)';
-  const cardBg=isDark?'rgba(255,255,255,0.08)':'rgba(0,0,0,0.12)';
-  document.documentElement.style.setProperty('--primary-color',primary);
-  document.documentElement.style.setProperty('--accent-color',primary);
-  document.documentElement.style.setProperty('--dark-overlay',overlay);
-  document.documentElement.style.setProperty('--light-overlay',lightOverlay);
-  document.documentElement.style.setProperty('--card-bg',cardBg);
-  document.documentElement.style.setProperty('--text-primary',contrast);
-}
+function updateThemeColors(r,g,b,sharp=false){
+  const primary = `rgb(${r},${g},${b})`;
+  const accent = `rgb(${Math.min(255, r + 28)},${Math.min(255, g + 16)},${Math.min(255, b + 6)})`;
+  const isDark = (r*0.299 + g*0.587 + b*0.114) < 150;
+  const text = isDark ? 'rgba(255,255,255,0.92)' : 'rgba(18,18,18,0.94)';
+  const bgOverlay = isDark ? `rgba(${Math.round(r*0.18)},${Math.round(g*0.18)},${Math.round(b*0.18)},0.72)` : `rgba(${Math.round(r*0.35)},${Math.round(g*0.35)},${Math.round(b*0.35)},0.32)`;
+  const lightOverlay = isDark ? 'rgba(20,20,20,0.18)' : 'rgba(255,255,255,0.24)';
+  const cardBg = isDark ? 'rgba(255,255,255,0.12)' : 'rgba(255,255,255,0.88)';
+  const panelRadius = sharp ? '16px' : '28px';
+  const buttonRadius = sharp ? '16px' : '50%';
 
-// Sample backgrounds for rotation
-const backgrounds=['url(/background.jpg)'];
-let bgIndex=0;
+  document.documentElement.style.setProperty('--primary-color', primary);
+  document.documentElement.style.setProperty('--accent-color', accent);
+  document.documentElement.style.setProperty('--accent-rgb', `${r},${g},${b}`);
+  document.documentElement.style.setProperty('--bg-overlay', bgOverlay);
+  document.documentElement.style.setProperty('--light-overlay', lightOverlay);
+  document.documentElement.style.setProperty('--card-bg', cardBg);
+  document.documentElement.style.setProperty('--text-primary', text);
+  document.documentElement.style.setProperty('--panel-radius', panelRadius);
+  document.documentElement.style.setProperty('--button-radius', buttonRadius);
+  document.documentElement.style.setProperty('--border-style', sharp ? '16px' : '24px');
+  document.documentElement.classList.toggle('sharp-theme', sharp);
+}
 
 function changeBackground(){
-  bgIndex=(bgIndex+1)%backgrounds.length;
-  const bgImg=document.querySelector('.bg-img');
-  bgImg.style.backgroundImage=backgrounds[bgIndex];
-  setTimeout(extractDominantColor,100);
+  bgIndex = (bgIndex + 1) % backgrounds.length;
+  setBackground(bgIndex);
+  setTimeout(extractDominantColor, 120);
 }
 
-document.addEventListener('DOMContentLoaded',function(){
+document.addEventListener('DOMContentLoaded', function(){
+  setBackground(bgIndex);
   extractDominantColor();
-  const switcherBtn=document.getElementById('theme-switcher');
+  const switcherBtn = document.getElementById('theme-switcher');
   if(switcherBtn){
-    switcherBtn.addEventListener('click',changeBackground);
+    switcherBtn.addEventListener('click', changeBackground);
   }
 });
 </script>
