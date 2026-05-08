@@ -2618,6 +2618,18 @@ function resetInvoice(){
 // Init
 buildCatGrid();
 loadDaySummary();
+
+// Load AI theme from login page (if user uploaded a background there)
+(function loadAiTheme(){
+  try{
+    const saved = localStorage.getItem('fairuz_ai_theme');
+    if(saved){
+      const vars = JSON.parse(saved);
+      const root = document.documentElement;
+      Object.entries(vars).forEach(([k,v]) => root.style.setProperty(k, v));
+    }
+  }catch(e){}
+})();
 </script>
 </body>
 </html>"""
@@ -2832,154 +2844,46 @@ html,body{min-height:100%;overflow-x:hidden;overflow-y:auto;font-family:'Tajawal
 }
 .panel-worker .login-btn:hover{transform:translateY(-2px) scale(1.02);box-shadow:0 10px 28px rgba(232,121,138,0.5);}
 
-/* ══════════════════════════════════
-   CHANGE BACKGROUND BUTTON
-   Centered bottom · glassmorphism
-   Adapts fully to extracted theme
-══════════════════════════════════ */
-
-/* The pill-shaped label that wraps icon + text */
-.bg-changer{
+/* Theme Switcher Button */
+.theme-switcher{
   position:fixed;
-  bottom:28px;
+  bottom:24px;
   left:50%;
   transform:translateX(-50%);
-  z-index:200;
-
-  /* size */
-  height:44px;
-  padding:0 20px 0 14px;
-
-  /* glass base — overridden by JS vars */
-  background:rgba(255,255,255,0.10);
-  backdrop-filter:blur(20px) saturate(1.8);
-  -webkit-backdrop-filter:blur(20px) saturate(1.8);
-
-  /* border adapts to geometry vibe */
-  border:1.5px solid rgba(255,255,255,0.28);
-  border-radius:var(--btn-radius, 50px);          /* JS sets this */
-
-  /* clip-path for sharp mode — JS toggles .sharp class */
-  clip-path:var(--btn-clip, none);
-
-  /* flex layout */
-  display:inline-flex;
-  align-items:center;
-  gap:8px;
+  z-index:100;
+  width:50px;
+  height:50px;
+  border-radius:var(--button-radius,50%);
+  border:2px solid rgba(255,255,255,0.3);
+  background:rgba(255,255,255,0.12);
+  color:var(--text-primary);
+  backdrop-filter:blur(16px) saturate(1.5);
+  -webkit-backdrop-filter:blur(16px) saturate(1.5);
+  font-size:24px;
   cursor:pointer;
-
-  /* shadow tinted by accent */
-  box-shadow:0 8px 28px rgba(var(--accent-rgb,212,168,67), 0.28),
-             inset 0 1px 0 rgba(255,255,255,0.18);
-
-  /* smooth everything */
-  transition:
-    background       .4s ease,
-    border-color     .4s ease,
-    border-radius    .5s cubic-bezier(.34,1.56,.64,1),
-    clip-path        .5s ease,
-    box-shadow       .4s ease,
-    transform        .25s cubic-bezier(.34,1.56,.64,1);
-
-  /* prevent text selection on rapid clicks */
-  user-select:none;
-  -webkit-user-select:none;
+  transition:all .3s cubic-bezier(.34,1.56,.64,1);
+  box-shadow:0 8px 32px rgba(0,0,0,0.2);
+  display:flex;
+  align-items:center;
+  justify-content:center;
 }
-
-.bg-changer:hover{
+.theme-switcher:hover{
+  transform:translateX(-50%) scale(1.1);
+  border-color:var(--accent-color);
   background:rgba(255,255,255,0.18);
-  border-color:rgba(var(--accent-rgb,212,168,67), 0.7);
-  box-shadow:0 12px 36px rgba(var(--accent-rgb,212,168,67), 0.45),
-             inset 0 1px 0 rgba(255,255,255,0.25);
-  transform:translateX(-50%) translateY(-3px) scale(1.04);
+  box-shadow:0 12px 40px rgba(0,0,0,0.28);
 }
-.bg-changer:active{
+.theme-switcher:active{
   transform:translateX(-50%) scale(0.95);
 }
 
-/* Icon container — spins on click */
-.bgc-icon{
-  width:26px;height:26px;
-  display:flex;align-items:center;justify-content:center;
-  font-size:16px;
-  transition:transform .5s cubic-bezier(.34,1.56,.64,1);
-  flex-shrink:0;
-}
-.bg-changer.spinning .bgc-icon{
-  transform:rotate(360deg);
-}
-
-/* Label text */
-.bgc-label{
-  font-family:'Tajawal',sans-serif;
-  font-size:12px;
-  font-weight:700;
-  color:rgba(255,255,255,0.88);
-  letter-spacing:0.5px;
-  white-space:nowrap;
-  transition:color .4s;
-}
-
-/* Color swatch strip — 3 dots showing extracted palette */
-.bgc-swatches{
-  display:flex;gap:3px;align-items:center;margin-right:2px;
-}
-.bgc-dot{
-  width:7px;height:7px;
-  border-radius:50%;
-  border:1px solid rgba(255,255,255,0.3);
-  transition:background .5s ease, border-radius .4s ease;
-  flex-shrink:0;
-}
-
-/* Loading ring when analyzing */
-.bgc-ring{
-  display:none;
-  width:16px;height:16px;
-  border:2px solid rgba(255,255,255,0.2);
-  border-top-color:rgba(255,255,255,0.85);
-  border-radius:50%;
-  animation:bgc-spin .7s linear infinite;
-  flex-shrink:0;
-}
-.bg-changer.analyzing .bgc-ring{ display:block; }
-.bg-changer.analyzing .bgc-icon{ display:none; }
-
-@keyframes bgc-spin{ to{ transform:rotate(360deg); } }
-
-/* Sharp geometry mode → diamond/hex clip on button */
-.bg-changer.sharp-mode{
-  border-radius:8px;
-}
-
-/* Ripple on click */
-.bg-changer::after{
-  content:'';
-  position:absolute;
-  inset:0;
-  border-radius:inherit;
-  background:radial-gradient(circle at center, rgba(255,255,255,0.35) 0%, transparent 70%);
-  opacity:0;
-  transition:opacity .4s;
-  pointer-events:none;
-}
-.bg-changer.ripple::after{ opacity:1; }
-
-/* Hidden real file input */
-#bg-file-input{
-  position:absolute;
-  width:1px;height:1px;
-  opacity:0;pointer-events:none;
-}
-
-@media (max-width:480px){
-  .bg-changer{
-    bottom:18px;
-    height:38px;
-    padding:0 14px 0 10px;
+@media (max-width:768px){
+  .theme-switcher{
+    bottom:16px;
+    width:44px;
+    height:44px;
+    font-size:20px;
   }
-  .bgc-label{ font-size:11px; }
-  .bgc-dot{ width:6px;height:6px; }
 }
 </style>
 </head>
@@ -3024,18 +2928,82 @@ html,body{min-height:100%;overflow-x:hidden;overflow-y:auto;font-family:'Tajawal
   </div>
 </div>
 
-<!-- ── Change Background Button ── -->
-<button class="bg-changer" id="bg-changer" aria-label="Change Background Image">
-  <div class="bgc-icon">🌄</div>
-  <div class="bgc-ring"></div>
-  <div class="bgc-swatches">
-    <div class="bgc-dot" id="swatch-0"></div>
-    <div class="bgc-dot" id="swatch-1"></div>
-    <div class="bgc-dot" id="swatch-2"></div>
-  </div>
-  <span class="bgc-label">Change Background</span>
+<!-- Hidden file input for background upload -->
+<input type="file" id="bg-upload-input" accept="image/*" style="display:none">
+
+<!-- Upload Background Button -->
+<button class="bg-upload-btn" id="bg-upload-btn" title="تحميل صورة خلفية">
+  <span id="bg-upload-icon">🖼️</span>
 </button>
-<input type="file" id="bg-file-input" accept="image/*">
+
+<!-- AI Analysis Toast -->
+<div id="ai-toast" class="ai-toast"></div>
+
+<!-- Theme Switcher Button -->
+<button class="theme-switcher" id="theme-switcher" title="Change Background">🎨</button>
+
+<style>
+.bg-upload-btn{
+  position:fixed;
+  bottom:84px;
+  left:50%;
+  transform:translateX(-50%);
+  z-index:100;
+  width:50px;
+  height:50px;
+  border-radius:50%;
+  border:2px solid rgba(255,255,255,0.35);
+  background:rgba(255,255,255,0.13);
+  color:var(--text-primary,#fff);
+  backdrop-filter:blur(16px) saturate(1.5);
+  -webkit-backdrop-filter:blur(16px) saturate(1.5);
+  font-size:22px;
+  cursor:pointer;
+  transition:all .3s cubic-bezier(.34,1.56,.64,1);
+  box-shadow:0 8px 32px rgba(0,0,0,0.2);
+  display:flex;
+  align-items:center;
+  justify-content:center;
+}
+.bg-upload-btn:hover{
+  transform:translateX(-50%) scale(1.1);
+  border-color:var(--accent-color,#e8798a);
+  background:rgba(255,255,255,0.2);
+}
+.bg-upload-btn:active{transform:translateX(-50%) scale(0.95);}
+.bg-upload-btn.loading{animation:spin-upload 1s linear infinite;}
+@keyframes spin-upload{from{transform:translateX(-50%) rotate(0deg);}to{transform:translateX(-50%) rotate(360deg);}}
+
+.ai-toast{
+  position:fixed;
+  bottom:150px;
+  left:50%;
+  transform:translateX(-50%) translateY(20px);
+  background:rgba(20,20,20,0.85);
+  color:#fff;
+  padding:10px 20px;
+  border-radius:40px;
+  font-size:12px;
+  font-weight:600;
+  font-family:'Tajawal',sans-serif;
+  backdrop-filter:blur(16px);
+  border:1px solid rgba(255,255,255,0.15);
+  box-shadow:0 8px 28px rgba(0,0,0,0.3);
+  z-index:200;
+  opacity:0;
+  pointer-events:none;
+  transition:all .4s cubic-bezier(.34,1.56,.64,1);
+  max-width:85vw;
+  text-align:center;
+}
+.ai-toast.show{
+  opacity:1;
+  transform:translateX(-50%) translateY(0);
+}
+@media (max-width:768px){
+  .bg-upload-btn{bottom:72px;width:44px;height:44px;font-size:19px;}
+}
+</style>
 
 <script>
 // Petals
@@ -3110,332 +3078,338 @@ async function goWorker(){
   }
 }
 
-// ╔══════════════════════════════════════════════════════════╗
-// ║  FAIRUZ · IMAGE-BASED THEME ENGINE                      ║
-// ║  Canvas API k-means  •  Edge geometry detection         ║
-// ║  CSS variable injection  •  Adaptive design language    ║
-// ╚══════════════════════════════════════════════════════════╝
+// ── Image Upload & Groq AI Theme System ────────────────────────
 
-const BgTheme = (function(){
+function showAiToast(msg, duration=3500){
+  const t = document.getElementById('ai-toast');
+  if(!t) return;
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(()=>t.classList.remove('show'), duration);
+}
 
-  // ── Internal state ───────────────────────────────────────
-  const root   = document.documentElement;
-  const set    = (k,v) => root.style.setProperty(k,v);
-  const clamp  = (n,lo,hi) => Math.max(lo, Math.min(hi, n));
+// Extract dominant colors from image using canvas
+function extractColorsFromImage(imgEl, callback){
+  const canvas = document.createElement('canvas');
+  const w = 160, h = 160;
+  canvas.width = w; canvas.height = h;
+  const ctx = canvas.getContext('2d');
+  ctx.drawImage(imgEl, 0, 0, w, h);
+  const data = ctx.getImageData(0, 0, w, h).data;
 
-  let _currentDataURL = null;   // keeps last uploaded image as data-URL
-  let _analyzing      = false;
+  // Sample pixels in a grid to find dominant colors
+  let rSum=0, gSum=0, bSum=0, edgeSum=0, count=0;
+  const buckets = {};
+  const getIdx = (x,y)=>(y*w+x)*4;
 
-  // ── k-means palette extractor (3 clusters, 14 iterations) ─
-  function extractPalette(imgEl, clusters=3){
-    const W=180, H=180;
-    const cv = Object.assign(document.createElement('canvas'),{width:W,height:H});
-    const cx = cv.getContext('2d');
-    cx.drawImage(imgEl,0,0,W,H);
-    const px = cx.getImageData(0,0,W,H).data;
-
-    // ── 1. Collect colourful pixels (skip near-grey, near-white, near-black)
-    const pts=[];
-    for(let i=0;i<px.length;i+=4){
-      const r=px[i],g=px[i+1],b=px[i+2],a=px[i+3];
-      if(a<200) continue;
-      const max=Math.max(r,g,b), min=Math.min(r,g,b);
-      const lum=(r*299+g*587+b*114)/1000;
-      const sat= max===0 ? 0 : (max-min)/max;
-      if(sat>0.09 && lum>18 && lum<238) pts.push([r,g,b]);
+  for(let y=0;y<h;y++){
+    for(let x=0;x<w;x++){
+      const i = getIdx(x,y);
+      const r=data[i], g=data[i+1], b=data[i+2];
+      rSum+=r; gSum+=g; bSum+=b; count++;
+      // Quantize to bucket for dominant color
+      const key = `${Math.round(r/32)*32},${Math.round(g/32)*32},${Math.round(b/32)*32}`;
+      buckets[key] = (buckets[key]||0)+1;
+      // Edge detection
+      if(x>0){const li=getIdx(x-1,y);edgeSum+=Math.abs(r-data[li])+Math.abs(g-data[li+1])+Math.abs(b-data[li+2]);}
+      if(y>0){const ui=getIdx(x,y-1);edgeSum+=Math.abs(r-data[ui])+Math.abs(g-data[ui+1])+Math.abs(b-data[ui+2]);}
     }
+  }
 
-    // Subsample: keep at most 3 000 points for speed
-    const stride = Math.max(1, Math.floor(pts.length/3000));
-    const sample = pts.filter((_,i)=>i%stride===0);
-    if(sample.length < clusters) return [{r:212,g:168,b:67},{r:232,g:121,b:138},{r:255,g:255,b:255}];
+  // Average color
+  const avgR=Math.round(rSum/count), avgG=Math.round(gSum/count), avgB=Math.round(bSum/count);
 
-    // ── 2. k-means++ seeding ─────────────────────────────
-    const centroids = [sample[Math.floor(Math.random()*sample.length)]];
-    while(centroids.length < clusters){
-      const dists = sample.map(p=>{
-        const d = Math.min(...centroids.map(c=>(p[0]-c[0])**2+(p[1]-c[1])**2+(p[2]-c[2])**2));
-        return d;
-      });
-      const total = dists.reduce((a,b)=>a+b,0);
-      let rnd = Math.random()*total, idx=0;
-      for(;idx<dists.length-1;idx++){ rnd-=dists[idx]; if(rnd<=0)break; }
-      centroids.push(sample[idx]);
+  // Most dominant bucket
+  let topKey = Object.entries(buckets).sort((a,b)=>b[1]-a[1])[0][0];
+  const [dR,dG,dB] = topKey.split(',').map(Number);
+
+  // Edge density
+  const edgeDensity = edgeSum / (count * 255 * 2);
+  const isSharp = edgeDensity > 0.11;
+
+  // Sample corners for gradient variety
+  const corners = [
+    getIdx(0,0), getIdx(w-1,0), getIdx(0,h-1), getIdx(w-1,h-1),
+    getIdx(Math.floor(w/2),Math.floor(h/2))
+  ].map(i=>({r:data[i],g:data[i+1],b:data[i+2]}));
+
+  callback({avgR,avgG,avgB,dR,dG,dB,isSharp,corners,edgeDensity,canvas});
+}
+
+// Apply AI-analyzed theme to all pages via CSS variables on <html>
+function applyAiTheme(analysis, groqResult=null){
+  const {avgR,avgG,avgB,dR,dG,dB,isSharp,corners} = analysis;
+
+  const isDark = (avgR*0.299 + avgG*0.587 + avgB*0.114) < 128;
+
+  // Primary accent from dominant color
+  const primary = `rgb(${dR},${dG},${dB})`;
+
+  // Accent: shift hue slightly
+  const aR = Math.min(255, Math.round(dR*0.85 + avgR*0.15 + 20));
+  const aG = Math.min(255, Math.round(dG*0.85 + avgG*0.15 + 10));
+  const aB = Math.min(255, Math.round(dB*0.85 + avgB*0.15));
+  const accent = `rgb(${aR},${aG},${aB})`;
+
+  const text = isDark ? 'rgba(255,255,255,0.93)' : 'rgba(12,12,12,0.92)';
+  const bgOverlay = isDark
+    ? `rgba(${Math.round(avgR*0.12)},${Math.round(avgG*0.12)},${Math.round(avgB*0.12)},0.68)`
+    : `rgba(${Math.round(avgR*0.3)},${Math.round(avgG*0.3)},${Math.round(avgB*0.3)},0.28)`;
+  const lightOverlay = isDark ? 'rgba(10,10,10,0.15)' : 'rgba(255,255,255,0.2)';
+  const cardBg = isDark ? 'rgba(255,255,255,0.1)' : 'rgba(255,255,255,0.86)';
+
+  // Radius based on edge sharpness (angular vs rounded)
+  const panelR = isSharp ? '14px' : '26px';
+  const btnR   = isSharp ? '14px' : '50%';
+  const borderR = isSharp ? '14px' : '22px';
+
+  // Corner-based gradient for orbs
+  const c = corners;
+  const orb1 = `rgba(${c[0].r},${c[0].g},${c[0].b},0.25)`;
+  const orb2 = `rgba(${c[2].r},${c[2].g},${c[2].b},0.2)`;
+  const orb3 = `rgba(${c[4].r},${c[4].g},${c[4].b},0.18)`;
+
+  // Build secondary color from complementary channel
+  const secR = Math.min(255,Math.round(dB*0.6+dR*0.4));
+  const secG = Math.min(255,Math.round(dR*0.6+dG*0.4));
+  const secB = Math.min(255,Math.round(dG*0.6+dB*0.4));
+
+  const vars = {
+    '--primary-color': primary,
+    '--accent-color': accent,
+    '--accent-rgb': `${dR},${dG},${dB}`,
+    '--bg-overlay': bgOverlay,
+    '--light-overlay': lightOverlay,
+    '--card-bg': cardBg,
+    '--text-primary': text,
+    '--panel-radius': panelR,
+    '--button-radius': btnR,
+    '--border-style': borderR,
+    '--ai-orb1': orb1,
+    '--ai-orb2': orb2,
+    '--ai-orb3': orb3,
+    '--ai-accent': accent,
+    '--ai-primary': primary,
+    '--ai-secondary': `rgb(${secR},${secG},${secB})`,
+    '--ai-border': `rgba(${dR},${dG},${dB},0.28)`,
+    '--ai-glow': `rgba(${dR},${dG},${dB},0.22)`,
+    '--ai-card': cardBg,
+    '--ai-text': text,
+    '--ai-bg': isDark
+      ? `rgb(${Math.max(10,Math.round(avgR*0.15))},${Math.max(10,Math.round(avgG*0.15))},${Math.max(10,Math.round(avgB*0.15))})`
+      : `rgb(${Math.min(255,Math.round(avgR*0.9+200*0.1))},${Math.min(255,Math.round(avgG*0.9+200*0.1))},${Math.min(255,Math.round(avgB*0.9+200*0.1))})`,
+  };
+
+  // If Groq gave us refined palette, override with it
+  if(groqResult){
+    try{
+      const gp = typeof groqResult === 'string' ? JSON.parse(groqResult) : groqResult;
+      if(gp.accent)    vars['--accent-color']  = gp.accent;
+      if(gp.primary)   vars['--primary-color'] = gp.primary;
+      if(gp.secondary) vars['--ai-secondary']  = gp.secondary;
+      if(gp.radius)    {vars['--panel-radius']=gp.radius; vars['--border-style']=gp.radius;}
+      if(gp.btnRadius) vars['--button-radius'] = gp.btnRadius;
+    }catch(e){}
+  }
+
+  // Apply to <html> so all pages inherit via CSS
+  const root = document.documentElement;
+  Object.entries(vars).forEach(([k,v]) => root.style.setProperty(k, v));
+  root.classList.toggle('sharp-theme', isSharp);
+
+  // Persist to localStorage for other pages to read on load
+  try{ localStorage.setItem('fairuz_ai_theme', JSON.stringify(vars)); }catch(e){}
+}
+
+// Load persisted theme if available (for main app page)
+function loadPersistedTheme(){
+  try{
+    const saved = localStorage.getItem('fairuz_ai_theme');
+    if(saved){
+      const vars = JSON.parse(saved);
+      const root = document.documentElement;
+      Object.entries(vars).forEach(([k,v]) => root.style.setProperty(k, v));
     }
+  }catch(e){}
+}
 
-    // ── 3. Iterate ───────────────────────────────────────
-    for(let iter=0;iter<14;iter++){
-      const buckets=Array.from({length:clusters},()=>([0,0,0,0]));
-      for(const p of sample){
-        let best=0,bd=Infinity;
-        centroids.forEach((c,j)=>{
-          const d=(p[0]-c[0])**2+(p[1]-c[1])**2+(p[2]-c[2])**2;
-          if(d<bd){bd=d;best=j;}
-        });
-        buckets[best][0]+=p[0];buckets[best][1]+=p[1];
-        buckets[best][2]+=p[2];buckets[best][3]++;
+// Convert image file to base64 for Groq
+function fileToBase64(file){
+  return new Promise((res,rej)=>{
+    const reader = new FileReader();
+    reader.onload = e => res(e.target.result.split(',')[1]);
+    reader.onerror = rej;
+    reader.readAsDataURL(file);
+  });
+}
+
+// Analyze image with Groq Vision
+async function analyzeWithGroq(base64Img, mimeType){
+  try{
+    const resp = await fetch('/api/analyze-image', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({image: base64Img, mime: mimeType})
+    });
+    if(!resp.ok) return null;
+    const d = await resp.json();
+    return d.result || null;
+  }catch(e){
+    return null;
+  }
+}
+
+// Main: handle file selection
+async function handleBgUpload(file){
+  if(!file || !file.type.startsWith('image/')) return;
+
+  const btn = document.getElementById('bg-upload-btn');
+  const icon = document.getElementById('bg-upload-icon');
+
+  // Show loading
+  btn.classList.add('loading');
+  icon.textContent = '⏳';
+  showAiToast('⏳ جاري تحميل الصورة...', 8000);
+
+  const objectUrl = URL.createObjectURL(file);
+
+  // 1. Set as background immediately
+  const bgImg = document.querySelector('.bg-img');
+  if(bgImg){
+    bgImg.style.backgroundImage = `url('${objectUrl}')`;
+    bgImg.style.backgroundSize = 'cover';
+    bgImg.style.backgroundPosition = 'center';
+  }
+
+  // 2. Extract colors locally via canvas
+  const tempImg = new Image();
+  tempImg.onload = async function(){
+    showAiToast('🎨 جاري تحليل الألوان بالذكاء الاصطناعي...', 8000);
+
+    const colorData = await new Promise(res => extractColorsFromImage(tempImg, res));
+
+    // Apply local color analysis first (fast)
+    applyAiTheme(colorData, null);
+    showAiToast('✨ تم تطبيق الألوان! جاري تحسين الثيم عبر Groq...',5000);
+
+    // 3. Send to Groq for deeper analysis
+    try{
+      const b64 = await fileToBase64(file);
+      const groqResult = await analyzeWithGroq(b64, file.type);
+      if(groqResult){
+        applyAiTheme(colorData, groqResult);
+        const msg = groqResult.description || 'تم تطبيق الثيم الذكي على جميع الصفحات! 🌟';
+        showAiToast('🤖 ' + msg, 4500);
+      } else {
+        showAiToast('✅ تم تطبيق الثيم من الصورة على جميع الصفحات!', 3000);
       }
-      let moved=false;
-      buckets.forEach((b,j)=>{
-        if(!b[3]) return;
-        const nr=b[0]/b[3], ng=b[1]/b[3], nb=b[2]/b[3];
-        if(Math.abs(nr-centroids[j][0])>0.5) moved=true;
-        centroids[j]=[nr,ng,nb];
-      });
-      if(!moved) break;
+    }catch(e){
+      showAiToast('✅ تم تطبيق الثيم من الصورة!', 3000);
     }
 
-    // Sort by saturation×brightness (most vivid first)
-    return centroids
-      .map(c=>({r:Math.round(c[0]),g:Math.round(c[1]),b:Math.round(c[2])}))
-      .sort((a,b)=>{
-        const vivid=c=>{
-          const max=Math.max(c.r,c.g,c.b),min=Math.min(c.r,c.g,c.b);
-          const lum=(c.r*299+c.g*587+c.b*114)/1000;
-          return (max===0?0:(max-min)/max) * (1-Math.abs(lum-128)/128);
-        };
-        return vivid(b)-vivid(a);
-      });
-  }
+    btn.classList.remove('loading');
+    icon.textContent = '✅';
+    setTimeout(()=>{icon.textContent='🖼️';},2500);
+  };
+  tempImg.onerror = function(){
+    btn.classList.remove('loading');
+    icon.textContent = '🖼️';
+    showAiToast('❌ خطأ في تحميل الصورة', 3000);
+  };
+  tempImg.src = objectUrl;
+}
 
-  // ── Sobel edge-density → "sharpness" of the image ──────
-  function edgeDensity(imgEl){
-    const W=100,H=100;
-    const cv=Object.assign(document.createElement('canvas'),{width:W,height:H});
-    const cx=cv.getContext('2d');
-    cx.drawImage(imgEl,0,0,W,H);
-    const d=cx.getImageData(0,0,W,H).data;
-    const grey=(i)=>(d[i]*76+d[i+1]*150+d[i+2]*29)>>8;
-    let total=0,count=0;
-    for(let y=1;y<H-1;y++){
-      for(let x=1;x<W-1;x++){
-        const idx=(y*W+x)*4;
-        const gx=grey(idx+4)-grey(idx-4);
-        const gy=grey(idx+W*4)-grey(idx-W*4);
-        total+=Math.sqrt(gx*gx+gy*gy);
-        count++;
+// ── Dynamic Theme System (original background cycling) ────────────────────────
+const backgrounds = [
+  `url('/background.jpg?t=0') center top / cover no-repeat fixed`,
+  `url('/background.jpg?t=1') center center / cover no-repeat fixed`,
+  `url('/background.jpg?t=2') center bottom / cover no-repeat fixed`
+];
+let bgIndex = 0;
+
+function setBackground(index){
+  const bgImg = document.querySelector('.bg-img');
+  if(!bgImg) return;
+  bgImg.style.background = backgrounds[index];
+}
+
+function extractDominantColor(){
+  const canvas = document.createElement('canvas');
+  const img = new Image();
+  img.crossOrigin = 'anonymous';
+  img.src = '/background.jpg?t=' + Date.now();
+  img.onload = function(){
+    const w=120, h=120;
+    canvas.width=w; canvas.height=h;
+    const ctx=canvas.getContext('2d');
+    ctx.drawImage(img,0,0,w,h);
+    const imageData=ctx.getImageData(0,0,w,h).data;
+    let r=0,g=0,b=0,edgeSum=0;
+    const getIdx=(x,y)=>(y*w+x)*4;
+    for(let y=0;y<h;y++){
+      for(let x=0;x<w;x++){
+        const idx=getIdx(x,y);
+        const cr=imageData[idx],cg=imageData[idx+1],cb=imageData[idx+2];
+        r+=cr;g+=cg;b+=cb;
+        if(x>0){const li=getIdx(x-1,y);edgeSum+=Math.abs(cr-imageData[li])+Math.abs(cg-imageData[li+1])+Math.abs(cb-imageData[li+2]);}
+        if(y>0){const ui=getIdx(x,y-1);edgeSum+=Math.abs(cr-imageData[ui])+Math.abs(cg-imageData[ui+1])+Math.abs(cb-imageData[ui+2]);}
       }
     }
-    return total/(count*255);
-  }
+    const px=w*h;
+    r=Math.round(r/px);g=Math.round(g/px);b=Math.round(b/px);
+    const ed=edgeSum/(px*255*2);
+    updateThemeColors(r,g,b,ed>0.12);
+  };
+  img.onerror=function(){ updateThemeColors(212,168,67,false); };
+}
 
-  // ── Derive the full CSS token set from palette+metrics ─
-  function buildTokens(palette, sharp){
-    const P=palette[0], S=palette[1]||P, A=palette[2]||P;
-    const lum = c=>(c.r*299+c.g*587+c.b*114)/1000;
-    const isDark = lum(P)<148;
-    const rgb  = c=>`${c.r},${c.g},${c.b}`;
-    const col  = c=>`rgb(${rgb(c)})`;
-    const mix  = (c,f)=>({r:clamp(c.r+f,0,255),g:clamp(c.g+f,0,255),b:clamp(c.b+f,0,255)});
+function updateThemeColors(r,g,b,sharp=false){
+  const primary=`rgb(${r},${g},${b})`;
+  const accent=`rgb(${Math.min(255,r+28)},${Math.min(255,g+16)},${Math.min(255,b+6)})`;
+  const isDark=(r*0.299+g*0.587+b*0.114)<150;
+  const text=isDark?'rgba(255,255,255,0.92)':'rgba(18,18,18,0.94)';
+  const bgOverlay=isDark?`rgba(${Math.round(r*0.18)},${Math.round(g*0.18)},${Math.round(b*0.18)},0.72)`:`rgba(${Math.round(r*0.35)},${Math.round(g*0.35)},${Math.round(b*0.35)},0.32)`;
+  const lightOverlay=isDark?'rgba(20,20,20,0.18)':'rgba(255,255,255,0.24)';
+  const cardBg=isDark?'rgba(255,255,255,0.12)':'rgba(255,255,255,0.88)';
+  document.documentElement.style.setProperty('--primary-color',primary);
+  document.documentElement.style.setProperty('--accent-color',accent);
+  document.documentElement.style.setProperty('--accent-rgb',`${r},${g},${b}`);
+  document.documentElement.style.setProperty('--bg-overlay',bgOverlay);
+  document.documentElement.style.setProperty('--light-overlay',lightOverlay);
+  document.documentElement.style.setProperty('--card-bg',cardBg);
+  document.documentElement.style.setProperty('--text-primary',text);
+  document.documentElement.style.setProperty('--panel-radius',sharp?'16px':'28px');
+  document.documentElement.style.setProperty('--button-radius',sharp?'16px':'50%');
+  document.documentElement.style.setProperty('--border-style',sharp?'16px':'24px');
+  document.documentElement.classList.toggle('sharp-theme',sharp);
+}
 
-    // Accent darken/lighten
-    const A2  = mix(A,-32);
+function changeBackground(){
+  bgIndex=(bgIndex+1)%backgrounds.length;
+  setBackground(bgIndex);
+  setTimeout(extractDominantColor,120);
+}
 
-    // Overlay tints derived from dominant colour
-    const lumP = lum(P);
-    const bgOv  = isDark
-      ? `rgba(${rgb(mix(P,-70))},0.75)`
-      : `rgba(${rgb(mix(P, 30))},0.30)`;
-    const lightOv = isDark ? 'rgba(8,8,8,0.20)' : 'rgba(255,255,255,0.22)';
-    const cardBg  = isDark ? 'rgba(255,255,255,0.10)' : 'rgba(255,255,255,0.84)';
+document.addEventListener('DOMContentLoaded', function(){
+  // Load any persisted AI theme
+  loadPersistedTheme();
+  setBackground(bgIndex);
+  extractDominantColor();
 
-    // Geometry tokens — sharp images get hard angles
-    const panelR  = sharp ? '10px'  : '26px';
-    const btnR    = sharp ? '10px'  : '50px';
-    const btnClip = sharp
-      ? 'polygon(6px 0%,100% 0%,calc(100% - 6px) 100%,0% 100%)'  // parallelogram
-      : 'none';
+  // Theme switcher (original)
+  const switcherBtn=document.getElementById('theme-switcher');
+  if(switcherBtn) switcherBtn.addEventListener('click',changeBackground);
 
-    return {
-      '--primary-color'  : col(P),
-      '--secondary-color': col(S),
-      '--accent-color'   : col(A),
-      '--accent2-color'  : col(A2),
-      '--accent-rgb'     : rgb(A),
-      '--accent-glow'    : `rgba(${rgb(A)},0.35)`,
-      '--bg-overlay'     : bgOv,
-      '--dark-overlay'   : bgOv,
-      '--light-overlay'  : lightOv,
-      '--card-bg'        : cardBg,
-      '--text-primary'   : isDark ? 'rgba(255,255,255,0.93)' : 'rgba(16,10,6,0.95)',
-      '--panel-radius'   : panelR,
-      '--button-radius'  : btnR,
-      '--btn-radius'     : btnR,
-      '--btn-clip'       : btnClip,
-      '--border-style'   : panelR,
-      '--orb1'           : `rgba(${rgb(P)},0.20)`,
-      '--orb2'           : `rgba(${rgb(S)},0.15)`,
-      '--orb3'           : `rgba(${rgb(A)},0.12)`,
-    };
-  }
-
-  // ── Apply tokens to :root + inject <style> tag ──────────
-  function applyTokens(tokens, sharp){
-    for(const[k,v] of Object.entries(tokens)) set(k,v);
-    root.classList.toggle('sharp-theme', sharp);
-
-    // Persist via <style> so the variables survive CSS specificity fights
-    let tag = document.getElementById('fz-live-theme');
-    if(!tag){ tag=document.createElement('style'); tag.id='fz-live-theme'; document.head.appendChild(tag); }
-    tag.textContent = ':root{' + Object.entries(tokens).map(([k,v])=>`${k}:${v}`).join(';') + '}';
-  }
-
-  // ── Update the three swatch dots on the button ──────────
-  function updateSwatches(palette, sharp){
-    palette.forEach((c,i)=>{
-      const dot = document.getElementById('swatch-'+i);
-      if(!dot) return;
-      dot.style.background = `rgb(${c.r},${c.g},${c.b})`;
-      dot.style.borderRadius = sharp ? '2px' : '50%';
+  // Upload button
+  const uploadBtn=document.getElementById('bg-upload-btn');
+  const uploadInput=document.getElementById('bg-upload-input');
+  if(uploadBtn && uploadInput){
+    uploadBtn.addEventListener('click',()=>uploadInput.click());
+    uploadInput.addEventListener('change',e=>{
+      if(e.target.files && e.target.files[0]) handleBgUpload(e.target.files[0]);
     });
   }
-
-  // ── Full analysis pipeline ───────────────────────────────
-  function analyzeAndApply(imgEl, label=''){
-    const btn = document.getElementById('bg-changer');
-
-    // Show loading state
-    btn && btn.classList.add('analyzing');
-
-    // Run in next frame so browser can repaint the loading ring
-    requestAnimationFrame(()=>{
-      try {
-        const palette = extractPalette(imgEl);
-        const density = edgeDensity(imgEl);
-        const sharp   = density > 0.13;
-        const tokens  = buildTokens(palette, sharp);
-
-        applyTokens(tokens, sharp);
-        updateSwatches(palette, sharp);
-
-        // Update button geometry to match new design language
-        if(btn){
-          btn.classList.toggle('sharp-mode', sharp);
-          btn.classList.remove('analyzing');
-          // Spin icon once to confirm change
-          btn.classList.remove('spinning');
-          void btn.offsetWidth; // force reflow
-          btn.classList.add('spinning');
-          setTimeout(()=>btn.classList.remove('spinning'), 600);
-          // Ripple
-          btn.classList.add('ripple');
-          setTimeout(()=>btn.classList.remove('ripple'), 500);
-        }
-
-        // Save to localStorage for cross-page sync
-        try {
-          const snapshot = { tokens, sharp, palette, ts: Date.now() };
-          localStorage.setItem('fz_theme_snapshot', JSON.stringify(snapshot));
-          if(_currentDataURL) localStorage.setItem('fz_bg_dataurl', _currentDataURL);
-        } catch(e){}
-
-        // Broadcast to all open tabs (worker, dashboard, etc.)
-        if(window.BroadcastChannel){
-          const bc = new BroadcastChannel('fairuz_theme_sync');
-          bc.postMessage({ type:'THEME_UPDATE', tokens, sharp,
-                           bgDataURL: _currentDataURL });
-          bc.close();
-        }
-      } catch(err){
-        console.warn('Theme analysis failed:', err);
-        if(btn) btn.classList.remove('analyzing');
-      }
-    });
-  }
-
-  // ── Load image from data-URL then run pipeline ──────────
-  function applyFromDataURL(dataURL){
-    _currentDataURL = dataURL;
-    const bgImg = document.querySelector('.bg-img');
-    if(bgImg) bgImg.style.backgroundImage = `url("${dataURL}")`;
-
-    const img = new Image();
-    img.onload  = () => analyzeAndApply(img);
-    img.onerror = () => { const b=document.getElementById('bg-changer'); b&&b.classList.remove('analyzing'); };
-    img.src = dataURL;
-  }
-
-  // ── Load from server URL (initial load) ─────────────────
-  function applyFromURL(url){
-    const img = new Image();
-    img.crossOrigin = 'anonymous';
-    img.onload  = () => analyzeAndApply(img);
-    img.onerror = () => {};  // silent — keep CSS defaults
-    img.src = url;
-  }
-
-  // ── Restore last theme snapshot without re-analysing ────
-  function restoreSnapshot(){
-    try {
-      const raw = localStorage.getItem('fz_theme_snapshot');
-      if(!raw) return false;
-      const {tokens, sharp, palette} = JSON.parse(raw);
-      applyTokens(tokens, sharp);
-      if(palette) updateSwatches(palette, sharp);
-      return true;
-    } catch(e){ return false; }
-  }
-
-  // ── Init ─────────────────────────────────────────────────
-  function init(){
-    const fileInput = document.getElementById('bg-file-input');
-    const btn       = document.getElementById('bg-changer');
-
-    // File input → convert to data-URL → apply
-    if(fileInput){
-      fileInput.addEventListener('change', e=>{
-        const file = e.target.files[0];
-        if(!file) return;
-        if(!file.type.startsWith('image/')){ fileInput.value=''; return; }
-        const reader = new FileReader();
-        reader.onload = ev => {
-          applyFromDataURL(ev.target.result);
-          // Best-effort upload to server
-          const fd = new FormData();
-          fd.append('file', file);
-          fetch('/upload-background',{method:'POST',body:fd}).catch(()=>{});
-        };
-        reader.readAsDataURL(file);
-        fileInput.value = '';
-      });
-    }
-
-    // Button click → open file picker
-    if(btn){
-      btn.addEventListener('click', ()=>{
-        if(fileInput) fileInput.click();
-      });
-    }
-
-    // On load: try saved snapshot first, then server image
-    const savedBG = (()=>{ try{ return localStorage.getItem('fz_bg_dataurl'); }catch(e){return null;} })();
-    if(savedBG){
-      const bgEl = document.querySelector('.bg-img');
-      if(bgEl) bgEl.style.backgroundImage = `url("${savedBG}")`;
-      restoreSnapshot() || applyFromURL('/background.jpg?_='+Date.now());
-    } else {
-      applyFromURL('/background.jpg?_='+Date.now());
-    }
-
-    // Listen for cross-tab theme broadcasts
-    if(window.BroadcastChannel){
-      const bc = new BroadcastChannel('fairuz_theme_sync');
-      bc.onmessage = ev=>{
-        if(!ev.data || ev.data.type!=='THEME_UPDATE') return;
-        if(ev.data.tokens) applyTokens(ev.data.tokens, ev.data.sharp);
-        if(ev.data.bgDataURL){
-          const bgEl = document.querySelector('.bg-img');
-          if(bgEl) bgEl.style.backgroundImage = `url("${ev.data.bgDataURL}")`;
-        }
-      };
-    }
-  }
-
-  return { init, applyFromDataURL, applyFromURL };
-
-})();
-
-document.addEventListener('DOMContentLoaded', BgTheme.init);
+});
 </script>
 </body>
 </html>"""

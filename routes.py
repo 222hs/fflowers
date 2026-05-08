@@ -67,6 +67,73 @@ def upload_background():
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)}), 500
 
+
+@app.route('/api/analyze-image', methods=['POST'])
+def analyze_image():
+    """Analyze uploaded image with Groq Vision and return theme palette"""
+    try:
+        import base64 as b64mod
+        data = request.json or {}
+        img_b64 = data.get('image', '')
+        mime = data.get('mime', 'image/jpeg')
+
+        if not img_b64 or not GROQ_KEY:
+            return jsonify({"ok": False, "result": None})
+
+        # Call Groq vision API
+        payload = {
+            "model": "meta-llama/llama-4-scout-17b-16e-instruct",
+            "max_tokens": 300,
+            "messages": [{
+                "role": "user",
+                "content": [
+                    {
+                        "type": "image_url",
+                        "image_url": {
+                            "url": f"data:{mime};base64,{img_b64}"
+                        }
+                    },
+                    {
+                        "type": "text",
+                        "text": (
+                            "Analyze this image and return a JSON object ONLY (no explanation, no markdown) with these keys:\n"
+                            "- accent: dominant vibrant color as CSS rgb() string\n"
+                            "- primary: main/background color as CSS rgb() string\n"
+                            "- secondary: secondary accent color as CSS rgb() string\n"
+                            "- radius: border-radius value in px (e.g. '14px' for geometric/sharp images, '26px' for natural/organic images)\n"
+                            "- btnRadius: button border-radius ('14px' for angular style, '50%' for rounded)\n"
+                            "- description: one short Arabic sentence (max 10 words) describing the image mood/style for a UI theme\n"
+                            "Example: {\"accent\":\"rgb(232,121,138)\",\"primary\":\"rgb(45,20,30)\",\"secondary\":\"rgb(180,90,110)\",\"radius\":\"24px\",\"btnRadius\":\"50%\",\"description\":\"ثيم رومانسي بألوان الورود الدافئة\"}"
+                        )
+                    }
+                ]
+            }]
+        }
+
+        resp = requests.post(
+            "https://api.groq.com/openai/v1/chat/completions",
+            headers={
+                "Authorization": f"Bearer {GROQ_KEY}",
+                "Content-Type": "application/json"
+            },
+            json=payload,
+            timeout=15
+        )
+
+        if not resp.ok:
+            return jsonify({"ok": False, "result": None})
+
+        content = resp.json()['choices'][0]['message']['content'].strip()
+        # Clean up any markdown fences
+        content = content.replace('```json', '').replace('```', '').strip()
+
+        import json as _json
+        parsed = _json.loads(content)
+        return jsonify({"ok": True, "result": parsed})
+
+    except Exception as e:
+        return jsonify({"ok": False, "result": None, "error": str(e)})
+
 @app.route("/login")
 def login():
     return Response(LOGIN_PAGE, mimetype="text/html")
