@@ -9,6 +9,59 @@ HTML_PAGE = """<!DOCTYPE html>
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <title>فيروز فلورز</title>
 <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@300;400;500;700;900&family=Playfair+Display:wght@700&display=swap" rel="stylesheet">
+<script>
+/* ── Fairuz Theme Loader — runs before paint to avoid flash ── */
+(function(){
+  var THEME_KEY='fairuz_ui_theme';
+  var BG_KEY='fairuz_bg_image';
+  function applyVars(vars){
+    var root=document.documentElement;
+    Object.keys(vars).forEach(function(k){
+      if(k[0]==='-') root.style.setProperty(k,vars[k]);
+    });
+  }
+  // Apply cached theme immediately
+  try{
+    var t=localStorage.getItem(THEME_KEY);
+    if(t) applyVars(JSON.parse(t));
+  }catch(e){}
+  // Fetch fresh theme from server (async, non-blocking)
+  window._fairuzThemeLoaded=false;
+  window._fairuzLoadTheme=function(){
+    fetch('/api/theme').then(function(r){return r.json();}).then(function(d){
+      if(d.ok&&d.theme){
+        applyVars(d.theme);
+        try{localStorage.setItem(THEME_KEY,JSON.stringify(d.theme));}catch(e){}
+      }
+    }).catch(function(){});
+    fetch('/api/bg-image').then(function(r){return r.json();}).then(function(d){
+      if(d.ok&&d.image){
+        var bgEls=document.querySelectorAll('.bg-img,[data-bg-role="main"]');
+        bgEls.forEach(function(el){
+          el.style.backgroundImage='url("'+d.image+'")';
+          el.style.backgroundSize='cover';
+          el.style.backgroundPosition='center';
+        });
+        try{localStorage.setItem(BG_KEY,d.image);}catch(e){}
+      }
+    }).catch(function(){});
+  };
+  // Apply cached bg image immediately too
+  try{
+    var bg=localStorage.getItem(BG_KEY);
+    if(bg){
+      document.addEventListener('DOMContentLoaded',function(){
+        var bgEls=document.querySelectorAll('.bg-img,[data-bg-role="main"]');
+        bgEls.forEach(function(el){
+          el.style.backgroundImage='url("'+bg+'")';
+          el.style.backgroundSize='cover';
+          el.style.backgroundPosition='center';
+        });
+      });
+    }
+  }catch(e){}
+})();
+</script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
 <style>
 /* ══════════════════════════════════════════
@@ -96,6 +149,7 @@ html{scroll-behavior:smooth;-webkit-text-size-adjust:100%;}
 body{font-family:'Tajawal',sans-serif;background:var(--bg);color:var(--text);
   min-height:100vh;overflow-x:hidden;transition:background .4s,color .4s;}
 
+.bg-img{position:fixed;inset:0;z-index:0;background-size:cover;background-position:center;background-repeat:no-repeat;opacity:0.18;pointer-events:none;transition:opacity .6s;}
 .bg-scene{position:fixed;inset:0;z-index:0;pointer-events:none;overflow:hidden;}
 .orb{position:absolute;border-radius:50%;filter:blur(70px);opacity:0.7;animation:drift 18s ease-in-out infinite alternate;}
 .orb1{width:400px;height:400px;background:var(--orb1);top:-10%;right:-5%;animation-delay:0s;}
@@ -521,6 +575,7 @@ input[type="date"]{width:100%;padding:10px 12px;border:1px solid var(--border);b
 </style>
 </head>
 <body>
+<div class="bg-img" id="mainBgImg"></div>
 <div class="bg-scene">
   <div class="orb orb1"></div>
   <div class="orb orb2"></div>
@@ -2041,9 +2096,63 @@ WORKER_PAGE = """<!DOCTYPE html>
 <meta name="apple-mobile-web-app-capable" content="yes">
 <title>فيروز فلورز — العامل</title>
 <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;700;900&display=swap" rel="stylesheet">
+<script>
+/* ── Fairuz Theme Loader — runs before paint to avoid flash ── */
+(function(){
+  var THEME_KEY='fairuz_ui_theme';
+  var BG_KEY='fairuz_bg_image';
+  function applyVars(vars){
+    var root=document.documentElement;
+    Object.keys(vars).forEach(function(k){
+      if(k[0]==='-') root.style.setProperty(k,vars[k]);
+    });
+  }
+  // Apply cached theme immediately
+  try{
+    var t=localStorage.getItem(THEME_KEY);
+    if(t) applyVars(JSON.parse(t));
+  }catch(e){}
+  // Fetch fresh theme from server (async, non-blocking)
+  window._fairuzThemeLoaded=false;
+  window._fairuzLoadTheme=function(){
+    fetch('/api/theme').then(function(r){return r.json();}).then(function(d){
+      if(d.ok&&d.theme){
+        applyVars(d.theme);
+        try{localStorage.setItem(THEME_KEY,JSON.stringify(d.theme));}catch(e){}
+      }
+    }).catch(function(){});
+    fetch('/api/bg-image').then(function(r){return r.json();}).then(function(d){
+      if(d.ok&&d.image){
+        var bgEls=document.querySelectorAll('.bg-img,[data-bg-role="main"]');
+        bgEls.forEach(function(el){
+          el.style.backgroundImage='url("'+d.image+'")';
+          el.style.backgroundSize='cover';
+          el.style.backgroundPosition='center';
+        });
+        try{localStorage.setItem(BG_KEY,d.image);}catch(e){}
+      }
+    }).catch(function(){});
+  };
+  // Apply cached bg image immediately too
+  try{
+    var bg=localStorage.getItem(BG_KEY);
+    if(bg){
+      document.addEventListener('DOMContentLoaded',function(){
+        var bgEls=document.querySelectorAll('.bg-img,[data-bg-role="main"]');
+        bgEls.forEach(function(el){
+          el.style.backgroundImage='url("'+bg+'")';
+          el.style.backgroundSize='cover';
+          el.style.backgroundPosition='center';
+        });
+      });
+    }
+  }catch(e){}
+})();
+</script>
 <style>
 *,*::before,*::after{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
 body{font-family:'Tajawal',sans-serif;background:#fdf8f2;color:#3d2c24;min-height:100vh;overflow-x:hidden;}
+.bg-img{position:fixed;inset:0;z-index:0;background-size:cover;background-position:center;background-repeat:no-repeat;pointer-events:none;transition:opacity .6s;}
 
 /* Header */
 .wh{background:#fff;border-bottom:2px solid #f9c8d0;padding:12px 16px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:50;box-shadow:0 2px 12px rgba(232,121,138,.12);}
@@ -2135,6 +2244,7 @@ body{font-family:'Tajawal',sans-serif;background:#fdf8f2;color:#3d2c24;min-heigh
 </style>
 </head>
 <body>
+<div class="bg-img" id="workerBgImg" style="opacity:0.15;"></div>
 
 <div class="wh">
   <div class="wh-brand">
@@ -2618,6 +2728,8 @@ function resetInvoice(){
 // Init
 buildCatGrid();
 loadDaySummary();
+// Load AI theme from server
+if(typeof window._fairuzLoadTheme==='function') window._fairuzLoadTheme();
 
 // Load AI theme from login page (if user uploaded a background there)
 (function loadAiTheme(){
@@ -2630,6 +2742,9 @@ loadDaySummary();
     }
   }catch(e){}
 })();
+
+// Load AI theme
+if(typeof window._fairuzLoadTheme==='function') window._fairuzLoadTheme();
 </script>
 </body>
 </html>"""
@@ -2641,6 +2756,59 @@ LOGIN_PAGE = """<!DOCTYPE html>
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
 <title>فيروز فلورز</title>
 <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;700;900&family=Playfair+Display:ital,wght@0,700;1,400&display=swap" rel="stylesheet">
+<script>
+/* ── Fairuz Theme Loader — runs before paint to avoid flash ── */
+(function(){
+  var THEME_KEY='fairuz_ui_theme';
+  var BG_KEY='fairuz_bg_image';
+  function applyVars(vars){
+    var root=document.documentElement;
+    Object.keys(vars).forEach(function(k){
+      if(k[0]==='-') root.style.setProperty(k,vars[k]);
+    });
+  }
+  // Apply cached theme immediately
+  try{
+    var t=localStorage.getItem(THEME_KEY);
+    if(t) applyVars(JSON.parse(t));
+  }catch(e){}
+  // Fetch fresh theme from server (async, non-blocking)
+  window._fairuzThemeLoaded=false;
+  window._fairuzLoadTheme=function(){
+    fetch('/api/theme').then(function(r){return r.json();}).then(function(d){
+      if(d.ok&&d.theme){
+        applyVars(d.theme);
+        try{localStorage.setItem(THEME_KEY,JSON.stringify(d.theme));}catch(e){}
+      }
+    }).catch(function(){});
+    fetch('/api/bg-image').then(function(r){return r.json();}).then(function(d){
+      if(d.ok&&d.image){
+        var bgEls=document.querySelectorAll('.bg-img,[data-bg-role="main"]');
+        bgEls.forEach(function(el){
+          el.style.backgroundImage='url("'+d.image+'")';
+          el.style.backgroundSize='cover';
+          el.style.backgroundPosition='center';
+        });
+        try{localStorage.setItem(BG_KEY,d.image);}catch(e){}
+      }
+    }).catch(function(){});
+  };
+  // Apply cached bg image immediately too
+  try{
+    var bg=localStorage.getItem(BG_KEY);
+    if(bg){
+      document.addEventListener('DOMContentLoaded',function(){
+        var bgEls=document.querySelectorAll('.bg-img,[data-bg-role="main"]');
+        bgEls.forEach(function(el){
+          el.style.backgroundImage='url("'+bg+'")';
+          el.style.backgroundSize='cover';
+          el.style.backgroundPosition='center';
+        });
+      });
+    }
+  }catch(e){}
+})();
+</script>
 <script src="https://chir.cat/ClusterRGB/bundle.js"></script>
 <style>
 :root{
@@ -3006,23 +3174,15 @@ html,body{min-height:100%;overflow-x:hidden;overflow-y:auto;font-family:'Tajawal
 </style>
 
 <script>
-// Petals
+// ── Petals ───────────────────────────────────────────────────
 (function(){
   const wrap=document.getElementById('petals');
   const colors=['rgba(255,182,193,0.7)','rgba(255,209,220,0.6)','rgba(255,255,255,0.5)','rgba(255,228,181,0.6)','rgba(212,168,67,0.5)'];
-  const count=25;
-  for(let i=0;i<count;i++){
+  for(let i=0;i<25;i++){
     const p=document.createElement('div');
     p.className='petal';
-    const size=5+Math.random()*10;
-    const color=colors[Math.floor(Math.random()*colors.length)];
-    p.style.cssText=`
-      left:${Math.random()*110-5}vw;
-      width:${size}px;height:${size*1.3}px;
-      background:${color};
-      animation-duration:${10+Math.random()*14}s;
-      animation-delay:${Math.random()*18}s;
-    `;
+    const sz=5+Math.random()*10;
+    p.style.cssText=`left:${Math.random()*110-5}vw;width:${sz}px;height:${sz*1.3}px;background:${colors[i%colors.length]};animation-duration:${10+Math.random()*14}s;animation-delay:${Math.random()*18}s;`;
     wrap.appendChild(p);
   }
 })();
@@ -3039,20 +3199,11 @@ async function goOwner(){
   const btn=document.querySelector('.panel-owner .login-btn');
   btn.textContent='...';btn.disabled=true;
   try{
-    const r=await fetch('/auth',{method:'POST',
-      headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({p:pw})});
+    const r=await fetch('/auth',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({p:pw})});
     const d=await r.json();
     if(d.ok){location.href='/';}
-    else{
-      err.textContent='❌ كلمة المرور غير صحيحة';
-      document.getElementById('pw-owner').value='';
-      btn.textContent='دخول';btn.disabled=false;
-    }
-  }catch(e){
-    err.textContent='❌ خطأ في الاتصال';
-    btn.textContent='دخول';btn.disabled=false;
-  }
+    else{err.textContent='❌ كلمة المرور غير صحيحة';document.getElementById('pw-owner').value='';btn.textContent='دخول';btn.disabled=false;}
+  }catch(e){err.textContent='❌ خطأ في الاتصال';btn.textContent='دخول';btn.disabled=false;}
 }
 
 async function goWorker(){
@@ -3062,355 +3213,186 @@ async function goWorker(){
   const btn=document.querySelector('.panel-worker .login-btn');
   btn.textContent='...';btn.disabled=true;
   try{
-    const r=await fetch('/worker-auth',{method:'POST',
-      headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({p:pw})});
+    const r=await fetch('/worker-auth',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({p:pw})});
     const d=await r.json();
     if(d.ok){location.href='/worker';}
-    else{
-      err.textContent='❌ كلمة المرور غير صحيحة';
-      document.getElementById('pw-worker').value='';
-      btn.textContent='دخول';btn.disabled=false;
-    }
-  }catch(e){
-    err.textContent='❌ خطأ في الاتصال';
-    btn.textContent='دخول';btn.disabled=false;
-  }
+    else{err.textContent='❌ كلمة المرور غير صحيحة';document.getElementById('pw-worker').value='';btn.textContent='دخول';btn.disabled=false;}
+  }catch(e){err.textContent='❌ خطأ في الاتصال';btn.textContent='دخول';btn.disabled=false;}
 }
 
-// ── Image Upload & Groq AI Theme System ────────────────────────
-
-function showAiToast(msg, duration=3500){
-  const t = document.getElementById('ai-toast');
-  if(!t) return;
-  t.textContent = msg;
-  t.classList.add('show');
-  setTimeout(()=>t.classList.remove('show'), duration);
+// ── AI Toast ─────────────────────────────────────────────────
+function showAiToast(msg,dur=3500){
+  const t=document.getElementById('ai-toast');
+  if(!t)return;
+  t.textContent=msg;t.classList.add('show');
+  setTimeout(()=>t.classList.remove('show'),dur);
 }
 
-// Extract dominant colors from image using canvas
-function extractColorsFromImage(imgEl, callback){
-  const canvas = document.createElement('canvas');
-  const w = 160, h = 160;
-  canvas.width = w; canvas.height = h;
-  const ctx = canvas.getContext('2d');
-  ctx.drawImage(imgEl, 0, 0, w, h);
-  const data = ctx.getImageData(0, 0, w, h).data;
-
-  // Sample pixels in a grid to find dominant colors
-  let rSum=0, gSum=0, bSum=0, edgeSum=0, count=0;
-  const buckets = {};
-  const getIdx = (x,y)=>(y*w+x)*4;
-
-  for(let y=0;y<h;y++){
-    for(let x=0;x<w;x++){
-      const i = getIdx(x,y);
-      const r=data[i], g=data[i+1], b=data[i+2];
-      rSum+=r; gSum+=g; bSum+=b; count++;
-      // Quantize to bucket for dominant color
-      const key = `${Math.round(r/32)*32},${Math.round(g/32)*32},${Math.round(b/32)*32}`;
-      buckets[key] = (buckets[key]||0)+1;
-      // Edge detection
-      if(x>0){const li=getIdx(x-1,y);edgeSum+=Math.abs(r-data[li])+Math.abs(g-data[li+1])+Math.abs(b-data[li+2]);}
-      if(y>0){const ui=getIdx(x,y-1);edgeSum+=Math.abs(r-data[ui])+Math.abs(g-data[ui+1])+Math.abs(b-data[ui+2]);}
-    }
-  }
-
-  // Average color
-  const avgR=Math.round(rSum/count), avgG=Math.round(gSum/count), avgB=Math.round(bSum/count);
-
-  // Most dominant bucket
-  let topKey = Object.entries(buckets).sort((a,b)=>b[1]-a[1])[0][0];
-  const [dR,dG,dB] = topKey.split(',').map(Number);
-
-  // Edge density
-  const edgeDensity = edgeSum / (count * 255 * 2);
-  const isSharp = edgeDensity > 0.11;
-
-  // Sample corners for gradient variety
-  const corners = [
-    getIdx(0,0), getIdx(w-1,0), getIdx(0,h-1), getIdx(w-1,h-1),
-    getIdx(Math.floor(w/2),Math.floor(h/2))
-  ].map(i=>({r:data[i],g:data[i+1],b:data[i+2]}));
-
-  callback({avgR,avgG,avgB,dR,dG,dB,isSharp,corners,edgeDensity,canvas});
+// ── Canvas color extraction ───────────────────────────────────
+function extractColors(imgEl,cb){
+  const c=document.createElement('canvas');
+  const W=160,H=160;c.width=W;c.height=H;
+  const ctx=c.getContext('2d');ctx.drawImage(imgEl,0,0,W,H);
+  const d=ctx.getImageData(0,0,W,H).data;
+  let rS=0,gS=0,bS=0,eS=0,n=0;
+  const buckets={};
+  const idx=(x,y)=>(y*W+x)*4;
+  for(let y=0;y<H;y++){for(let x=0;x<W;x++){
+    const i=idx(x,y);
+    const r=d[i],g=d[i+1],b=d[i+2];
+    rS+=r;gS+=g;bS+=b;n++;
+    const k=`${Math.round(r/32)*32},${Math.round(g/32)*32},${Math.round(b/32)*32}`;
+    buckets[k]=(buckets[k]||0)+1;
+    if(x>0){const l=idx(x-1,y);eS+=Math.abs(r-d[l])+Math.abs(g-d[l+1])+Math.abs(b-d[l+2]);}
+    if(y>0){const u=idx(x,y-1);eS+=Math.abs(r-d[u])+Math.abs(g-d[u+1])+Math.abs(b-d[u+2]);}
+  }}
+  const aR=Math.round(rS/n),aG=Math.round(gS/n),aB=Math.round(bS/n);
+  const top=Object.entries(buckets).sort((a,b)=>b[1]-a[1])[0][0].split(',').map(Number);
+  const ed=eS/(n*255*2);
+  const corners=[idx(0,0),idx(W-1,0),idx(0,H-1),idx(W-1,H-1),idx(W/2|0,H/2|0)]
+    .map(i=>({r:d[i],g:d[i+1],b:d[i+2]}));
+  cb({aR,aG,aB,dR:top[0],dG:top[1],dB:top[2],sharp:ed>0.11,corners,canvas:c});
 }
 
-// Apply AI-analyzed theme to all pages via CSS variables on <html>
-function applyAiTheme(analysis, groqResult=null){
-  const {avgR,avgG,avgB,dR,dG,dB,isSharp,corners} = analysis;
-
-  const isDark = (avgR*0.299 + avgG*0.587 + avgB*0.114) < 128;
-
-  // Primary accent from dominant color
-  const primary = `rgb(${dR},${dG},${dB})`;
-
-  // Accent: shift hue slightly
-  const aR = Math.min(255, Math.round(dR*0.85 + avgR*0.15 + 20));
-  const aG = Math.min(255, Math.round(dG*0.85 + avgG*0.15 + 10));
-  const aB = Math.min(255, Math.round(dB*0.85 + avgB*0.15));
-  const accent = `rgb(${aR},${aG},${aB})`;
-
-  const text = isDark ? 'rgba(255,255,255,0.93)' : 'rgba(12,12,12,0.92)';
-  const bgOverlay = isDark
-    ? `rgba(${Math.round(avgR*0.12)},${Math.round(avgG*0.12)},${Math.round(avgB*0.12)},0.68)`
-    : `rgba(${Math.round(avgR*0.3)},${Math.round(avgG*0.3)},${Math.round(avgB*0.3)},0.28)`;
-  const lightOverlay = isDark ? 'rgba(10,10,10,0.15)' : 'rgba(255,255,255,0.2)';
-  const cardBg = isDark ? 'rgba(255,255,255,0.1)' : 'rgba(255,255,255,0.86)';
-
-  // Radius based on edge sharpness (angular vs rounded)
-  const panelR = isSharp ? '14px' : '26px';
-  const btnR   = isSharp ? '14px' : '50%';
-  const borderR = isSharp ? '14px' : '22px';
-
-  // Corner-based gradient for orbs
-  const c = corners;
-  const orb1 = `rgba(${c[0].r},${c[0].g},${c[0].b},0.25)`;
-  const orb2 = `rgba(${c[2].r},${c[2].g},${c[2].b},0.2)`;
-  const orb3 = `rgba(${c[4].r},${c[4].g},${c[4].b},0.18)`;
-
-  // Build secondary color from complementary channel
-  const secR = Math.min(255,Math.round(dB*0.6+dR*0.4));
-  const secG = Math.min(255,Math.round(dR*0.6+dG*0.4));
-  const secB = Math.min(255,Math.round(dG*0.6+dB*0.4));
-
-  const vars = {
-    '--primary-color': primary,
-    '--accent-color': accent,
-    '--accent-rgb': `${dR},${dG},${dB}`,
-    '--bg-overlay': bgOverlay,
-    '--light-overlay': lightOverlay,
-    '--card-bg': cardBg,
-    '--text-primary': text,
-    '--panel-radius': panelR,
-    '--button-radius': btnR,
-    '--border-style': borderR,
-    '--ai-orb1': orb1,
-    '--ai-orb2': orb2,
-    '--ai-orb3': orb3,
-    '--ai-accent': accent,
-    '--ai-primary': primary,
-    '--ai-secondary': `rgb(${secR},${secG},${secB})`,
-    '--ai-border': `rgba(${dR},${dG},${dB},0.28)`,
-    '--ai-glow': `rgba(${dR},${dG},${dB},0.22)`,
-    '--ai-card': cardBg,
-    '--ai-text': text,
-    '--ai-bg': isDark
-      ? `rgb(${Math.max(10,Math.round(avgR*0.15))},${Math.max(10,Math.round(avgG*0.15))},${Math.max(10,Math.round(avgB*0.15))})`
-      : `rgb(${Math.min(255,Math.round(avgR*0.9+200*0.1))},${Math.min(255,Math.round(avgG*0.9+200*0.1))},${Math.min(255,Math.round(avgB*0.9+200*0.1))})`,
+// ── Build CSS vars from local canvas analysis ─────────────────
+function buildCssVars(a){
+  const {aR,aG,aB,dR,dG,dB,sharp,corners}=a;
+  const isDark=(aR*0.299+aG*0.587+aB*0.114)<128;
+  const c=corners;
+  return {
+    '--accent-color':`rgb(${dR},${dG},${dB})`,
+    '--accent':`rgb(${dR},${dG},${dB})`,
+    '--accent2':`rgb(${Math.max(0,dR-30)},${Math.max(0,dG-30)},${Math.max(0,dB-30)})`,
+    '--primary-color':`rgb(${dR},${dG},${dB})`,
+    '--accent-rgb':`${dR},${dG},${dB}`,
+    '--accent-glow':`rgba(${dR},${dG},${dB},0.28)`,
+    '--border':`rgba(${dR},${dG},${dB},0.22)`,
+    '--border2':`rgba(${dR},${dG},${dB},0.10)`,
+    '--panel-radius':sharp?'13px':'24px',
+    '--border-style':sharp?'13px':'24px',
+    '--button-radius':sharp?'13px':'50%',
+    '--text-primary':isDark?'rgba(255,255,255,0.93)':'rgba(15,10,25,0.93)',
+    '--card-bg':isDark?'rgba(255,255,255,0.09)':'rgba(255,255,255,0.83)',
+    '--bg-overlay':isDark?`rgba(${Math.round(aR*.12)},${Math.round(aG*.12)},${Math.round(aB*.12)},0.65)`:`rgba(${Math.round(aR*.3)},${Math.round(aG*.3)},${Math.round(aB*.3)},0.28)`,
+    '--light-overlay':isDark?'rgba(8,5,12,0.15)':'rgba(255,255,255,0.20)',
+    '--shadow':isDark?'rgba(0,0,0,0.45)':'rgba(40,20,60,0.14)',
+    '--orb1':`rgba(${c[0].r},${c[0].g},${c[0].b},0.22)`,
+    '--orb2':`rgba(${c[2].r},${c[2].g},${c[2].b},0.18)`,
+    '--orb3':`rgba(${c[4].r},${c[4].g},${c[4].b},0.16)`,
+    '_isDark':isDark
   };
-
-  // If Groq gave us refined palette, override with it
-  if(groqResult){
-    try{
-      const gp = typeof groqResult === 'string' ? JSON.parse(groqResult) : groqResult;
-      if(gp.accent)    vars['--accent-color']  = gp.accent;
-      if(gp.primary)   vars['--primary-color'] = gp.primary;
-      if(gp.secondary) vars['--ai-secondary']  = gp.secondary;
-      if(gp.radius)    {vars['--panel-radius']=gp.radius; vars['--border-style']=gp.radius;}
-      if(gp.btnRadius) vars['--button-radius'] = gp.btnRadius;
-    }catch(e){}
-  }
-
-  // Apply to <html> so all pages inherit via CSS
-  const root = document.documentElement;
-  Object.entries(vars).forEach(([k,v]) => root.style.setProperty(k, v));
-  root.classList.toggle('sharp-theme', isSharp);
-
-  // Persist to localStorage for other pages to read on load
-  try{ localStorage.setItem('fairuz_ai_theme', JSON.stringify(vars)); }catch(e){}
 }
 
-// Load persisted theme if available (for main app page)
-function loadPersistedTheme(){
-  try{
-    const saved = localStorage.getItem('fairuz_ai_theme');
-    if(saved){
-      const vars = JSON.parse(saved);
-      const root = document.documentElement;
-      Object.entries(vars).forEach(([k,v]) => root.style.setProperty(k, v));
-    }
-  }catch(e){}
+// ── Apply CSS vars to <html> ──────────────────────────────────
+function applyVars(vars){
+  const root=document.documentElement;
+  Object.entries(vars).forEach(([k,v])=>{if(k[0]==='-') root.style.setProperty(k,v);});
 }
 
-// Convert image file to base64 for Groq
-function fileToBase64(file){
+// ── file → base64 ─────────────────────────────────────────────
+function toBase64(file){
   return new Promise((res,rej)=>{
-    const reader = new FileReader();
-    reader.onload = e => res(e.target.result.split(',')[1]);
-    reader.onerror = rej;
-    reader.readAsDataURL(file);
+    const r=new FileReader();
+    r.onload=e=>res(e.target.result.split(',')[1]);
+    r.onerror=rej;r.readAsDataURL(file);
   });
 }
 
-// Analyze image with Groq Vision
-async function analyzeWithGroq(base64Img, mimeType){
-  try{
-    const resp = await fetch('/api/analyze-image', {
-      method: 'POST',
-      headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({image: base64Img, mime: mimeType})
-    });
-    if(!resp.ok) return null;
-    const d = await resp.json();
-    return d.result || null;
-  }catch(e){
-    return null;
-  }
-}
-
-// Main: handle file selection
+// ── Main upload handler ───────────────────────────────────────
 async function handleBgUpload(file){
-  if(!file || !file.type.startsWith('image/')) return;
+  if(!file||!file.type.startsWith('image/'))return;
+  const btn=document.getElementById('bg-upload-btn');
+  const icon=document.getElementById('bg-upload-icon');
+  btn.classList.add('loading');icon.textContent='⏳';
+  showAiToast('⏳ جاري تحميل الصورة...', 9000);
 
-  const btn = document.getElementById('bg-upload-btn');
-  const icon = document.getElementById('bg-upload-icon');
+  const objectUrl=URL.createObjectURL(file);
 
-  // Show loading
-  btn.classList.add('loading');
-  icon.textContent = '⏳';
-  showAiToast('⏳ جاري تحميل الصورة...', 8000);
+  // Set bg immediately
+  const bgEl=document.querySelector('.bg-img');
+  if(bgEl){bgEl.style.backgroundImage=`url('${objectUrl}')`;bgEl.style.backgroundSize='cover';bgEl.style.backgroundPosition='center';}
 
-  const objectUrl = URL.createObjectURL(file);
+  const img=new Image();
+  img.onload=async function(){
+    showAiToast('🎨 جاري تحليل الألوان...', 9000);
+    extractColors(img, async function(colorData){
+      // Apply local theme instantly
+      const cssVars=buildCssVars(colorData);
+      applyVars(cssVars);
+      // Cache locally
+      try{localStorage.setItem('fairuz_ui_theme',JSON.stringify(cssVars));}catch(e){}
 
-  // 1. Set as background immediately
-  const bgImg = document.querySelector('.bg-img');
-  if(bgImg){
-    bgImg.style.backgroundImage = `url('${objectUrl}')`;
-    bgImg.style.backgroundSize = 'cover';
-    bgImg.style.backgroundPosition = 'center';
-  }
+      showAiToast('🤖 جاري تحليل الصورة بالذكاء الاصطناعي...', 12000);
 
-  // 2. Extract colors locally via canvas
-  const tempImg = new Image();
-  tempImg.onload = async function(){
-    showAiToast('🎨 جاري تحليل الألوان بالذكاء الاصطناعي...', 8000);
-
-    const colorData = await new Promise(res => extractColorsFromImage(tempImg, res));
-
-    // Apply local color analysis first (fast)
-    applyAiTheme(colorData, null);
-    showAiToast('✨ تم تطبيق الألوان! جاري تحسين الثيم عبر Groq...',5000);
-
-    // 3. Send to Groq for deeper analysis
-    try{
-      const b64 = await fileToBase64(file);
-      const groqResult = await analyzeWithGroq(b64, file.type);
-      if(groqResult){
-        applyAiTheme(colorData, groqResult);
-        const msg = groqResult.description || 'تم تطبيق الثيم الذكي على جميع الصفحات! 🌟';
-        showAiToast('🤖 ' + msg, 4500);
-      } else {
-        showAiToast('✅ تم تطبيق الثيم من الصورة على جميع الصفحات!', 3000);
+      try{
+        const b64=await toBase64(file);
+        // Save to server (Groq analysis happens server-side)
+        const resp=await fetch('/api/bg-image',{
+          method:'POST',
+          headers:{'Content-Type':'application/json'},
+          body:JSON.stringify({image:b64, mime:file.type, cssVars})
+        });
+        const d=await resp.json();
+        if(d.ok && d.theme){
+          applyVars(d.theme);
+          try{localStorage.setItem('fairuz_ui_theme',JSON.stringify(d.theme));}catch(e){}
+          try{localStorage.setItem('fairuz_bg_image','data:'+file.type+';base64,'+b64);}catch(e){}
+          const desc=d.description||'تم تطبيق الثيم على جميع الصفحات ✨';
+          showAiToast('🌟 '+desc, 5000);
+        } else {
+          showAiToast('✅ تم حفظ الصورة وتطبيق الثيم!', 3500);
+        }
+      }catch(e){
+        showAiToast('✅ تم تطبيق الثيم من الصورة!', 3000);
       }
-    }catch(e){
-      showAiToast('✅ تم تطبيق الثيم من الصورة!', 3000);
-    }
 
-    btn.classList.remove('loading');
-    icon.textContent = '✅';
-    setTimeout(()=>{icon.textContent='🖼️';},2500);
+      btn.classList.remove('loading');
+      icon.textContent='✅';
+      setTimeout(()=>{icon.textContent='🖼️';},2500);
+    });
   };
-  tempImg.onerror = function(){
-    btn.classList.remove('loading');
-    icon.textContent = '🖼️';
-    showAiToast('❌ خطأ في تحميل الصورة', 3000);
+  img.onerror=function(){
+    btn.classList.remove('loading');icon.textContent='🖼️';
+    showAiToast('❌ خطأ في تحميل الصورة',3000);
   };
-  tempImg.src = objectUrl;
+  img.src=objectUrl;
 }
 
-// ── Dynamic Theme System (original background cycling) ────────────────────────
-const backgrounds = [
-  `url('/background.jpg?t=0') center top / cover no-repeat fixed`,
-  `url('/background.jpg?t=1') center center / cover no-repeat fixed`,
-  `url('/background.jpg?t=2') center bottom / cover no-repeat fixed`
+// ── Background cycling (original 🎨 button) ───────────────────
+let bgIndex=0;
+const backgrounds=[
+  `url('/background.jpg?t=0') center top/cover no-repeat fixed`,
+  `url('/background.jpg?t=1') center center/cover no-repeat fixed`,
+  `url('/background.jpg?t=2') center bottom/cover no-repeat fixed`
 ];
-let bgIndex = 0;
-
-function setBackground(index){
-  const bgImg = document.querySelector('.bg-img');
-  if(!bgImg) return;
-  bgImg.style.background = backgrounds[index];
-}
-
-function extractDominantColor(){
-  const canvas = document.createElement('canvas');
-  const img = new Image();
-  img.crossOrigin = 'anonymous';
-  img.src = '/background.jpg?t=' + Date.now();
-  img.onload = function(){
-    const w=120, h=120;
-    canvas.width=w; canvas.height=h;
-    const ctx=canvas.getContext('2d');
-    ctx.drawImage(img,0,0,w,h);
-    const imageData=ctx.getImageData(0,0,w,h).data;
-    let r=0,g=0,b=0,edgeSum=0;
-    const getIdx=(x,y)=>(y*w+x)*4;
-    for(let y=0;y<h;y++){
-      for(let x=0;x<w;x++){
-        const idx=getIdx(x,y);
-        const cr=imageData[idx],cg=imageData[idx+1],cb=imageData[idx+2];
-        r+=cr;g+=cg;b+=cb;
-        if(x>0){const li=getIdx(x-1,y);edgeSum+=Math.abs(cr-imageData[li])+Math.abs(cg-imageData[li+1])+Math.abs(cb-imageData[li+2]);}
-        if(y>0){const ui=getIdx(x,y-1);edgeSum+=Math.abs(cr-imageData[ui])+Math.abs(cg-imageData[ui+1])+Math.abs(cb-imageData[ui+2]);}
-      }
-    }
-    const px=w*h;
-    r=Math.round(r/px);g=Math.round(g/px);b=Math.round(b/px);
-    const ed=edgeSum/(px*255*2);
-    updateThemeColors(r,g,b,ed>0.12);
-  };
-  img.onerror=function(){ updateThemeColors(212,168,67,false); };
-}
-
-function updateThemeColors(r,g,b,sharp=false){
-  const primary=`rgb(${r},${g},${b})`;
-  const accent=`rgb(${Math.min(255,r+28)},${Math.min(255,g+16)},${Math.min(255,b+6)})`;
-  const isDark=(r*0.299+g*0.587+b*0.114)<150;
-  const text=isDark?'rgba(255,255,255,0.92)':'rgba(18,18,18,0.94)';
-  const bgOverlay=isDark?`rgba(${Math.round(r*0.18)},${Math.round(g*0.18)},${Math.round(b*0.18)},0.72)`:`rgba(${Math.round(r*0.35)},${Math.round(g*0.35)},${Math.round(b*0.35)},0.32)`;
-  const lightOverlay=isDark?'rgba(20,20,20,0.18)':'rgba(255,255,255,0.24)';
-  const cardBg=isDark?'rgba(255,255,255,0.12)':'rgba(255,255,255,0.88)';
-  document.documentElement.style.setProperty('--primary-color',primary);
-  document.documentElement.style.setProperty('--accent-color',accent);
-  document.documentElement.style.setProperty('--accent-rgb',`${r},${g},${b}`);
-  document.documentElement.style.setProperty('--bg-overlay',bgOverlay);
-  document.documentElement.style.setProperty('--light-overlay',lightOverlay);
-  document.documentElement.style.setProperty('--card-bg',cardBg);
-  document.documentElement.style.setProperty('--text-primary',text);
-  document.documentElement.style.setProperty('--panel-radius',sharp?'16px':'28px');
-  document.documentElement.style.setProperty('--button-radius',sharp?'16px':'50%');
-  document.documentElement.style.setProperty('--border-style',sharp?'16px':'24px');
-  document.documentElement.classList.toggle('sharp-theme',sharp);
-}
-
 function changeBackground(){
   bgIndex=(bgIndex+1)%backgrounds.length;
-  setBackground(bgIndex);
-  setTimeout(extractDominantColor,120);
+  const bgEl=document.querySelector('.bg-img');
+  if(bgEl) bgEl.style.background=backgrounds[bgIndex];
 }
 
-document.addEventListener('DOMContentLoaded', function(){
-  // Load any persisted AI theme
-  loadPersistedTheme();
-  setBackground(bgIndex);
-  extractDominantColor();
+// ── DOMContentLoaded ─────────────────────────────────────────
+document.addEventListener('DOMContentLoaded',function(){
+  // Load fresh theme + bg from server
+  if(typeof window._fairuzLoadTheme==='function') window._fairuzLoadTheme();
 
-  // Theme switcher (original)
-  const switcherBtn=document.getElementById('theme-switcher');
-  if(switcherBtn) switcherBtn.addEventListener('click',changeBackground);
+  // Theme cycle button
+  const sw=document.getElementById('theme-switcher');
+  if(sw) sw.addEventListener('click',changeBackground);
 
   // Upload button
   const uploadBtn=document.getElementById('bg-upload-btn');
   const uploadInput=document.getElementById('bg-upload-input');
-  if(uploadBtn && uploadInput){
+  if(uploadBtn&&uploadInput){
     uploadBtn.addEventListener('click',()=>uploadInput.click());
     uploadInput.addEventListener('change',e=>{
-      if(e.target.files && e.target.files[0]) handleBgUpload(e.target.files[0]);
+      if(e.target.files&&e.target.files[0]) handleBgUpload(e.target.files[0]);
     });
   }
 });
 </script>
 </body>
 </html>"""
+
+
 
