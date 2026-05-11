@@ -1681,3 +1681,66 @@ unit: "بندلة" for جبسون/ليموناي, else "وردة". Only include 
 if __name__=="__main__":
     port=int(os.environ.get("PORT",5000))
     app.run(host="0.0.0.0",port=port,debug=False)
+
+
+# ── Theme & Settings API ──────────────────────────────────
+
+@app.route("/api/theme")
+def api_get_theme():
+    """إرجاع الثيم المحفوظ من قاعدة البيانات."""
+    try:
+        row = db_one("SELECT value FROM app_settings WHERE key='theme'")
+        theme = row["value"] if row else "rose"
+    except Exception:
+        theme = "rose"
+    return jsonify({"theme": theme})
+
+@app.route("/api/theme", methods=["POST"])
+@auth
+def api_set_theme():
+    """حفظ الثيم المختار."""
+    d = request.json or {}
+    theme = d.get("theme", "rose")
+    valid = {"rose", "bloom", "ocean", "forest", "gold", "lavender"}
+    if theme not in valid:
+        theme = "rose"
+    try:
+        db_run(
+            "INSERT INTO app_settings (key,value) VALUES ('theme',?) "
+            "ON CONFLICT(key) DO UPDATE SET value=excluded.value",
+            (theme,)
+        )
+    except Exception as e:
+        print("theme save error:", e)
+    return jsonify({"ok": True, "theme": theme})
+
+@app.route("/api/theme/reset", methods=["POST"])
+@auth
+def api_reset_theme():
+    """إعادة الثيم للأصلي (وردي)."""
+    try:
+        db_run(
+            "INSERT INTO app_settings (key,value) VALUES ('theme','rose') "
+            "ON CONFLICT(key) DO UPDATE SET value='rose'"
+        )
+    except Exception as e:
+        print("theme reset error:", e)
+    return jsonify({"ok": True, "theme": "rose"})
+
+@app.route("/api/bg-image")
+def api_bg_image():
+    """إرجاع صورة الخلفية مع Cache headers لتخفيف الحمل."""
+    import os as _os
+    bg_path = "background.jpg"
+    if not _os.path.exists(bg_path):
+        return jsonify({"error": "not found"}), 404
+    mtime = int(_os.path.getmtime(bg_path))
+    etag = str(mtime)
+    if request.headers.get("If-None-Match") == etag:
+        return Response(status=304)
+    with open(bg_path, "rb") as f:
+        data = f.read()
+    resp = Response(data, mimetype="image/jpeg")
+    resp.headers["Cache-Control"] = "public, max-age=86400"
+    resp.headers["ETag"] = etag
+    return resp

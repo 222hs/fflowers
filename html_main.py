@@ -599,6 +599,9 @@ input[type="date"]{width:100%;padding:10px 12px;border:1px solid var(--border);b
         <span class="th-name">🌸 ورود</span>
       </div>
     </div>
+    <button onclick="resetTheme()" style="margin-top:10px;width:100%;padding:7px;border:none;border-radius:10px;background:rgba(232,121,138,0.12);color:var(--accent);font-family:'Tajawal',sans-serif;font-size:12px;font-weight:700;cursor:pointer;transition:.2s;" onmouseover="this.style.background='rgba(232,121,138,0.22)'" onmouseout="this.style.background='rgba(232,121,138,0.12)'">
+      🔄 إعادة الثيم الأصلي
+    </button>
   </div>
 
   <!-- Nav Tabs -->
@@ -1028,6 +1031,11 @@ function setTheme(t){
   if(el) el.classList.add('active');
   if(t==='bloom') initRoseBg();
   if(barCI) loadCharts();
+}
+
+function resetTheme(){
+  setTheme('rose');
+  document.getElementById('themePanel').classList.remove('open');
 }
 
 function toggleThemePanel(){
