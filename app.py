@@ -1,13 +1,18 @@
 """
 نقطة الدخول الرئيسية — Render يشغّل هذا الملف
 """
+import os
 from config import app
 from database import init_db
 import routes  # noqa: يسجّل كل الـ routes تلقائياً
 
-# تهيئة قاعدة البيانات عند البدء
+# ✅ إصلاح: init_db تُستدعى مرة واحدة فقط هنا
 with app.app_context():
     init_db()
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=int(__import__("os").environ.get("PORT", 5000)), debug=False)
+    app.run(
+        host="0.0.0.0",
+        port=int(os.environ.get("PORT", 5000)),
+        debug=False
+    )

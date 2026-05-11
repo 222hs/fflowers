@@ -3,8 +3,10 @@ services:
     name: fairuz-flowers
     env: python
     buildCommand: pip install -r requirements.txt
-    startCommand: gunicorn app:app --bind 0.0.0.0:$PORT
+    startCommand: gunicorn app:app --bind 0.0.0.0:$PORT --workers 1 --timeout 120
     envVars:
+      - key: SECRET_KEY
+        generateValue: true          # ✅ Render يولّد قيمة آمنة تلقائياً
       - key: BOT_TOKEN
         sync: false
       - key: GROQ_API_KEY
@@ -13,5 +15,9 @@ services:
         sync: false
       - key: WORKER_PASSWORD
         sync: false
+      - key: TURSO_URL
+        sync: false                  # ✅ مضاف — ضع رابط قاعدة Turso
+      - key: TURSO_TOKEN
+        sync: false                  # ✅ مضاف — ضع token قاعدة Turso
       - key: DB_PATH
         value: /opt/render/project/src/fairuz.db

@@ -1,8 +1,5 @@
 """
 auth.py — نظام المصادقة (مالك / عامل)
-استورده في routes.py هكذا:
-    from auth import owner_required, worker_required, register_auth_routes
-    register_auth_routes(app)
 """
 from functools import wraps
 from flask import session, redirect, request
@@ -13,6 +10,7 @@ from html_pages import login_select_page, owner_login_page, worker_login_page
 # ── Helpers ───────────────────────────────────────────────────
 def is_owner():
     return session.get("role") == "owner"
+
 
 def is_worker():
     return session.get("role") in ("owner", "worker")
@@ -26,6 +24,7 @@ def owner_required(f):
             return redirect("/login/owner")
         return f(*args, **kwargs)
     return decorated
+
 
 def worker_required(f):
     @wraps(f)
@@ -41,7 +40,6 @@ def register_auth_routes(app):
 
     @app.route("/")
     def index():
-        # إذا دخل مسبقاً، وجّهه مباشرة
         if session.get("role") == "owner":
             return redirect("/dashboard")
         if session.get("role") == "worker":
