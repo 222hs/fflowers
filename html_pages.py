@@ -2113,8 +2113,16 @@ function toggleLang(){
 // Init language
 setLang(lang);
 
-load(); // طلب واحد يجيب كل شيء
-loadFlowerInvPage(); // تحميل ملخص فواتير الورد في الصفحة الرئيسية
+// تحميل البيانات فور اكتمال الصفحة
+document.addEventListener('DOMContentLoaded', function(){
+  load();
+  loadFlowerInvPage();
+});
+// fallback لو DOMContentLoaded اطلع مبكر
+if(document.readyState === 'complete' || document.readyState === 'interactive'){
+  load();
+  loadFlowerInvPage();
+}
 </script>
 </body>
 </html>"""
