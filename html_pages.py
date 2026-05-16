@@ -689,10 +689,10 @@ input[type="date"]{width:100%;padding:10px 12px;border:1px solid var(--border);b
   </div>
 
   <!-- شريط الأخبار المتحرك -->
-  <div class="ticker-wrap" id="tickerWrap" style="display:none;">
+  <div class="ticker-wrap" id="tickerWrap">
     <div class="ticker-track" id="tickerTrack">
-      <span class="ticker-text" id="tickerText1">🌸 جاري التحميل...</span>
-      <span class="ticker-text" id="tickerText2">🌸 جاري التحميل...</span>
+      <span class="ticker-text" id="tickerText1">🌸 فيروز فلورز — متجر الورود والهدايا الفاخرة 🌹 أهلاً وسهلاً بكم 💐 جاري تحميل ملخص اليوم...</span>
+      <span class="ticker-text" id="tickerText2">🌸 فيروز فلورز — متجر الورود والهدايا الفاخرة 🌹 أهلاً وسهلاً بكم 💐 جاري تحميل ملخص اليوم...</span>
     </div>
   </div>
 
@@ -2163,27 +2163,23 @@ async function loadTicker(){
     const r = await api('/api/ticker');
     if(!r || !r.text) return;
     const txt = r.text;
-    // كرّر النص ضعفين لضمان انسيابية اللف
     document.getElementById('tickerText1').textContent = txt;
     document.getElementById('tickerText2').textContent = txt;
-    // اضبط مدة الحركة حسب طول النص
     const duration = Math.max(25, txt.length * 0.38);
     document.getElementById('tickerTrack').style.animationDuration = duration + 's';
-    document.getElementById('tickerWrap').style.display = 'block';
   }catch(e){ console.log('ticker error',e); }
 }
 
 // تحميل البيانات فور اكتمال الصفحة
-document.addEventListener('DOMContentLoaded', function(){
+function initApp(){
   load();
   loadFlowerInvPage();
   loadTicker();
-});
-// fallback لو DOMContentLoaded اطلع مبكر
-if(document.readyState === 'complete' || document.readyState === 'interactive'){
-  load();
-  loadFlowerInvPage();
-  loadTicker();
+}
+if(document.readyState === 'loading'){
+  document.addEventListener('DOMContentLoaded', initApp);
+} else {
+  initApp();
 }
 </script>
 </body>
