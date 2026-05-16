@@ -715,6 +715,7 @@ input[type="date"]{width:100%;padding:10px 12px;border:1px solid var(--border);b
   </div>
 
   <!-- ── ملخص فواتير الورد ── -->
+  <div id="shelfSummaryCard" style="display:none;"></div>
   <div class="slbl">🧾 فواتير الورد</div>
   <div class="gc" style="padding:14px;margin-bottom:16px;">
     <div class="kpi-row row2" style="margin-bottom:0;">
@@ -1291,6 +1292,7 @@ async function load(){
     const cur = all[parseInt(month.split('-')[1])-1];
     if(cur){ renderPayChart(cur.sales); renderPayerChart(cur.buys.filter(e=>e.type!=='expense')); }
     if(dash.flowers) document.getElementById('flowerCount').textContent = dash.flowers.total || 0;
+    if(dash.shelves_summary) renderShelfSummaryCard(dash.shelves_summary, dash.shelf_sales||[]);
   } catch(e){ hideSkeleton(); console.error('load error', e); }
 }
 
@@ -1341,6 +1343,34 @@ function renderKPI(sales,buys,expD){
   const py={};buys.filter(e=>e.type!=='expense').forEach(e=>{if(e.paid_by){py[e.paid_by]=(py[e.paid_by]||0)+e.amt;}});
   document.getElementById('payerChips').innerHTML=Object.entries(py)
     .map(([k,v])=>`<span class="chip">👤${k} ${fmt(v)}</span>`).join('');
+}
+
+/* ── SHELF SUMMARY CARD ── */
+function renderShelfSummaryCard(shelvesSummary, shelfSales){
+  const el = document.getElementById('shelfSummaryCard');
+  if(!el) return;
+  const totalShelf = shelvesSummary.reduce((a,s)=>a+s.total,0);
+  if(totalShelf === 0 && shelvesSummary.every(s=>s.count===0)){
+    el.style.display='none'; return;
+  }
+  el.style.display='block';
+  const rows = shelvesSummary.filter(s=>s.total>0||s.count>0).map(s=>`
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:7px 0;border-bottom:1px solid var(--border);">
+      <div style="display:flex;align-items:center;gap:7px;">
+        <div style="width:10px;height:10px;border-radius:50%;background:${s.color};flex-shrink:0;"></div>
+        <span style="font-size:14px;font-weight:700;color:var(--text);">رف ${s.name}</span>
+        <span style="font-size:11px;color:var(--text3);">(${s.count} عملية)</span>
+      </div>
+      <span style="font-family:'Playfair Display',serif;font-size:15px;font-weight:700;color:var(--green2);">${fmt(s.total)} ر.ع</span>
+    </div>`).join('');
+  el.innerHTML=`
+    <div class="gc" style="padding:14px;margin-bottom:14px;">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+        <div style="font-size:12px;font-weight:700;color:var(--text3);letter-spacing:2px;text-transform:uppercase;">🗄️ مبيعات الرفوف</div>
+        <span style="font-family:'Playfair Display',serif;font-size:16px;font-weight:800;color:var(--accent2);">${fmt(totalShelf)} ر.ع</span>
+      </div>
+      ${rows||'<div style="color:var(--text3);font-size:13px;text-align:center;padding:8px;">لا توجد مبيعات الرفوف هذا الشهر</div>'}
+    </div>`;
 }
 
 /* ── LISTS ── */
@@ -1539,6 +1569,21 @@ async function loadShelves(){
   const shelves=await api(`/api/shelves?month=${month}`);
   document.getElementById('shelfSummary').innerHTML=shelves.map(s=>{
     const netPos=s.net>=0;
+    const entries=s.sales_entries||[];
+    const entriesHtml=entries.length?`
+      <div style="margin-top:10px;border-top:1px solid var(--border);padding-top:8px;">
+        <div style="font-size:11px;font-weight:700;color:var(--text3);letter-spacing:1px;margin-bottom:6px;">📋 المبيعات:</div>
+        ${entries.map(e=>{
+          const pay=e.payment_method?`<span style="font-size:10px;background:rgba(255,255,255,0.5);border-radius:6px;padding:1px 5px;margin-right:3px;">${e.payment_method}</span>`:'';
+          return `<div style="display:flex;align-items:center;justify-content:space-between;padding:5px 0;border-bottom:1px solid rgba(255,255,255,0.3);">
+            <div style="display:flex;align-items:center;gap:5px;flex:1;min-width:0;">
+              ${pay}
+              <span style="font-size:13px;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${e.desc}</span>
+            </div>
+            <span style="font-family:'Playfair Display',serif;font-size:13px;font-weight:700;color:var(--green2);white-space:nowrap;margin-right:6px;">${fmt(e.amt)} ر.ع</span>
+          </div>`;
+        }).join('')}
+      </div>`:'';
     return `<div class="shelf-kpi gc">
       <div class="shelf-kpi-bar" style="background:${s.color}"></div>
       <div class="shelf-kpi-name"><div class="shelf-dot" style="background:${s.color}"></div>رف ${s.name}</div>
@@ -1552,6 +1597,7 @@ async function loadShelves(){
         <span class="nl">صافي بعد الإيجار</span>
         <span class="nv" style="color:${netPos?'var(--green2)':'var(--accent)'}">${s.net>=0?'+':''}${fmt(s.net)} ر.ع</span>
       </div>
+      ${entriesHtml}
       <button class="rent-btn" onclick="openRent(${s.id},'${s.name}',${s.rent})">✏️ إيجار: ${fmt(s.rent)} ر.ع</button>
     </div>`;}).join('');
   document.getElementById('shelfProds').innerHTML=shelves.map(s=>`

@@ -84,12 +84,27 @@ def groq_chat(text, chat_id):
         exp_names = ", ".join(f"{e['name']} ({fmt_omr(e['amount'])})" for e in exps_list)
         shelf_names = ", ".join(s2["name"] for s2 in shelves)
 
+        # نجيب منتجات الرفوف للسياق
+        shelf_products_ctx = ""
+        try:
+            shelves_with_prods = []
+            for sh in db_get("SELECT * FROM shelves ORDER BY id"):
+                prods = db_get("SELECT name,price,qty FROM shelf_products WHERE shelf_id=? AND qty>0 ORDER BY name", (sh["id"],))
+                if prods:
+                    prod_list = ", ".join(f"{p['name']} ({fmt_omr(p['price'])})" for p in prods)
+                    shelves_with_prods.append(f"رف {sh['name']}: {prod_list}")
+            shelf_products_ctx = "\n".join(shelves_with_prods) if shelves_with_prods else "لا توجد منتجات"
+        except:
+            shelf_products_ctx = ""
+
         system = f"""أنت مساعد ذكي لمحل فيروز فلورز لبيع الزهور في عُمان.
 اليوم: {today} | الشهر الحالي: {cur_m}
 إجمالي مبيعات هذا الشهر: {fmt_omr(ts)} ({len(s)} عملية)
 إجمالي مشتريات هذا الشهر: {fmt_omr(tb)} ({len(b)} عملية)
 المصاريف الثابتة: {exp_names}
 الرفوف: {shelf_names}
+منتجات الرفوف المتاحة:
+{shelf_products_ctx}
 
 مهمتك: حلل رسالة المستخدم وأخرج JSON فقط بهذا الشكل:
 
@@ -101,6 +116,8 @@ def groq_chat(text, chat_id):
 
 قواعد كل action:
 - register_sale: مبيعة → data: {{desc, amt, payment, category, shelf}}
+  - إذا كان البيع من رف، ضع اسم الرف في shelf (مثل "ريحان") وضع اسم المنتج بالضبط كما في قائمة الرف في desc
+  - المبلغ amt: إذا ذُكر صراحة خذه، وإلا اتركه 0 وسيُجلب من قاعدة البيانات تلقائياً
 - register_buy: مشتريات → data: {{desc, amt, paid_by}}
 - register_expense: مصروف → data: {{expense_name, amt}}
 - answer: سؤال أو كلام عام → data: {{}} + reply بالعربي
@@ -112,6 +129,8 @@ def groq_chat(text, chat_id):
 
 أمثلة:
 "بعت باقة بـ 5.5 كاش" → {{"action":"register_sale","data":{{"desc":"باقة ورد","amt":5.5,"payment":"كاش 💵","category":"ورد وباقات"}}}}
+"بعت عطر من رف ريحان" → {{"action":"register_sale","data":{{"desc":"عطر","amt":0,"payment":null,"shelf":"ريحان"}}}}
+"بعت ساعة من رف فتحية بـ 8 كاش" → {{"action":"register_sale","data":{{"desc":"ساعة","amt":8.0,"payment":"كاش 💵","shelf":"فتحية"}}}}
 "اشتريت ورد 12 ريال" → {{"action":"register_buy","data":{{"desc":"ورد","amt":12.0,"paid_by":null}}}}
 "دفعت الراتب" → {{"action":"register_expense","data":{{"expense_name":"راتب العامل","amt":null}}}}
 "كم مبيعات اليوم؟" → {{"action":"answer","data":{{}},"reply":"مبيعات اليوم..."}}

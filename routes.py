@@ -157,26 +157,42 @@ def api_dashboard():
         all_entries = db_get("SELECT * FROM entries WHERE month LIKE ? ORDER BY created DESC", (f"{yr}-%",))
         flowers     = db_get("SELECT * FROM flowers ORDER BY count DESC")
 
-    s = [e for e in cur_entries if e["type"] == "s"]
+    all_s = [e for e in cur_entries if e["type"] == "s"]
     b = [e for e in cur_entries if e["type"] in ("b","expense")]
+    # فصل مبيعات الرفوف عن مبيعات المحل
+    s = [e for e in all_s if not e.get("shelf_id")]
+    shelf_sales = [e for e in all_s if e.get("shelf_id")]
 
     months_data = {}
     for mm in [f"{yr}-{str(i).zfill(2)}" for i in range(1,13)]:
         ms = [e for e in all_entries if e["month"] == mm]
         months_data[mm] = {
-            "sales": [e for e in ms if e["type"] == "s"],
+            "sales": [e for e in ms if e["type"] == "s" and not e.get("shelf_id")],
             "buys":  [e for e in ms if e["type"] in ("b","expense")]
         }
 
     flowers_total = sum(f["count"] for f in flowers) if flowers else 0
 
+    # ملخص مبيعات الرفوف للصفحة الرئيسية
+    shelves_info = db_get("SELECT * FROM shelves ORDER BY id")
+    shelves_summary = []
+    for sh in shelves_info:
+        sh_sales = [e for e in shelf_sales if e.get("shelf_id") == sh["id"]]
+        shelves_summary.append({
+            "id": sh["id"], "name": sh["name"], "color": sh["color"],
+            "total": sum(e["amt"] for e in sh_sales),
+            "count": len(sh_sales)
+        })
+
     return jsonify({
-        "month":    month,
-        "sales":    s,
-        "buys":     b,
-        "expenses": {"expenses": expenses, "paid": paid},
-        "charts":   months_data,
-        "flowers":  {"flowers": flowers, "total": flowers_total}
+        "month":          month,
+        "sales":          s,
+        "buys":           b,
+        "shelf_sales":    shelf_sales,
+        "shelves_summary": shelves_summary,
+        "expenses":       {"expenses": expenses, "paid": paid},
+        "charts":         months_data,
+        "flowers":        {"flowers": flowers, "total": flowers_total}
     })
 
 @app.route("/api/entries")
@@ -209,9 +225,10 @@ def api_shelves():
     for s in shelves:
         prods=db_get("SELECT * FROM shelf_products WHERE shelf_id=? ORDER BY created DESC",(s["id"],))
         row=db_one("SELECT COALESCE(SUM(amt),0) as total,COUNT(*) as cnt FROM entries WHERE type='s' AND shelf_id=? AND month=?",(s["id"],month))
+        sales_entries=db_get("SELECT desc,amt,date,payment_method FROM entries WHERE type='s' AND shelf_id=? AND month=? ORDER BY created DESC",(s["id"],month))
         ms=float(row["total"]) if row else 0
         rent=float(s.get("rent") or 0)
-        result.append({**s,"products":prods,"monthly_sales":ms,"sales_count":int(row["cnt"]) if row else 0,"rent":rent,"net":ms-rent})
+        result.append({**s,"products":prods,"monthly_sales":ms,"sales_count":int(row["cnt"]) if row else 0,"rent":rent,"net":ms-rent,"sales_entries":sales_entries})
     return jsonify(result)
 
 @app.route("/api/shelves/<int:sid>/products",methods=["POST"])
@@ -616,7 +633,10 @@ def webhook():
            "<code>دفعت إيجار</code>\n"
            "<code>دفعت كهرباء 45.000</code>\n\n"
            "🗄️ <b>الرفوف:</b>\n"
-           "<code>/رف ريحان</code> — منتجات الرف\n"
+           "<code>بعت عطر من رف ريحان</code> — بيع من رف\n"
+           "<code>بعت ساعة من رف فتحية بـ 8 كاش</code>\n"
+           "<code>/رف ريحان</code> — عرض منتجات الرف\n"
+           "<code>/رفوف</code> — ملخص جميع الرفوف\n"
            "<code>/ايجار_الرفوف</code> — تسجيل الإيجارات\n\n"
            "🌸 <b>مخزون الورد:</b>\n"
            "أرسل صورة + تعليق <code>عد الورد</code>\n"
@@ -763,6 +783,34 @@ def webhook():
         if registered > 0:
             msg += f"\n\n✅ تم تسجيل {registered} إيجار تلقائياً"
         tg(chat, msg)
+        return "ok"
+
+    if text in ["/رفوف", "/shelf_summary", "/ملخص_الرفوف"]:
+        shelves = db_get("SELECT * FROM shelves ORDER BY id")
+        lines = []
+        total_shelf_sales = 0
+        for sh in shelves:
+            row = db_one("SELECT COALESCE(SUM(amt),0) as total, COUNT(*) as cnt FROM entries WHERE type='s' AND shelf_id=? AND month=?", (sh["id"], month))
+            sh_total = float(row["total"]) if row else 0
+            sh_cnt = int(row["cnt"]) if row else 0
+            rent = float(sh.get("rent") or 0)
+            net = sh_total - rent
+            net_emoji = "✅" if net >= 0 else "🔴"
+            total_shelf_sales += sh_total
+            # آخر 3 مبيعات
+            recent = db_get("SELECT desc,amt FROM entries WHERE type='s' AND shelf_id=? AND month=? ORDER BY created DESC LIMIT 3", (sh["id"], month))
+            recent_lines = "\n".join(f"    • {e['desc']}: {fmt_omr(e['amt'])}" for e in recent) if recent else "    لا توجد مبيعات"
+            lines.append(
+                f"🗄️ <b>رف {sh['name']}</b>\n"
+                f"💰 مبيعات: {fmt_omr(sh_total)} ({sh_cnt} عملية)\n"
+                f"🏷️ إيجار: {fmt_omr(rent)}\n"
+                f"{net_emoji} صافي: {fmt_omr(net)}\n"
+                f"آخر مبيعات:\n{recent_lines}"
+            )
+        tg(chat,
+           f"🗄️ <b>ملخص الرفوف — {month}</b>\n\n" +
+           "\n\n".join(lines) +
+           f"\n\n{'━'*18}\n💰 إجمالي مبيعات الرفوف: {fmt_omr(total_shelf_sales)}")
         return "ok"
 
     if text == "/فئات":
@@ -914,21 +962,38 @@ def webhook():
             cat   = data.get("category") or detect_category(text)
             shelf_id_detected = None
             shelf_name = data.get("shelf")
+            if not shelf_name:
+                for sname in ["ريحان","فتحية","فطوم","اكسسوارات"]:
+                    if sname in text:
+                        shelf_name = sname; break
             if shelf_name:
                 sh = db_one("SELECT id FROM shelves WHERE name=?",(shelf_name,))
                 if sh: shelf_id_detected = sh["id"]
+            # لو ما ذُكر مبلغ وفيه رف، نجيب سعر المنتج من قاعدة البيانات
+            if shelf_id_detected and (not amt or amt<=0):
+                prod_kw = desc.split()[0] if desc else ""
+                prod = db_one("SELECT * FROM shelf_products WHERE shelf_id=? AND name LIKE ? AND qty>0",
+                              (shelf_id_detected, f"%{prod_kw}%"))
+                if prod: amt = prod["price"]
             if not amt or amt<=0:
-                pending[chat]={"waiting":"sale_amt","desc":desc}
+                pending[chat]={"waiting":"sale_amt","desc":desc,"shelf_id":shelf_id_detected}
                 tg(chat,f"🌸 <b>{desc}</b>\nكم المبلغ؟ أرسل الرقم فقط:")
                 return "ok"
             db_run("INSERT INTO entries (type,desc,amt,date,month,payment_method,category,shelf_id) VALUES (?,?,?,?,?,?,?,?)",
                    ("s",desc,amt,date,month,pay,cat,shelf_id_detected))
+            # تحديث كمية المنتج في الرف
+            if shelf_id_detected and desc:
+                prod_kw = desc.split()[0] if desc else ""
+                prod = db_one("SELECT * FROM shelf_products WHERE shelf_id=? AND name LIKE ? AND qty>0",
+                              (shelf_id_detected, f"%{prod_kw}%"))
+                if prod: db_run("UPDATE shelf_products SET qty=qty-1 WHERE id=? AND qty>0",(prod["id"],))
             cat_line = f"\n🏷️ {cat}" if cat else ""
+            shelf_line = f"\n🗄️ رف {shelf_name}" if shelf_name else ""
             if pay:
-                tg(chat,f"✅ <b>مبيعة مسجلة!</b>\n🌸 {desc}\n💰 {fmt_omr(amt)} — {pay}{cat_line}")
+                tg(chat,f"✅ <b>مبيعة مسجلة!</b>\n🌸 {desc}\n💰 {fmt_omr(amt)} — {pay}{cat_line}{shelf_line}")
             else:
-                pending[chat]={"waiting":"sale_payment"}
-                tg_buttons(chat,f"🌸 <b>مبيعة {fmt_omr(amt)}</b>\n📝 {desc}{cat_line}\n\n💳 طريقة الدفع؟",
+                pending[chat]={"waiting":"sale_payment","shelf_id":shelf_id_detected,"shelf_name":shelf_name}
+                tg_buttons(chat,f"🌸 <b>مبيعة {fmt_omr(amt)}</b>\n📝 {desc}{cat_line}{shelf_line}\n\n💳 طريقة الدفع؟",
                     [[{"label":"💵 كاش","data":"pay:كاش 💵"},{"label":"💳 فيزا","data":"pay:فيزا 💳"},{"label":"🏦 تحويل","data":"pay:تحويل 🏦"}]])
             return "ok"
 

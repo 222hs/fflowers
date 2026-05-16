@@ -45,15 +45,24 @@ def day_summary(day_str):
 
 def format_day_report(day_str):
     s, b, e = get_day_data(day_str)
-    ts = sum(r["amt"] for r in s)
+    # فصل مبيعات الرفوف عن مبيعات المحل
+    store_s = [r for r in s if not r.get("shelf_id")]
+    shelf_s = [r for r in s if r.get("shelf_id")]
+    ts = sum(r["amt"] for r in store_s)
+    ts_shelf = sum(r["amt"] for r in shelf_s)
     tb = sum(r["amt"] for r in b)
     te = sum(r["amt"] for r in e)
     net = ts - tb - te
     emoji = "✅" if net >= 0 else "⚠️"
     lines = [f"📅 <b>تقرير يوم {day_str}</b>\n"]
-    lines.append(f"🌸 المبيعات: {fmt_omr(ts)} ({len(s)} عملية)")
-    if s:
-        for r in s:
+    lines.append(f"🌸 مبيعات المحل: {fmt_omr(ts)} ({len(store_s)} عملية)")
+    if store_s:
+        for r in store_s:
+            pay = f" — {r['payment_method']}" if r.get("payment_method") else ""
+            lines.append(f"  • {r['desc']}: {fmt_omr(r['amt'])}{pay}")
+    if shelf_s:
+        lines.append(f"\n🗄️ مبيعات الرفوف: {fmt_omr(ts_shelf)} ({len(shelf_s)} عملية)")
+        for r in shelf_s:
             pay = f" — {r['payment_method']}" if r.get("payment_method") else ""
             lines.append(f"  • {r['desc']}: {fmt_omr(r['amt'])}{pay}")
     lines.append(f"\n📦 المشتريات: {fmt_omr(tb)} ({len(b)} عملية)")
@@ -66,7 +75,9 @@ def format_day_report(day_str):
         for r in e:
             lines.append(f"  • {r['desc']}: {fmt_omr(r['amt'])}")
     lines.append("\n━━━━━━")
-    lines.append(f"{emoji} الصافي: {fmt_omr(net)}")
+    lines.append(f"{emoji} صافي المحل: {fmt_omr(net)}")
+    if ts_shelf:
+        lines.append(f"🗄️ إجمالي الرفوف: {fmt_omr(ts_shelf)}")
     return "\n".join(lines)
 
 
@@ -76,13 +87,17 @@ def format_month_report(month):
         "SELECT * FROM entries WHERE type='expense' AND month=? ORDER BY created DESC",
         (month,)
     )
-    ts = sum(r["amt"] for r in s)
+    # فصل مبيعات الرفوف
+    store_s = [r for r in s if not r.get("shelf_id")]
+    shelf_s = [r for r in s if r.get("shelf_id")]
+    ts = sum(r["amt"] for r in store_s)
+    ts_shelf = sum(r["amt"] for r in shelf_s)
     tb = sum(r["amt"] for r in b if r["type"] != "expense")
     te = sum(r["amt"] for r in exps)
     net = ts - tb - te
     emoji = "✅" if net >= 0 else "⚠️"
     days = {}
-    for r in s:
+    for r in store_s:
         d = r.get("date", "")
         if d not in days:
             days[d] = {"s": 0, "b": 0, "sc": 0, "bc": 0}
@@ -97,10 +112,12 @@ def format_month_report(month):
             days[d]["bc"] += 1
     days_sorted = sorted(days.items(), key=lambda x: x[0])
     lines = [f"📊 <b>تقرير شهر {month}</b>\n"]
-    lines.append(f"🌸 إجمالي المبيعات: {fmt_omr(ts)} ({len(s)} عملية)")
+    lines.append(f"🌸 مبيعات المحل: {fmt_omr(ts)} ({len(store_s)} عملية)")
+    if ts_shelf > 0:
+        lines.append(f"🗄️ مبيعات الرفوف: {fmt_omr(ts_shelf)} ({len(shelf_s)} عملية)")
     lines.append(f"📦 إجمالي المشتريات: {fmt_omr(tb)}")
     lines.append(f"💸 إجمالي المصاريف: {fmt_omr(te)}")
-    lines.append(f"{emoji} الصافي: {fmt_omr(net)}\n")
+    lines.append(f"{emoji} صافي المحل: {fmt_omr(net)}\n")
     lines.append("📆 <b>تفصيل يومي:</b>")
     for day, v in days_sorted:
         if day:
