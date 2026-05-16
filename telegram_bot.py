@@ -40,6 +40,34 @@ def detect_category(text):
                 return cat
     return None
 
+# كلمات الكميات بالعربي
+QTY_WORDS = {
+    "واحد":1,"واحده":1,"وحده":1,
+    "اثنين":2,"اثنتين":2,"ثنتين":2,"اتنين":2,"باقتين":2,"تاجين":2,"عطرين":2,"قطعتين":2,"وردتين":2,"هديتين":2,"طباعتين":2,"ساعتين":2,"خاتمين":2,"سوارين":2,
+    "ثلاث":3,"ثلاثة":3,"ثلث":3,
+    "أربع":4,"اربع":4,"أربعة":4,"اربعة":4,
+    "خمس":5,"خمسة":5,
+    "ست":6,"ستة":6,
+    "سبع":7,"سبعة":7,
+    "ثمان":8,"ثمانية":8,
+    "تسع":9,"تسعة":9,
+    "عشر":10,"عشرة":10,
+}
+
+def detect_qty_from_text(text):
+    """استخراج الكمية من النص العربي"""
+    text_lower = text.strip()
+    # أولاً: ابحث عن رقم + وحدة مثل "3 باقات"
+    import re as _re
+    m = _re.search(r'(\d+)\s*(باقة|باقات|تاج|تيجان|عطر|عطور|قطعة|قطع|وردة|ورود|هدية|هدايا|ساعة|ساعات|خاتم|خواتم|سوار|أساور)', text_lower)
+    if m:
+        return int(m.group(1))
+    # ثانياً: ابحث عن كلمات الكمية
+    for word, n in QTY_WORDS.items():
+        if word in text_lower:
+            return n
+    return 1
+
 def parse_text(text):
     text=text.strip()
     etype=None
@@ -115,10 +143,13 @@ def groq_chat(text, chat_id):
 }}
 
 قواعد كل action:
-- register_sale: مبيعة → data: {{desc, amt, payment, category, shelf}}
-  - إذا كان البيع من رف، ضع اسم الرف في shelf (مثل "ريحان") وضع اسم المنتج بالضبط كما في قائمة الرف في desc
-  - المبلغ amt: إذا ذُكر صراحة خذه، وإلا اتركه 0 وسيُجلب من قاعدة البيانات تلقائياً
-- register_buy: مشتريات → data: {{desc, amt, paid_by}}
+- register_sale: مبيعة → data: {{desc, amt, qty, payment, category, shelf}}
+  - desc: اسم المنتج المفرد (مثل "باقة ورد" لا "باقتين")
+  - amt: السعر الإجمالي لكل الكميات (كما ذُكر)
+  - qty: الكمية (افتراضي 1). استخرجها من: "باقتين"=2، "ثلاث"=3، "أربع"=4، "3 باقات"=3 إلخ
+  - إذا كان البيع من رف، ضع اسم الرف في shelf وضع اسم المنتج في desc
+  - المبلغ amt: إذا ذُكر صراحة خذه، وإلا اتركه 0
+- register_buy: مشتريات → data: {{desc, amt, qty, paid_by}}
 - register_expense: مصروف → data: {{expense_name, amt}}
 - answer: سؤال أو كلام عام → data: {{}} + reply بالعربي
 - report: طلب تقرير → data: {{period: "today"|"month"|"custom"}}
@@ -128,10 +159,16 @@ def groq_chat(text, chat_id):
 المبالغ: أرقام عشرية مثل 5.5 أو 12.0
 
 أمثلة:
-"بعت باقة بـ 5.5 كاش" → {{"action":"register_sale","data":{{"desc":"باقة ورد","amt":5.5,"payment":"كاش 💵","category":"ورد وباقات"}}}}
-"بعت عطر من رف ريحان" → {{"action":"register_sale","data":{{"desc":"عطر","amt":0,"payment":null,"shelf":"ريحان"}}}}
-"بعت ساعة من رف فتحية بـ 8 كاش" → {{"action":"register_sale","data":{{"desc":"ساعة","amt":8.0,"payment":"كاش 💵","shelf":"فتحية"}}}}
-"اشتريت ورد 12 ريال" → {{"action":"register_buy","data":{{"desc":"ورد","amt":12.0,"paid_by":null}}}}
+"بعت باقة بـ 5.5 كاش" → {{"action":"register_sale","data":{{"desc":"باقة ورد","amt":5.5,"qty":1,"payment":"كاش 💵","category":"ورد وباقات"}}}}
+"بعت باقتين بـ 8" → {{"action":"register_sale","data":{{"desc":"باقة ورد","amt":8.0,"qty":2,"payment":null,"category":"ورد وباقات"}}}}
+"بعت 3 باقات بـ 12 كاش" → {{"action":"register_sale","data":{{"desc":"باقة ورد","amt":12.0,"qty":3,"payment":"كاش 💵","category":"ورد وباقات"}}}}
+"بعت تاجين بـ 6 فيزا" → {{"action":"register_sale","data":{{"desc":"تاج","amt":6.0,"qty":2,"payment":"فيزا 💳","category":"تاجات"}}}}
+"بعت عطر من رف ريحان" → {{"action":"register_sale","data":{{"desc":"عطر","amt":0,"qty":1,"payment":null,"shelf":"ريحان"}}}}
+"بعت عطرين من رف ريحان" → {{"action":"register_sale","data":{{"desc":"عطر","amt":0,"qty":2,"payment":null,"shelf":"ريحان"}}}}
+"بعت ثلاث عطور من رف ريحان بـ 15 كاش" → {{"action":"register_sale","data":{{"desc":"عطر","amt":15.0,"qty":3,"payment":"كاش 💵","shelf":"ريحان"}}}}
+"بعت ساعة من رف فتحية بـ 8 كاش" → {{"action":"register_sale","data":{{"desc":"ساعة","amt":8.0,"qty":1,"payment":"كاش 💵","shelf":"فتحية"}}}}
+"بعت ساعتين من رف فتحية" → {{"action":"register_sale","data":{{"desc":"ساعة","amt":0,"qty":2,"payment":null,"shelf":"فتحية"}}}}
+"اشتريت ورد 12 ريال" → {{"action":"register_buy","data":{{"desc":"ورد","amt":12.0,"qty":1,"paid_by":null}}}}
 "دفعت الراتب" → {{"action":"register_expense","data":{{"expense_name":"راتب العامل","amt":null}}}}
 "كم مبيعات اليوم؟" → {{"action":"answer","data":{{}},"reply":"مبيعات اليوم..."}}
 "كيف الأرباح هذا الشهر؟" → {{"action":"report","data":{{"period":"month"}}}}

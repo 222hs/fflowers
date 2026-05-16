@@ -958,6 +958,7 @@ def webhook():
         if action == "register_sale":
             desc  = data.get("desc","مبيعة")
             amt   = float(data.get("amt") or 0)
+            qty   = max(1, int(data.get("qty") or 1))
             pay   = data.get("payment")
             cat   = data.get("category") or detect_category(text)
             shelf_id_detected = None
@@ -974,26 +975,30 @@ def webhook():
                 prod_kw = desc.split()[0] if desc else ""
                 prod = db_one("SELECT * FROM shelf_products WHERE shelf_id=? AND name LIKE ? AND qty>0",
                               (shelf_id_detected, f"%{prod_kw}%"))
-                if prod: amt = prod["price"]
+                if prod: amt = prod["price"] * qty
             if not amt or amt<=0:
-                pending[chat]={"waiting":"sale_amt","desc":desc,"shelf_id":shelf_id_detected}
-                tg(chat,f"🌸 <b>{desc}</b>\nكم المبلغ؟ أرسل الرقم فقط:")
+                pending[chat]={"waiting":"sale_amt","desc":desc,"qty":qty,"shelf_id":shelf_id_detected}
+                tg(chat,f"🌸 <b>{desc}</b>" + (f" × {qty}" if qty>1 else "") + "\nكم المبلغ الإجمالي؟ أرسل الرقم فقط:")
                 return "ok"
-            db_run("INSERT INTO entries (type,desc,amt,date,month,payment_method,category,shelf_id) VALUES (?,?,?,?,?,?,?,?)",
-                   ("s",desc,amt,date,month,pay,cat,shelf_id_detected))
+            unit_price = round(amt / qty, 3)
+            cat_line = f"\n🏷️ {cat}" if cat else ""
+            shelf_line = f"\n🗄️ رف {shelf_name}" if shelf_name else ""
+            # تسجيل كل قطعة بسجل منفصل
+            for _ in range(qty):
+                db_run("INSERT INTO entries (type,desc,amt,date,month,payment_method,category,shelf_id) VALUES (?,?,?,?,?,?,?,?)",
+                       ("s",desc,unit_price,date,month,pay,cat,shelf_id_detected))
             # تحديث كمية المنتج في الرف
             if shelf_id_detected and desc:
                 prod_kw = desc.split()[0] if desc else ""
                 prod = db_one("SELECT * FROM shelf_products WHERE shelf_id=? AND name LIKE ? AND qty>0",
                               (shelf_id_detected, f"%{prod_kw}%"))
-                if prod: db_run("UPDATE shelf_products SET qty=qty-1 WHERE id=? AND qty>0",(prod["id"],))
-            cat_line = f"\n🏷️ {cat}" if cat else ""
-            shelf_line = f"\n🗄️ رف {shelf_name}" if shelf_name else ""
+                if prod: db_run("UPDATE shelf_products SET qty=MAX(0,qty-?) WHERE id=?",(qty, prod["id"]))
+            qty_line = f" × {qty} = {fmt_omr(amt)}" if qty > 1 else f" = {fmt_omr(amt)}"
             if pay:
-                tg(chat,f"✅ <b>مبيعة مسجلة!</b>\n🌸 {desc}\n💰 {fmt_omr(amt)} — {pay}{cat_line}{shelf_line}")
+                tg(chat,f"✅ <b>{'مبيعات' if qty>1 else 'مبيعة'} مسجلة!</b>\n🌸 {qty}× {desc}\n💰 {fmt_omr(unit_price)} للقطعة{qty_line} — {pay}{cat_line}{shelf_line}")
             else:
-                pending[chat]={"waiting":"sale_payment","shelf_id":shelf_id_detected,"shelf_name":shelf_name}
-                tg_buttons(chat,f"🌸 <b>مبيعة {fmt_omr(amt)}</b>\n📝 {desc}{cat_line}{shelf_line}\n\n💳 طريقة الدفع؟",
+                pending[chat]={"waiting":"sale_payment","shelf_id":shelf_id_detected,"shelf_name":shelf_name,"qty":qty,"desc":desc,"unit_price":unit_price,"cat_line":cat_line}
+                tg_buttons(chat,f"🌸 <b>{'مبيعات' if qty>1 else 'مبيعة'} {fmt_omr(unit_price)}{'×'+str(qty) if qty>1 else ''}</b>\n📝 {qty}× {desc}{cat_line}{shelf_line}\n\n💳 طريقة الدفع؟",
                     [[{"label":"💵 كاش","data":"pay:كاش 💵"},{"label":"💳 فيزا","data":"pay:فيزا 💳"},{"label":"🏦 تحويل","data":"pay:تحويل 🏦"}]])
             return "ok"
 
@@ -1050,9 +1055,10 @@ def webhook():
 
         # مبيعة
         if etype=="s":
+            qty = max(1, int(parsed.get("qty") or detect_qty_from_text(text)))
             if not amt or amt<=0:
-                pending[chat]={"waiting":"sale_amt","desc":desc}
-                tg(chat,f"🌸 <b>{desc}</b>\nكم المبلغ؟ أرسل الرقم فقط:")
+                pending[chat]={"waiting":"sale_amt","desc":desc,"qty":qty}
+                tg(chat,f"🌸 <b>{desc}</b>" + (f" × {qty}" if qty>1 else "") + "\nكم المبلغ الإجمالي؟ أرسل الرقم فقط:")
                 return "ok"
             cat = parsed.get("category") or detect_category(text) or detect_category(desc)
             pay = parsed.get("payment")
@@ -1067,18 +1073,20 @@ def webhook():
                     if sname in text:
                         shelf = db_one("SELECT id FROM shelves WHERE name=?", (sname,))
                         if shelf: shelf_id_detected = shelf["id"]; break
-            db_run("INSERT INTO entries (type,desc,amt,date,month,payment_method,category,shelf_id) VALUES (?,?,?,?,?,?,?,?)",
-                   ("s",desc,amt,date,month,pay,cat,shelf_id_detected))
+            unit_price = round(amt / qty, 3)
+            cat_line = f"\n🏷️ {cat}" if cat else ""
+            for _ in range(qty):
+                db_run("INSERT INTO entries (type,desc,amt,date,month,payment_method,category,shelf_id) VALUES (?,?,?,?,?,?,?,?)",
+                       ("s",desc,unit_price,date,month,pay,cat,shelf_id_detected))
             if shelf_id_detected and desc:
                 prod=db_one("SELECT * FROM shelf_products WHERE shelf_id=? AND name LIKE ? AND qty>0",
                            (shelf_id_detected,f"%{desc.split()[0]}%"))
-                if prod: db_run("UPDATE shelf_products SET qty=qty-1 WHERE id=? AND qty>0",(prod["id"],))
-            cat_line = f"\n🏷️ {cat}" if cat else ""
+                if prod: db_run("UPDATE shelf_products SET qty=MAX(0,qty-?) WHERE id=?",(qty, prod["id"]))
             if pay:
-                tg(chat, f"✅ <b>مبيعة مسجلة!</b>\n🌸 {desc}\n💰 {fmt_omr(amt)} — {pay}{cat_line}")
+                tg(chat, f"✅ <b>{'مبيعات' if qty>1 else 'مبيعة'} مسجلة!</b>\n🌸 {qty}× {desc}\n💰 {fmt_omr(unit_price)} للقطعة = {fmt_omr(amt)} — {pay}{cat_line}")
             else:
-                pending[chat]={"waiting":"sale_payment"}
-                tg_buttons(chat,f"🌸 <b>مبيعة {fmt_omr(amt)}</b>\n📝 {desc}{cat_line}\n\n💳 طريقة الدفع؟",
+                pending[chat]={"waiting":"sale_payment","qty":qty,"desc":desc,"unit_price":unit_price,"cat_line":cat_line}
+                tg_buttons(chat,f"🌸 <b>{'مبيعات' if qty>1 else 'مبيعة'} {fmt_omr(unit_price)}{'×'+str(qty) if qty>1 else ''}</b>\n📝 {qty}× {desc}{cat_line}\n\n💳 طريقة الدفع؟",
                     [[{"label":"💵 كاش","data":"pay:كاش 💵"},{"label":"💳 فيزا","data":"pay:فيزا 💳"},{"label":"🏦 تحويل","data":"pay:تحويل 🏦"}]])
             return "ok"
     else:
