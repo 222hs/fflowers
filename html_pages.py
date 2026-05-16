@@ -106,27 +106,62 @@ body{font-family:'Tajawal',sans-serif;background:var(--bg);color:var(--text);
 #app{position:relative;z-index:1;min-height:100vh;display:flex;flex-direction:column;}
 
 /* ══════════════════════════════════════════
-   HEADER — Mobile First
+   HEADER — فاخر ومتناسق
 ══════════════════════════════════════════ */
 header{
-  background:var(--nav-bg);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);
+  background:var(--nav-bg);backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px);
   border-bottom:1px solid var(--border);position:sticky;top:0;z-index:100;
   transition:background .4s;
+  box-shadow:0 2px 20px var(--shadow);
 }
 .header-top{
   display:flex;align-items:center;justify-content:space-between;
-  padding:10px 14px;height:56px;
+  padding:9px 14px;min-height:58px;
 }
-.brand{display:flex;align-items:center;gap:9px;}
+.brand{display:flex;align-items:center;gap:10px;}
 .emblem{
-  width:36px;height:36px;background:linear-gradient(135deg,var(--accent),var(--accent2));
-  border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:17px;
-  box-shadow:0 3px 12px var(--accent-glow);animation:glow 3s ease-in-out infinite;flex-shrink:0;
+  width:40px;height:40px;
+  background:linear-gradient(135deg,var(--accent),var(--accent2));
+  border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:19px;
+  box-shadow:0 4px 14px var(--accent-glow);
+  animation:glow 3s ease-in-out infinite;flex-shrink:0;
+  position:relative;overflow:hidden;
 }
-@keyframes glow{0%,100%{box-shadow:0 3px 12px var(--accent-glow);}50%{box-shadow:0 3px 24px var(--accent-glow);}}
-.bname{font-family:'Playfair Display',serif;font-size:17px;font-weight:700;color:var(--accent2);}
-.bsub{font-size:11px;color:var(--text3);display:none;}
-.header-actions{display:flex;align-items:center;gap:7px;}
+.emblem::after{
+  content:'';position:absolute;inset:0;
+  background:linear-gradient(135deg,rgba(255,255,255,0.25),transparent);
+  border-radius:inherit;
+}
+@keyframes glow{0%,100%{box-shadow:0 4px 14px var(--accent-glow);}50%{box-shadow:0 4px 26px var(--accent-glow),0 0 40px var(--accent-glow);}}
+.brand-text{display:flex;flex-direction:column;gap:1px;}
+.bname{font-family:'Playfair Display',serif;font-size:17px;font-weight:700;color:var(--accent2);line-height:1.2;}
+.bsub{font-size:10px;color:var(--text3);display:block;letter-spacing:0.5px;font-weight:500;}
+.header-actions{display:flex;align-items:center;gap:6px;}
+
+/* ── شريط الأخبار المتحرك ── */
+.ticker-wrap{
+  overflow:hidden;background:linear-gradient(90deg,var(--accent),var(--accent2));
+  padding:6px 0;position:relative;border-top:1px solid rgba(255,255,255,0.15);
+}
+.ticker-wrap::before,.ticker-wrap::after{
+  content:'';position:absolute;top:0;bottom:0;width:40px;z-index:2;pointer-events:none;
+}
+.ticker-wrap::before{right:0;background:linear-gradient(to left,var(--accent2),transparent);}
+.ticker-wrap::after{left:0;background:linear-gradient(to right,var(--accent),transparent);}
+.ticker-track{
+  display:flex;white-space:nowrap;
+  animation:ticker-scroll 40s linear infinite;
+  width:max-content;
+}
+.ticker-track:hover{animation-play-state:paused;}
+.ticker-text{
+  font-family:'Tajawal',sans-serif;font-size:13px;font-weight:600;
+  color:rgba(255,255,255,0.95);padding:0 30px;letter-spacing:0.3px;
+}
+@keyframes ticker-scroll{
+  0%{transform:translateX(0);}
+  100%{transform:translateX(-50%);}
+}
 
 /* Theme picker */
 .theme-btn{
@@ -496,9 +531,11 @@ input[type="date"]{width:100%;padding:10px 12px;border:1px solid var(--border);b
    DESKTOP ENHANCEMENTS
 ══════════════════════════════════════════ */
 @media(min-width:768px){
-  .header-top{padding:10px 24px;height:66px;}
-  .bsub{display:block;}
+  .header-top{padding:10px 24px;min-height:66px;}
+  .emblem{width:44px;height:44px;font-size:21px;border-radius:14px;}
   .bname{font-size:19px;}
+  .bsub{font-size:11px;}
+  .ticker-text{font-size:14px;}
   .page{padding:24px 20px 60px;max-width:1100px;margin:0 auto;}
   .kpi-row.row2{grid-template-columns:1fr 1fr;}
   .kpi-row.row3{grid-template-columns:repeat(3,1fr);}
@@ -575,16 +612,15 @@ input[type="date"]{width:100%;padding:10px 12px;border:1px solid var(--border);b
   <div class="header-top">
     <div class="brand">
       <div class="emblem">🌹</div>
-      <div>
+      <div class="brand-text">
         <div class="bname">فيروز فلورز</div>
-        <div class="bsub">إدارة المبيعات</div>
+        <div class="bsub">✦ إدارة المبيعات ✦</div>
       </div>
     </div>
     <div class="header-actions">
       <div id="flowerPill" onclick="toggleFlowerPanel()">
         <span>🌸</span>
         <span id="flowerCount">0</span>
-        <span class="exp-badge">تجريبي</span>
       </div>
       <div class="mpill">
         <label>📅</label>
@@ -649,6 +685,14 @@ input[type="date"]{width:100%;padding:10px 12px;border:1px solid var(--border);b
       <input type="file" id="bgFileInput" accept="image/*" style="display:none;" onchange="uploadBackground(event)"/>
       <button class="login-btn" onclick="document.getElementById('bgFileInput').click()" style="width:100%;margin-bottom:8px;background:linear-gradient(135deg,#d4a843,#c49030);color:#1a1208;border:none;padding:12px;border-radius:8px;font-family:'Tajawal',sans-serif;font-weight:700;cursor:pointer;">📁 اختر صورة</button>
       <div id="bgStatus" style="font-size:12px;text-align:center;margin-top:8px;color:rgba(255,255,255,0.7);"></div>
+    </div>
+  </div>
+
+  <!-- شريط الأخبار المتحرك -->
+  <div class="ticker-wrap" id="tickerWrap" style="display:none;">
+    <div class="ticker-track" id="tickerTrack">
+      <span class="ticker-text" id="tickerText1">🌸 جاري التحميل...</span>
+      <span class="ticker-text" id="tickerText2">🌸 جاري التحميل...</span>
     </div>
   </div>
 
@@ -2113,15 +2157,33 @@ function toggleLang(){
 // Init language
 setLang(lang);
 
+/* ── شريط الأخبار ── */
+async function loadTicker(){
+  try{
+    const r = await api('/api/ticker');
+    if(!r || !r.text) return;
+    const txt = r.text;
+    // كرّر النص ضعفين لضمان انسيابية اللف
+    document.getElementById('tickerText1').textContent = txt;
+    document.getElementById('tickerText2').textContent = txt;
+    // اضبط مدة الحركة حسب طول النص
+    const duration = Math.max(25, txt.length * 0.38);
+    document.getElementById('tickerTrack').style.animationDuration = duration + 's';
+    document.getElementById('tickerWrap').style.display = 'block';
+  }catch(e){ console.log('ticker error',e); }
+}
+
 // تحميل البيانات فور اكتمال الصفحة
 document.addEventListener('DOMContentLoaded', function(){
   load();
   loadFlowerInvPage();
+  loadTicker();
 });
 // fallback لو DOMContentLoaded اطلع مبكر
 if(document.readyState === 'complete' || document.readyState === 'interactive'){
   load();
   loadFlowerInvPage();
+  loadTicker();
 }
 </script>
 </body>

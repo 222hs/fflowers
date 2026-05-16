@@ -195,6 +195,79 @@ def api_dashboard():
         "flowers":        {"flowers": flowers, "total": flowers_total}
     })
 
+@app.route("/api/ticker")
+@auth
+def api_ticker():
+    today = datetime.now().strftime("%Y-%m-%d")
+    cached      = db_one("SELECT value FROM app_settings WHERE key='ticker_text'")
+    cached_date = db_one("SELECT value FROM app_settings WHERE key='ticker_date'")
+    if cached and cached_date and cached_date.get("value") == today:
+        return jsonify({"text": cached.get("value"), "fresh": False})
+
+    today_str = datetime.now().strftime("%d/%m/%Y")
+    sales, _, _ = get_day_data(today_str)
+    total_sales  = sum(e["amt"] for e in sales)
+    sales_count  = len(sales)
+
+    month_num = datetime.now().month
+    occasions = {
+        1:"🎉 رأس السنة — باقات احتفالية فاخرة",
+        2:"💕 عيد الحب — باقات رومانسية خاصة",
+        3:"🌸 ربيع — ألوان طازجة وزاهية",
+        4:"🌙 شهر رمضان — تزيينات وبخور فاخر",
+        5:"👩 عيد الأم — باقات ورد ومفاجآت",
+        6:"☀️ الصيف — ورود نضرة وعطور",
+        7:"🏖️ صيف — ترتيبات هدايا وسفر",
+        8:"🌴 آخر الصيف — عروض خاصة",
+        9:"🍂 خريف — ألوان دافئة وورود مجففة",
+        10:"✨ موسم الأعياد — ترتيبات احتفالية",
+        11:"🎄 أعياد — باقات هدايا فاخرة",
+        12:"🎅 نهاية السنة — احتفالات وورود",
+    }
+    occasion_tip = occasions.get(month_num, "💐 باقات خاصة بانتظاركم")
+
+    fallback = (f"🌸 مبيعات اليوم: {fmt_omr(total_sales)} ({sales_count} عملية)"
+                f" ✦ 💡 {occasion_tip} ✦ ✨ شكراً لزيارتكم فيروز فلورز")
+
+    if GROQ_KEY:
+        try:
+            system_p = f"""أنت مساعد ذكي لمحل فيروز فلورز للزهور في عُمان.
+اليوم: {today_str} | مبيعات اليوم: {fmt_omr(total_sales)} ({sales_count} عملية)
+المناسبة القادمة: {occasion_tip}
+
+مهمتك: اكتب نص قصير لشريط إخباري متحرك (ticker) يعرض في أعلى التطبيق.
+
+الشروط الصارمة:
+- بالعربية فقط، أسلوب احترافي ودافئ
+- 3 أجزاء منفصلة بـ ✦
+- كل جزء 6-9 كلمات بحد أقصى
+- الجزء الأول: ملخص مبيعات اليوم بأرقام حقيقية
+- الجزء الثاني: نصيحة ذكية مرتبطة بالمناسبة القادمة لزيادة المبيعات
+- الجزء الثالث: كلمة تحفيزية أو دعوة للتواصل
+- استخدم emoji في بداية كل جزء
+- لا تضع أي علامات تنصيص أو أرقام أو قوائم
+
+مثال:
+🌸 مبيعات اليوم {fmt_omr(total_sales)} رائعة ✦ 💡 {occasion_tip} لزيادة مبيعاتك ✦ 💐 دائماً نحن هنا لكم"""
+
+            res = requests.post("https://api.groq.com/openai/v1/chat/completions",
+                headers={"Authorization": f"Bearer {GROQ_KEY}", "Content-Type": "application/json"},
+                json={"model":"llama-3.3-70b-versatile",
+                      "messages":[{"role":"system","content":system_p},
+                                  {"role":"user","content":"اكتب النص الآن"}],
+                      "max_tokens":180,"temperature":0.8}, timeout=10)
+            ticker_text = res.json()["choices"][0]["message"]["content"].strip()
+            # تنظيف لو رجع بين quotes
+            ticker_text = ticker_text.strip('"').strip("'")
+        except:
+            ticker_text = fallback
+    else:
+        ticker_text = fallback
+
+    db_run("INSERT OR REPLACE INTO app_settings (key,value) VALUES (?,?)", ("ticker_text", ticker_text))
+    db_run("INSERT OR REPLACE INTO app_settings (key,value) VALUES (?,?)", ("ticker_date", today))
+    return jsonify({"text": ticker_text, "fresh": True})
+
 @app.route("/api/entries")
 @worker_auth
 def api_get():
