@@ -37,8 +37,8 @@ def _insights_scheduler():
             from datetime import timezone
             oman_offset = timedelta(hours=4)
             now_oman = datetime.now(timezone.utc) + oman_offset
-            # إذا الساعة 22:00 بتوقيت عُمان → امسح الكاش لإجبار التجديد
-            if now_oman.hour == 22 and now_oman.minute < 10:
+            # إذا الساعة 23:40 بتوقيت عُمان → امسح الكاش لإجبار التجديد
+            if now_oman.hour == 23 and 40 <= now_oman.minute < 50:
                 from database import db_run
                 db_run("DELETE FROM app_settings WHERE key IN ('insights_text','insights_date')")
             # افحص كل 5 دقائق
