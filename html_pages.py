@@ -129,15 +129,17 @@ header{
 }
 /* الصف العلوي — اسم المحل */
 .header-brand-row{
-  display:flex;align-items:center;justify-content:center;
-  padding:10px 14px 6px;gap:10px;
+  display:flex;align-items:center;justify-content:space-between;
+  padding:10px 14px 8px;gap:6px;
   border-bottom:1px solid var(--border);
-  position:relative;
 }
+.header-corner{display:flex;align-items:center;gap:5px;flex-shrink:0;min-width:50px;}
+.header-corner-r{display:flex;align-items:center;gap:6px;flex-shrink:0;min-width:50px;justify-content:flex-end;}
+.brand-center{display:flex;align-items:center;gap:8px;flex:1;justify-content:center;}
 .emblem{
-  width:36px;height:36px;
+  width:34px;height:34px;
   background:linear-gradient(135deg,var(--accent),var(--accent2));
-  border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:18px;
+  border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:17px;
   box-shadow:0 3px 10px var(--accent-glow);flex-shrink:0;
   position:relative;overflow:hidden;
 }
@@ -148,30 +150,28 @@ header{
 }
 @keyframes glow{0%,100%{box-shadow:0 6px 28px var(--accent-glow),0 2px 8px var(--shadow);}
   50%{box-shadow:0 6px 36px var(--accent-glow),0 0 50px var(--accent-glow),0 2px 8px var(--shadow);}}
-.brand-center{display:flex;flex-direction:column;align-items:center;gap:1px;}
-.bname{font-family:'Playfair Display',serif;font-size:18px;font-weight:700;color:var(--accent2);line-height:1.2;letter-spacing:.3px;}
-.bsub{font-size:9px;color:var(--text3);letter-spacing:2px;font-weight:600;text-transform:uppercase;}
-.header-corner{position:absolute;left:14px;top:50%;transform:translateY(-50%);display:flex;gap:5px;align-items:center;}
-.header-corner-r{position:absolute;right:14px;top:50%;transform:translateY(-50%);display:flex;gap:6px;align-items:center;}
+.brand-titles{display:flex;flex-direction:column;align-items:center;}
+.bname{font-family:'Playfair Display',serif;font-size:17px;font-weight:700;color:var(--accent2);line-height:1.2;letter-spacing:.3px;}
+.bsub{font-size:9px;color:var(--text3);letter-spacing:1.5px;font-weight:600;text-transform:uppercase;}
 /* مؤشرات حالة الـ AI */
-.ai-dots{display:flex;gap:4px;align-items:center;}
+.ai-dots{display:flex;gap:5px;align-items:center;}
 .ai-dot{
-  width:9px;height:9px;border-radius:50%;
-  background:rgba(255,255,255,0.3);border:1.5px solid rgba(255,255,255,0.5);
-  transition:all .4s;position:relative;cursor:default;flex-shrink:0;
+  width:10px;height:10px;border-radius:50%;
+  background:#aaa;border:2px solid #888;
+  transition:all .5s;position:relative;cursor:default;flex-shrink:0;
 }
 .ai-dot.ok{
-  background:#4caf50;border-color:#81c784;
-  box-shadow:0 0 7px rgba(76,175,80,0.9);
+  background:#22c55e;border-color:#16a34a;
+  box-shadow:0 0 8px rgba(34,197,94,1);
 }
 .ai-dot.ok::after{
-  content:'';position:absolute;inset:-3px;border-radius:50%;
-  border:1.5px solid rgba(76,175,80,0.5);
+  content:'';position:absolute;inset:-4px;border-radius:50%;
+  border:2px solid rgba(34,197,94,0.4);
   animation:dot-pulse 1.8s ease-in-out infinite;
 }
-.ai-dot.error{background:#ef5350;border-color:#e57373;box-shadow:0 0 5px rgba(239,83,80,0.7);}
-.ai-dot.no_key{background:rgba(255,255,255,0.15);border-color:rgba(255,255,255,0.2);}
-@keyframes dot-pulse{0%,100%{transform:scale(1);opacity:0.8;}50%{transform:scale(1.6);opacity:0;}}
+.ai-dot.error{background:#ef4444;border-color:#dc2626;box-shadow:0 0 6px rgba(239,68,68,0.8);}
+.ai-dot.no_key{background:#d1d5db;border-color:#9ca3af;}
+@keyframes dot-pulse{0%,100%{transform:scale(1);opacity:0.7;}50%{transform:scale(1.7);opacity:0;}}
 /* الصف الثاني — الأدوات */
 .header-tools-row{
   display:flex;align-items:center;justify-content:space-between;
@@ -690,10 +690,12 @@ input[type="date"]{width:100%;padding:10px 12px;border:1px solid var(--border);b
             <span id="flowerCount">0</span>
           </div>
         </div>
-        <div class="emblem">🌹</div>
         <div class="brand-center">
-          <div class="bname">فيروز فلورز</div>
-          <div class="bsub">إدارة المبيعات</div>
+          <div class="emblem">🌹</div>
+          <div class="brand-titles">
+            <div class="bname">فيروز فلورز</div>
+            <div class="bsub">إدارة المبيعات</div>
+          </div>
         </div>
         <div class="header-corner-r">
           <div class="ai-dots" id="aiDots" title="حالة الذكاء الاصطناعي">
@@ -846,11 +848,17 @@ input[type="date"]{width:100%;padding:10px 12px;border:1px solid var(--border);b
       <span class="insights-header-badge" id="insightsBadge">جاري التحليل...</span>
     </div>
     <div class="insights-sections" id="insightsSections">
-      <div class="insights-loading">
-        <div class="insights-skeleton"></div>
-        <div class="insights-skeleton w90"></div>
-        <div class="insights-skeleton w80"></div>
-        <div class="insights-skeleton w60"></div>
+      <div class="insights-section">
+        <div class="insights-section-label"><span>📊 تحليل أداء اليوم</span></div>
+        <div class="insights-text" style="color:var(--text3);font-style:italic;">⏳ جاري تحليل مبيعات اليوم...</div>
+      </div>
+      <div class="insights-section">
+        <div class="insights-section-label"><span>💡 نصائح لزيادة المبيعات</span></div>
+        <div class="insights-text" style="color:var(--text3);font-style:italic;">⏳ جاري تحضير النصائح المخصصة...</div>
+      </div>
+      <div class="insights-section">
+        <div class="insights-section-label"><span>🗓️ المناسبات القادمة في عُمان</span></div>
+        <div class="insights-text" style="color:var(--text3);font-style:italic;">⏳ جاري البحث عن المناسبات القريبة...</div>
       </div>
     </div>
   </div>
@@ -2256,39 +2264,46 @@ setLang(lang);
 
 /* ── بطاقة التحليل الذكي ── */
 function renderInsights(text, badge){
-  const parts = text.split('||');
-  const labels = [
-    {icon:'📊', title:'تحليل أداء اليوم'},
-    {icon:'💡', title:'نصائح لزيادة المبيعات'},
-    {icon:'🗓️', title:'المناسبات القادمة في عُمان'},
-  ];
-  let html = '';
-  parts.forEach((part, i)=>{
-    const lbl = labels[i] || {icon:'✨', title:'ملاحظات'};
-    html += `<div class="insights-section">
-      <div class="insights-section-label"><span>${lbl.icon} ${lbl.title}</span></div>
-      <div class="insights-text">${part.trim()}</div>
-    </div>`;
-  });
-  document.getElementById('insightsSections').innerHTML = html;
-  document.getElementById('insightsBadge').textContent = badge || 'اليوم';
+  try{
+    const sec = document.getElementById('insightsSections');
+    if(!sec) return;
+    const parts = text.split('||');
+    const labels = [
+      {icon:'📊', title:'تحليل أداء اليوم'},
+      {icon:'💡', title:'نصائح لزيادة المبيعات'},
+      {icon:'🗓️', title:'المناسبات القادمة في عُمان'},
+    ];
+    let html = '';
+    parts.forEach((part, i)=>{
+      const lbl = labels[i] || {icon:'✨', title:'ملاحظات'};
+      html += '<div class="insights-section">'
+        + '<div class="insights-section-label"><span>' + lbl.icon + ' ' + lbl.title + '</span></div>'
+        + '<div class="insights-text">' + part.trim() + '</div>'
+        + '</div>';
+    });
+    sec.innerHTML = html;
+    const b = document.getElementById('insightsBadge');
+    if(b) b.textContent = badge || 'اليوم';
+  }catch(err){ console.error('renderInsights error:', err); }
 }
 
 async function loadInsights(){
-  // عرض نص انتظار فوري
-  renderInsights(
-    'جاري تحليل أداء اليوم ومقارنته بالأمس... ⏳||جاري إعداد نصائح مخصصة لك بالذكاء الاصطناعي... 💡||جاري البحث عن المناسبات القادمة في سلطنة عُمان... 🗓️',
-    'جاري...'
-  );
   try{
-    const r = await api('/api/insights');
-    if(r && r.text){
-      renderInsights(r.text, r.fresh ? 'جديد ✨' : 'اليوم');
+    const r = await fetch('/api/insights');
+    const data = await r.json();
+    if(data && data.text && data.text.indexOf('||') !== -1){
+      renderInsights(data.text, data.fresh ? 'جديد ✨' : 'اليوم');
+    } else if(data && data.text){
+      // نص بدون فاصل — نعرضه كقسم واحد
+      renderInsights(data.text + '||نصائح: حافظ على التواصل مع عملائك وقدّم عروضاً خاصة في المناسبات.||راجع التقويم الرسمي لسلطنة عُمان للمناسبات القادمة واستغلها لزيادة مبيعات الورد.', data.fresh ? 'جديد ✨' : 'اليوم');
     }
   }catch(e){
+    console.error('loadInsights error:', e);
     renderInsights(
-      'تعذّر الاتصال بالذكاء الاصطناعي حالياً ⚠️||تأكد من إعدادات المفاتيح في لوحة Render||سيحاول مجدداً عند التحديث التالي',
-      'خطأ'
+      'تعذّر الاتصال بالذكاء الاصطناعي حالياً ⚠️ — تأكد من إضافة مفاتيح API في إعدادات Render.'
+      + '||💡 نصيحة: أضف مفتاح Groq أو Gemini مجاناً من groq.com أو aistudio.google.com'
+      + '||🗓️ تأكد من متابعة المناسبات الرسمية في سلطنة عُمان لزيادة مبيعاتك.',
+      'تحقق من المفاتيح'
     );
   }
 }
