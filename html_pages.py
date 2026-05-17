@@ -2289,21 +2289,27 @@ function renderInsights(text, badge){
 
 async function loadInsights(){
   try{
-    const r = await fetch('/api/insights');
+    const r = await fetch('/api/insights', {credentials:'include'});
+    if(r.status === 302 || r.status === 401 || r.redirected){
+      renderInsights('⚠️ انتهت جلسة الدخول||أعد تحميل الصفحة أو سجّل دخول من جديد||—', 'خطأ');
+      return;
+    }
+    if(!r.ok){
+      renderInsights('⚠️ خطأ في الخادم ('+r.status+')||تحقق من سجلات Render لمعرفة السبب||—', 'خطأ '+r.status);
+      return;
+    }
     const data = await r.json();
-    if(data && data.text && data.text.indexOf('||') !== -1){
-      renderInsights(data.text, data.fresh ? 'جديد ✨' : 'اليوم');
-    } else if(data && data.text){
-      // نص بدون فاصل — نعرضه كقسم واحد
-      renderInsights(data.text + '||نصائح: حافظ على التواصل مع عملائك وقدّم عروضاً خاصة في المناسبات.||راجع التقويم الرسمي لسلطنة عُمان للمناسبات القادمة واستغلها لزيادة مبيعات الورد.', data.fresh ? 'جديد ✨' : 'اليوم');
+    if(data && data.text){
+      const txt = data.text.indexOf('||') !== -1 ? data.text
+        : data.text + '||💡 حافظ على التواصل مع عملائك وقدّم عروضاً خاصة في المناسبات.||🗓️ راجع التقويم الرسمي لسلطنة عُمان للمناسبات القادمة.';
+      renderInsights(txt, data.fresh ? 'جديد ✨' : 'اليوم');
     }
   }catch(e){
-    console.error('loadInsights error:', e);
     renderInsights(
-      'تعذّر الاتصال بالذكاء الاصطناعي حالياً ⚠️ — تأكد من إضافة مفاتيح API في إعدادات Render.'
-      + '||💡 نصيحة: أضف مفتاح Groq أو Gemini مجاناً من groq.com أو aistudio.google.com'
-      + '||🗓️ تأكد من متابعة المناسبات الرسمية في سلطنة عُمان لزيادة مبيعاتك.',
-      'تحقق من المفاتيح'
+      '⚠️ تعذّر الاتصال بالخادم: ' + e.message
+      + '||💡 أضف مفتاح Groq أو Gemini مجاناً في إعدادات Render'
+      + '||🗓️ بعد إضافة المفتاح أعد تحميل الصفحة',
+      'خطأ'
     );
   }
 }

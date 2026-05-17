@@ -260,9 +260,8 @@ def call_ai(prompt, max_tokens=900, temperature=0.85):
 
 
 @app.route("/api/ai-status")
-@auth
 def api_ai_status():
-    """يرجع حالة كل مفتاح بدون ping — سريع فوري"""
+    """حالة المفاتيح — بدون auth لأنها معلومات غير حساسة"""
     results = {
         "groq":       "ok" if GROQ_KEY else "no_key",
         "gemini":     "ok" if GEMINI_KEY else "no_key",
@@ -270,7 +269,9 @@ def api_ai_status():
         "openai":     "ok" if OPENAI_KEY else "no_key",
     }
     results["any_ok"] = any(v == "ok" for v in results.values())
-    return jsonify(results)
+    r = jsonify(results)
+    r.headers["Cache-Control"] = "no-cache"
+    return r
 
 
 @app.route("/api/insights")
