@@ -156,18 +156,22 @@ header{
 /* مؤشرات حالة الـ AI */
 .ai-dots{display:flex;gap:4px;align-items:center;}
 .ai-dot{
-  width:8px;height:8px;border-radius:50%;
-  background:#ccc;transition:background .4s;
-  position:relative;cursor:default;
+  width:9px;height:9px;border-radius:50%;
+  background:rgba(255,255,255,0.3);border:1.5px solid rgba(255,255,255,0.5);
+  transition:all .4s;position:relative;cursor:default;flex-shrink:0;
 }
-.ai-dot.ok{background:#4caf50;box-shadow:0 0 6px rgba(76,175,80,0.7);}
+.ai-dot.ok{
+  background:#4caf50;border-color:#81c784;
+  box-shadow:0 0 7px rgba(76,175,80,0.9);
+}
 .ai-dot.ok::after{
-  content:'';position:absolute;inset:-2px;border-radius:50%;
-  border:1px solid rgba(76,175,80,0.4);animation:dot-pulse 2s ease-in-out infinite;
+  content:'';position:absolute;inset:-3px;border-radius:50%;
+  border:1.5px solid rgba(76,175,80,0.5);
+  animation:dot-pulse 1.8s ease-in-out infinite;
 }
-.ai-dot.error{background:#ef5350;}
-.ai-dot.no_key{background:#bdbdbd;opacity:0.5;}
-@keyframes dot-pulse{0%,100%{transform:scale(1);opacity:1;}50%{transform:scale(1.4);opacity:0.5;}}
+.ai-dot.error{background:#ef5350;border-color:#e57373;box-shadow:0 0 5px rgba(239,83,80,0.7);}
+.ai-dot.no_key{background:rgba(255,255,255,0.15);border-color:rgba(255,255,255,0.2);}
+@keyframes dot-pulse{0%,100%{transform:scale(1);opacity:0.8;}50%{transform:scale(1.6);opacity:0;}}
 /* الصف الثاني — الأدوات */
 .header-tools-row{
   display:flex;align-items:center;justify-content:space-between;
@@ -693,9 +697,10 @@ input[type="date"]{width:100%;padding:10px 12px;border:1px solid var(--border);b
         </div>
         <div class="header-corner-r">
           <div class="ai-dots" id="aiDots" title="حالة الذكاء الاصطناعي">
-            <div class="ai-dot" id="dot-groq" title="Groq"></div>
-            <div class="ai-dot" id="dot-openrouter" title="OpenRouter"></div>
-            <div class="ai-dot" id="dot-openai" title="OpenAI"></div>
+            <div class="ai-dot no_key" id="dot-groq" title="Groq"></div>
+            <div class="ai-dot no_key" id="dot-gemini" title="Gemini"></div>
+            <div class="ai-dot no_key" id="dot-openrouter" title="OpenRouter"></div>
+            <div class="ai-dot no_key" id="dot-openai" title="OpenAI"></div>
           </div>
           <a href="/logout" class="logout-btn" title="خروج">🔒</a>
         </div>
@@ -2292,9 +2297,9 @@ async function loadInsights(){
 async function loadAiStatus(){
   try{
     const r = await api('/api/ai-status');
-    ['groq','openrouter','openai'].forEach(name=>{
+    ['groq','gemini','openrouter','openai'].forEach(name=>{
       const dot = document.getElementById('dot-'+name);
-      if(dot){ dot.className = 'ai-dot ' + (r[name] || 'no_key'); }
+      if(dot) dot.className = 'ai-dot ' + (r[name] || 'no_key');
     });
   }catch(e){}
 }

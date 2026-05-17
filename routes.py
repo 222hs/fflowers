@@ -205,7 +205,7 @@ def api_dashboard():
     })
 
 def call_ai(prompt, max_tokens=900, temperature=0.85):
-    """يجرّب النماذج بالترتيب ويرجع النص أو None"""
+    """يجرّب النماذج بالترتيب: Groq → Gemini → OpenRouter → OpenAI"""
     msg = [{"role":"system","content":prompt}, {"role":"user","content":"اكتب التحليل الآن"}]
 
     # 1. Groq
@@ -219,7 +219,22 @@ def call_ai(prompt, max_tokens=900, temperature=0.85):
             if txt: return txt, "Groq"
         except: pass
 
-    # 2. OpenRouter (يدعم عشرات النماذج بمفتاح واحد)
+    # 2. Gemini
+    if GEMINI_KEY:
+        try:
+            gemini_body = {
+                "contents":[{"parts":[{"text": prompt + "\n\nاكتب التحليل الآن"}]}],
+                "generationConfig":{"maxOutputTokens":max_tokens,"temperature":temperature}
+            }
+            res = requests.post(
+                f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={GEMINI_KEY}",
+                headers={"Content-Type":"application/json"},
+                json=gemini_body, timeout=15)
+            txt = res.json()["candidates"][0]["content"]["parts"][0]["text"].strip()
+            if txt: return txt, "Gemini"
+        except: pass
+
+    # 3. OpenRouter
     if OPENROUTER_KEY:
         try:
             res = requests.post("https://openrouter.ai/api/v1/chat/completions",
@@ -230,7 +245,7 @@ def call_ai(prompt, max_tokens=900, temperature=0.85):
             if txt: return txt, "OpenRouter"
         except: pass
 
-    # 3. OpenAI
+    # 4. OpenAI
     if OPENAI_KEY:
         try:
             res = requests.post("https://api.openai.com/v1/chat/completions",
@@ -247,40 +262,13 @@ def call_ai(prompt, max_tokens=900, temperature=0.85):
 @app.route("/api/ai-status")
 @auth
 def api_ai_status():
-    """يتحقق من حالة كل نموذج — ping سريع"""
-    results = {}
-    ping_msg = [{"role":"user","content":"قل كلمة واحدة فقط: جاهز"}]
-
-    if GROQ_KEY:
-        try:
-            r = requests.post("https://api.groq.com/openai/v1/chat/completions",
-                headers={"Authorization": f"Bearer {GROQ_KEY}", "Content-Type":"application/json"},
-                json={"model":"llama-3.3-70b-versatile","messages":ping_msg,"max_tokens":5}, timeout=6)
-            results["groq"] = "ok" if r.status_code == 200 else "error"
-        except: results["groq"] = "error"
-    else:
-        results["groq"] = "no_key"
-
-    if OPENROUTER_KEY:
-        try:
-            r = requests.post("https://openrouter.ai/api/v1/chat/completions",
-                headers={"Authorization": f"Bearer {OPENROUTER_KEY}", "Content-Type":"application/json"},
-                json={"model":"meta-llama/llama-3.3-70b-instruct","messages":ping_msg,"max_tokens":5}, timeout=6)
-            results["openrouter"] = "ok" if r.status_code == 200 else "error"
-        except: results["openrouter"] = "error"
-    else:
-        results["openrouter"] = "no_key"
-
-    if OPENAI_KEY:
-        try:
-            r = requests.post("https://api.openai.com/v1/chat/completions",
-                headers={"Authorization": f"Bearer {OPENAI_KEY}", "Content-Type":"application/json"},
-                json={"model":"gpt-4o-mini","messages":ping_msg,"max_tokens":5}, timeout=6)
-            results["openai"] = "ok" if r.status_code == 200 else "error"
-        except: results["openai"] = "error"
-    else:
-        results["openai"] = "no_key"
-
+    """يرجع حالة كل مفتاح بدون ping — سريع فوري"""
+    results = {
+        "groq":       "ok" if GROQ_KEY else "no_key",
+        "gemini":     "ok" if GEMINI_KEY else "no_key",
+        "openrouter": "ok" if OPENROUTER_KEY else "no_key",
+        "openai":     "ok" if OPENAI_KEY else "no_key",
+    }
     results["any_ok"] = any(v == "ok" for v in results.values())
     return jsonify(results)
 
@@ -291,8 +279,10 @@ def api_insights():
     today = datetime.now().strftime("%Y-%m-%d")
     cached      = db_one("SELECT value FROM app_settings WHERE key='insights_text'")
     cached_date = db_one("SELECT value FROM app_settings WHERE key='insights_date'")
-    if cached and cached_date and cached_date.get("value") == today:
-        return jsonify({"text": cached.get("value"), "fresh": False})
+    # نستخدم الكاش فقط إذا كان من نفس اليوم ويحتوي على الفاصل ||
+    cached_val = cached.get("value","") if cached else ""
+    if cached_date and cached_date.get("value") == today and "||" in cached_val:
+        return jsonify({"text": cached_val, "fresh": False})
 
     now = datetime.now()
     today_str     = now.strftime("%d/%m/%Y")
