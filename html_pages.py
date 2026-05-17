@@ -1397,9 +1397,13 @@ function setFT(t){
   document.getElementById('form-s').style.display=t==='s'?'block':'none';
   document.getElementById('form-b').style.display=t==='b'?'block':'none';
 }
-document.getElementById('bPayer').addEventListener('change',function(){
-  document.getElementById('bOtherWrap').style.display=this.value==='أخرى'?'block':'none';
-});
+(function(){
+  const bPayer=document.getElementById('bPayer');
+  if(bPayer) bPayer.addEventListener('change',function(){
+    const w=document.getElementById('bOtherWrap');
+    if(w) w.style.display=this.value==='أخرى'?'block':'none';
+  });
+})();
 
 /* ── LOAD ── */
 function showSkeleton(){
@@ -1416,7 +1420,10 @@ function hideSkeleton(){
   document.querySelectorAll('.kpi-val').forEach(el=>{ el.style.opacity='1'; });
 }
 
+let _loading=false;
 async function load(){
+  if(_loading) return;        // منع الاستدعاء المزدوج
+  _loading=true;
   showSkeleton();
   try {
     const dash = await api(`/api/dashboard?month=${month}`);
@@ -1443,6 +1450,7 @@ async function load(){
     if(dash.flowers) document.getElementById('flowerCount').textContent = dash.flowers.total || 0;
     if(dash.shelves_summary) renderShelfSummaryCard(dash.shelves_summary, dash.shelf_sales||[]);
   } catch(e){ hideSkeleton(); console.error('load error', e); }
+  finally { _loading=false; }
 }
 
 // تحديث تلقائي كل 60 ثانية
@@ -2238,10 +2246,13 @@ function setLang(l){
 function t(key){ return T[lang][key] || T['ar'][key] || key; }
 
 function applyTranslations(){
-  // Nav tabs
-  document.getElementById('nt-home').textContent = t('home');
-  document.getElementById('nt-shelves').textContent = t('shelves');
-  document.getElementById('nt-reports').textContent = t('reports');
+  // Nav tabs (optional — might not exist)
+  const ntHome = document.getElementById('nt-home');
+  const ntShelves = document.getElementById('nt-shelves');
+  const ntReports = document.getElementById('nt-reports');
+  if(ntHome) ntHome.textContent = t('home');
+  if(ntShelves) ntShelves.textContent = t('shelves');
+  if(ntReports) ntReports.textContent = t('reports');
   // Section labels
   const labels = document.querySelectorAll('[data-t]');
   labels.forEach(el => { if(T[lang][el.dataset.t]) el.textContent = t(el.dataset.t); });
@@ -2327,10 +2338,11 @@ async function loadAiStatus(){
 
 // تحميل البيانات فور اكتمال الصفحة
 function initApp(){
-  load();
-  loadFlowerInvPage();
-  loadInsights();
-  loadAiStatus();
+  // كل استدعاء معزول حتى لا يمنع فشلُ واحد البقيةَ
+  try{ load(); }catch(e){ console.error('load init failed', e); }
+  try{ loadFlowerInvPage(); }catch(e){ console.error('loadFlowerInvPage failed', e); }
+  try{ loadInsights(); }catch(e){ console.error('loadInsights failed', e); }
+  try{ loadAiStatus(); }catch(e){ console.error('loadAiStatus failed', e); }
 }
 if(document.readyState === 'loading'){
   document.addEventListener('DOMContentLoaded', initApp);
