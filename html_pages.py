@@ -138,30 +138,50 @@ header{
 .bsub{font-size:10px;color:var(--text3);display:block;letter-spacing:0.5px;font-weight:500;}
 .header-actions{display:flex;align-items:center;gap:6px;}
 
-/* ── شريط الأخبار المتحرك ── */
-.ticker-wrap{
-  overflow:hidden;background:linear-gradient(90deg,var(--accent),var(--accent2));
-  padding:6px 0;position:relative;border-top:1px solid rgba(255,255,255,0.15);
+/* ── بطاقة التحليل الذكي ── */
+.insights-card{
+  margin:14px 0 0;border-radius:20px;overflow:hidden;
+  border:1px solid var(--border);
+  box-shadow:0 4px 20px var(--shadow);
+  animation:fadeUp .6s ease both;
 }
-.ticker-wrap::before,.ticker-wrap::after{
-  content:'';position:absolute;top:0;bottom:0;width:40px;z-index:2;pointer-events:none;
+.insights-header{
+  background:linear-gradient(135deg,var(--accent),var(--accent2));
+  padding:11px 16px;display:flex;align-items:center;gap:8px;
 }
-.ticker-wrap::before{right:0;background:linear-gradient(to left,var(--accent2),transparent);}
-.ticker-wrap::after{left:0;background:linear-gradient(to right,var(--accent),transparent);}
-.ticker-track{
-  display:flex;white-space:nowrap;
-  animation:ticker-scroll 40s linear infinite;
-  width:max-content;
+.insights-header-icon{font-size:18px;}
+.insights-header-title{font-size:13px;font-weight:800;color:#fff;letter-spacing:.5px;}
+.insights-header-badge{
+  margin-right:auto;font-size:10px;font-weight:700;
+  background:rgba(255,255,255,0.25);color:#fff;
+  padding:2px 8px;border-radius:20px;
 }
-.ticker-track:hover{animation-play-state:paused;}
-.ticker-text{
-  font-family:'Tajawal',sans-serif;font-size:13px;font-weight:600;
-  color:rgba(255,255,255,0.95);padding:0 30px;letter-spacing:0.3px;
+.insights-sections{background:var(--card);}
+.insights-section{
+  padding:14px 16px;border-bottom:1px solid var(--border);
 }
-@keyframes ticker-scroll{
-  0%{transform:translateX(0);}
-  100%{transform:translateX(-50%);}
+.insights-section:last-child{border-bottom:none;}
+.insights-section-label{
+  font-size:10px;font-weight:800;letter-spacing:2px;text-transform:uppercase;
+  color:var(--text3);margin-bottom:7px;display:flex;align-items:center;gap:5px;
 }
+.insights-section-label span{
+  background:var(--accent-glow);color:var(--accent2);
+  padding:2px 7px;border-radius:8px;
+}
+.insights-text{
+  font-size:14px;line-height:1.75;color:var(--text);font-weight:400;
+}
+.insights-loading{
+  padding:20px 16px;text-align:center;color:var(--text3);font-size:13px;
+}
+.insights-skeleton{
+  height:13px;background:linear-gradient(90deg,var(--border) 25%,var(--bg2) 50%,var(--border) 75%);
+  background-size:200% 100%;animation:skl-shine 1.2s infinite;border-radius:6px;margin:6px 0;
+}
+.insights-skeleton.w80{width:80%;}
+.insights-skeleton.w60{width:60%;}
+.insights-skeleton.w90{width:90%;}
 
 /* Theme picker */
 .theme-btn{
@@ -688,13 +708,6 @@ input[type="date"]{width:100%;padding:10px 12px;border:1px solid var(--border);b
     </div>
   </div>
 
-  <!-- شريط الأخبار المتحرك -->
-  <div class="ticker-wrap" id="tickerWrap">
-    <div class="ticker-track" id="tickerTrack">
-      <span class="ticker-text" id="tickerText1">🌸 فيروز فلورز — متجر الورود والهدايا الفاخرة 🌹 أهلاً وسهلاً بكم 💐 جاري تحميل ملخص اليوم...</span>
-      <span class="ticker-text" id="tickerText2">🌸 فيروز فلورز — متجر الورود والهدايا الفاخرة 🌹 أهلاً وسهلاً بكم 💐 جاري تحميل ملخص اليوم...</span>
-    </div>
-  </div>
 
   <!-- Nav Tabs -->
   <div class="mobile-tabs">
@@ -756,6 +769,23 @@ input[type="date"]{width:100%;padding:10px 12px;border:1px solid var(--border);b
       <div class="kpi-lbl" data-t="netProfit">الربح الصافي</div>
       <div class="kpi-val" id="kN">0 ر.ع</div>
       <div class="kpi-sub"><span id="kNb" class="badge">—</span></div></div>
+  </div>
+
+  <!-- ── بطاقة التحليل الذكي ── -->
+  <div class="insights-card" id="insightsCard">
+    <div class="insights-header">
+      <span class="insights-header-icon">🤖</span>
+      <span class="insights-header-title">تحليل اليوم والنصائح</span>
+      <span class="insights-header-badge" id="insightsBadge">جاري التحليل...</span>
+    </div>
+    <div class="insights-sections" id="insightsSections">
+      <div class="insights-loading">
+        <div class="insights-skeleton"></div>
+        <div class="insights-skeleton w90"></div>
+        <div class="insights-skeleton w80"></div>
+        <div class="insights-skeleton w60"></div>
+      </div>
+    </div>
   </div>
 
   <!-- ── ملخص فواتير الورد ── -->
@@ -2157,24 +2187,35 @@ function toggleLang(){
 // Init language
 setLang(lang);
 
-/* ── شريط الأخبار ── */
-async function loadTicker(){
+/* ── بطاقة التحليل الذكي ── */
+async function loadInsights(){
   try{
-    const r = await api('/api/ticker');
-    if(!r || !r.text) return;
-    const txt = r.text;
-    document.getElementById('tickerText1').textContent = txt;
-    document.getElementById('tickerText2').textContent = txt;
-    const duration = Math.max(25, txt.length * 0.38);
-    document.getElementById('tickerTrack').style.animationDuration = duration + 's';
-  }catch(e){ console.log('ticker error',e); }
+    const r = await api('/api/insights');
+    if(!r || !r.text){ return; }
+    const parts = r.text.split('||');
+    const labels = [
+      {icon:'📊', title:'تحليل أداء اليوم'},
+      {icon:'💡', title:'نصائح لزيادة المبيعات'},
+      {icon:'🗓️', title:'المناسبات القادمة في عُمان'},
+    ];
+    let html = '';
+    parts.forEach((part, i)=>{
+      const lbl = labels[i] || {icon:'✨', title:'ملاحظات'};
+      html += `<div class="insights-section">
+        <div class="insights-section-label"><span>${lbl.icon} ${lbl.title}</span></div>
+        <div class="insights-text">${part.trim()}</div>
+      </div>`;
+    });
+    document.getElementById('insightsSections').innerHTML = html;
+    document.getElementById('insightsBadge').textContent = r.fresh ? 'جديد ✨' : 'اليوم';
+  }catch(e){ console.log('insights error',e); }
 }
 
 // تحميل البيانات فور اكتمال الصفحة
 function initApp(){
   load();
   loadFlowerInvPage();
-  loadTicker();
+  loadInsights();
 }
 if(document.readyState === 'loading'){
   document.addEventListener('DOMContentLoaded', initApp);

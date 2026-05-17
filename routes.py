@@ -195,78 +195,93 @@ def api_dashboard():
         "flowers":        {"flowers": flowers, "total": flowers_total}
     })
 
-@app.route("/api/ticker")
+@app.route("/api/insights")
 @auth
-def api_ticker():
+def api_insights():
     today = datetime.now().strftime("%Y-%m-%d")
-    cached      = db_one("SELECT value FROM app_settings WHERE key='ticker_text'")
-    cached_date = db_one("SELECT value FROM app_settings WHERE key='ticker_date'")
+    cached      = db_one("SELECT value FROM app_settings WHERE key='insights_text'")
+    cached_date = db_one("SELECT value FROM app_settings WHERE key='insights_date'")
     if cached and cached_date and cached_date.get("value") == today:
         return jsonify({"text": cached.get("value"), "fresh": False})
 
-    today_str = datetime.now().strftime("%d/%m/%Y")
-    sales, _, _ = get_day_data(today_str)
-    total_sales  = sum(e["amt"] for e in sales)
-    sales_count  = len(sales)
+    now = datetime.now()
+    today_str     = now.strftime("%d/%m/%Y")
+    yesterday_str = (now - timedelta(days=1)).strftime("%d/%m/%Y")
 
-    month_num = datetime.now().month
-    occasions = {
-        1:"🎉 رأس السنة — باقات احتفالية فاخرة",
-        2:"💕 عيد الحب — باقات رومانسية خاصة",
-        3:"🌸 ربيع — ألوان طازجة وزاهية",
-        4:"🌙 شهر رمضان — تزيينات وبخور فاخر",
-        5:"👩 عيد الأم — باقات ورد ومفاجآت",
-        6:"☀️ الصيف — ورود نضرة وعطور",
-        7:"🏖️ صيف — ترتيبات هدايا وسفر",
-        8:"🌴 آخر الصيف — عروض خاصة",
-        9:"🍂 خريف — ألوان دافئة وورود مجففة",
-        10:"✨ موسم الأعياد — ترتيبات احتفالية",
-        11:"🎄 أعياد — باقات هدايا فاخرة",
-        12:"🎅 نهاية السنة — احتفالات وورود",
-    }
-    occasion_tip = occasions.get(month_num, "💐 باقات خاصة بانتظاركم")
+    today_s, today_b, today_e = get_day_data(today_str)
+    yest_s,  yest_b,  yest_e  = get_day_data(yesterday_str)
 
-    fallback = (f"🌸 مبيعات اليوم: {fmt_omr(total_sales)} ({sales_count} عملية)"
-                f" ✦ 💡 {occasion_tip} ✦ ✨ شكراً لزيارتكم فيروز فلورز")
+    store_today = [r for r in today_s if not r.get("shelf_id")]
+    store_yest  = [r for r in yest_s  if not r.get("shelf_id")]
+
+    ts_today = sum(r["amt"] for r in store_today)
+    ts_yest  = sum(r["amt"] for r in store_yest)
+    tb_today = sum(r["amt"] for r in today_b)
+    te_today = sum(r["amt"] for r in today_e)
+    net_today = ts_today - tb_today - te_today
+
+    today_items = ", ".join(r["desc"] for r in store_today) if store_today else "لا توجد مبيعات بعد"
+    yest_items  = ", ".join(r["desc"] for r in store_yest)  if store_yest  else "لم تكن هناك مبيعات"
+
+    diff_pct = ""
+    if ts_yest > 0:
+        pct = ((ts_today - ts_yest) / ts_yest) * 100
+        diff_pct = f"ارتفعت بنسبة {pct:.0f}٪" if pct >= 0 else f"انخفضت بنسبة {abs(pct):.0f}٪"
+
+    fallback = (
+        f"اليوم حققنا مبيعات بقيمة {fmt_omr(ts_today)} من {len(store_today)} عملية، "
+        f"وأمس كانت {fmt_omr(ts_yest)}. "
+        f"حافظ على جودة منتجاتك وتواصل مع عملائك لزيادة المبيعات."
+    )
 
     if GROQ_KEY:
         try:
-            system_p = f"""أنت مساعد ذكي لمحل فيروز فلورز للزهور في عُمان.
-اليوم: {today_str} | مبيعات اليوم: {fmt_omr(total_sales)} ({sales_count} عملية)
-المناسبة القادمة: {occasion_tip}
+            system_p = f"""أنت مستشار تجاري شخصي لصاحب محل فيروز فلورز للزهور والهدايا في سلطنة عُمان.
 
-مهمتك: اكتب نص قصير لشريط إخباري متحرك (ticker) يعرض في أعلى التطبيق.
+بيانات اليوم ({today_str}):
+- إجمالي مبيعات المحل: {fmt_omr(ts_today)} ({len(store_today)} عملية)
+- المبيعات: {today_items}
+- المشتريات: {fmt_omr(tb_today)}
+- المصاريف: {fmt_omr(te_today)}
+- الصافي: {fmt_omr(net_today)}
 
-الشروط الصارمة:
-- بالعربية فقط، أسلوب احترافي ودافئ
-- 3 أجزاء منفصلة بـ ✦
-- كل جزء 6-9 كلمات بحد أقصى
-- الجزء الأول: ملخص مبيعات اليوم بأرقام حقيقية
-- الجزء الثاني: نصيحة ذكية مرتبطة بالمناسبة القادمة لزيادة المبيعات
-- الجزء الثالث: كلمة تحفيزية أو دعوة للتواصل
-- استخدم emoji في بداية كل جزء
-- لا تضع أي علامات تنصيص أو أرقام أو قوائم
+بيانات أمس ({yesterday_str}):
+- إجمالي المبيعات: {fmt_omr(ts_yest)} ({len(store_yest)} عملية)
+- المبيعات: {yest_items}
+- المقارنة: {diff_pct if diff_pct else "يوم أول للمقارنة"}
 
-مثال:
-🌸 مبيعات اليوم {fmt_omr(total_sales)} رائعة ✦ 💡 {occasion_tip} لزيادة مبيعاتك ✦ 💐 دائماً نحن هنا لكم"""
+مهمتك: اكتب تحليلاً شاملاً كأنك شخص حقيقي يكتب لصديقه صاحب المحل.
+يجب أن يتضمن الرد ثلاثة أقسام مفصولة بـ ||:
+
+القسم الأول (تحليل اليوم): تكلم بصدق عن أداء اليوم مقارنة بالأمس، ماذا بيع وكيف كان الأداء، بأسلوب إنساني دافئ وطبيعي، لا تجعله رسمياً.
+
+القسم الثاني (نصائح مخصصة): بناءً على المبيعات الفعلية، قدم نصائح ذكية ومفصلة لزيادة المبيعات، فكر معه كيف يحسن أداءه غداً وفي الأيام القادمة.
+
+القسم الثالث (المناسبات القادمة في عُمان): ابحث في معرفتك عن المناسبات والأعياد والإجازات الرسمية وغير الرسمية القريبة في سلطنة عُمان خلال الأسابيع القادمة (مثل: العيد الوطني، رأس السنة الهجرية، المولد النبوي، أعياد الفطر والأضحى، اليوم الوطني العُماني، موسم السياحة، إلخ) واشرح كيف يستغلها لزيادة مبيعات الورد والهدايا. كن محدداً وعملياً.
+
+الأسلوب المطلوب:
+- كتابة بشرية طبيعية وليست آلية أو جافة
+- جمل طويلة وكاملة وطبيعية كالحديث بين أصدقاء
+- لا قوائم أو نقاط أو عناوين مرقمة
+- لا تبدأ بـ "بالطبع" أو "إليك" أو أي مقدمة رسمية
+- استخدم emoji بشكل طبيعي داخل النص
+- اللغة العربية فصيحة لكن قريبة وطبيعية"""
 
             res = requests.post("https://api.groq.com/openai/v1/chat/completions",
                 headers={"Authorization": f"Bearer {GROQ_KEY}", "Content-Type": "application/json"},
                 json={"model":"llama-3.3-70b-versatile",
                       "messages":[{"role":"system","content":system_p},
-                                  {"role":"user","content":"اكتب النص الآن"}],
-                      "max_tokens":180,"temperature":0.8}, timeout=10)
-            ticker_text = res.json()["choices"][0]["message"]["content"].strip()
-            # تنظيف لو رجع بين quotes
-            ticker_text = ticker_text.strip('"').strip("'")
+                                  {"role":"user","content":"اكتب التحليل الآن"}],
+                      "max_tokens":900,"temperature":0.85}, timeout=20)
+            insights_text = res.json()["choices"][0]["message"]["content"].strip()
         except:
-            ticker_text = fallback
+            insights_text = fallback
     else:
-        ticker_text = fallback
+        insights_text = fallback
 
-    db_run("INSERT OR REPLACE INTO app_settings (key,value) VALUES (?,?)", ("ticker_text", ticker_text))
-    db_run("INSERT OR REPLACE INTO app_settings (key,value) VALUES (?,?)", ("ticker_date", today))
-    return jsonify({"text": ticker_text, "fresh": True})
+    db_run("INSERT OR REPLACE INTO app_settings (key,value) VALUES (?,?)", ("insights_text", insights_text))
+    db_run("INSERT OR REPLACE INTO app_settings (key,value) VALUES (?,?)", ("insights_date", today))
+    return jsonify({"text": insights_text, "fresh": True})
 
 @app.route("/api/entries")
 @worker_auth
