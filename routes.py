@@ -314,6 +314,15 @@ def api_insights():
         pct = ((ts_today - ts_yest) / ts_yest) * 100
         diff_pct = f"ارتفعت بنسبة {abs(pct):.0f}٪ عن أمس 📈" if pct >= 0 else f"انخفضت بنسبة {abs(pct):.0f}٪ عن أمس 📉"
 
+    # احسب الشهرين القادمين
+    next1 = now + timedelta(days=30)
+    next2 = now + timedelta(days=60)
+    month_names_ar = {1:"يناير",2:"فبراير",3:"مارس",4:"أبريل",5:"مايو",6:"يونيو",
+                      7:"يوليو",8:"أغسطس",9:"سبتمبر",10:"أكتوبر",11:"نوفمبر",12:"ديسمبر"}
+    cur_month_name   = month_names_ar[now.month]
+    next1_month_name = month_names_ar[next1.month]
+    next2_month_name = month_names_ar[next2.month]
+
     # حساب التاريخ الهجري التقريبي
     def gregorian_to_hijri_approx(g_date):
         # خوارزمية تقريبية دقيقة بما يكفي للـ prompt
@@ -348,15 +357,6 @@ def api_insights():
         f"نحن الآن في شهر مايو 2026 🗓️، وهذا الوقت مناسب جداً لتحضير عروض خاصة، "
         f"راجع التقويم الرسمي لسلطنة عُمان للمناسبات القادمة واستغلها مبكراً."
     )
-
-    # احسب الشهرين القادمين للـ prompt
-    next1 = (now + timedelta(days=30))
-    next2 = (now + timedelta(days=60))
-    month_names_ar = {1:"يناير",2:"فبراير",3:"مارس",4:"أبريل",5:"مايو",6:"يونيو",
-                      7:"يوليو",8:"أغسطس",9:"سبتمبر",10:"أكتوبر",11:"نوفمبر",12:"ديسمبر"}
-    cur_month_name  = month_names_ar[now.month]
-    next1_month_name = month_names_ar[next1.month]
-    next2_month_name = month_names_ar[next2.month]
 
     system_p = f"""أنت مستشار تجاري شخصي ومتخصص في سوق الزهور والهدايا في سلطنة عُمان.
 تاريخ اليوم الميلادي: {today_str} ({cur_month_name} {now.year})
