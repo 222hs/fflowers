@@ -204,6 +204,87 @@ def api_dashboard():
         "yesterday_sales": round(sum(e["amt"] for e in yest_s), 3),
     })
 
+def call_ai(prompt, max_tokens=900, temperature=0.85):
+    """يجرّب النماذج بالترتيب ويرجع النص أو None"""
+    msg = [{"role":"system","content":prompt}, {"role":"user","content":"اكتب التحليل الآن"}]
+
+    # 1. Groq
+    if GROQ_KEY:
+        try:
+            res = requests.post("https://api.groq.com/openai/v1/chat/completions",
+                headers={"Authorization": f"Bearer {GROQ_KEY}", "Content-Type":"application/json"},
+                json={"model":"llama-3.3-70b-versatile","messages":msg,
+                      "max_tokens":max_tokens,"temperature":temperature}, timeout=12)
+            txt = res.json()["choices"][0]["message"]["content"].strip()
+            if txt: return txt, "Groq"
+        except: pass
+
+    # 2. OpenRouter (يدعم عشرات النماذج بمفتاح واحد)
+    if OPENROUTER_KEY:
+        try:
+            res = requests.post("https://openrouter.ai/api/v1/chat/completions",
+                headers={"Authorization": f"Bearer {OPENROUTER_KEY}", "Content-Type":"application/json"},
+                json={"model":"meta-llama/llama-3.3-70b-instruct","messages":msg,
+                      "max_tokens":max_tokens,"temperature":temperature}, timeout=15)
+            txt = res.json()["choices"][0]["message"]["content"].strip()
+            if txt: return txt, "OpenRouter"
+        except: pass
+
+    # 3. OpenAI
+    if OPENAI_KEY:
+        try:
+            res = requests.post("https://api.openai.com/v1/chat/completions",
+                headers={"Authorization": f"Bearer {OPENAI_KEY}", "Content-Type":"application/json"},
+                json={"model":"gpt-4o-mini","messages":msg,
+                      "max_tokens":max_tokens,"temperature":temperature}, timeout=15)
+            txt = res.json()["choices"][0]["message"]["content"].strip()
+            if txt: return txt, "OpenAI"
+        except: pass
+
+    return None, None
+
+
+@app.route("/api/ai-status")
+@auth
+def api_ai_status():
+    """يتحقق من حالة كل نموذج — ping سريع"""
+    results = {}
+    ping_msg = [{"role":"user","content":"قل كلمة واحدة فقط: جاهز"}]
+
+    if GROQ_KEY:
+        try:
+            r = requests.post("https://api.groq.com/openai/v1/chat/completions",
+                headers={"Authorization": f"Bearer {GROQ_KEY}", "Content-Type":"application/json"},
+                json={"model":"llama-3.3-70b-versatile","messages":ping_msg,"max_tokens":5}, timeout=6)
+            results["groq"] = "ok" if r.status_code == 200 else "error"
+        except: results["groq"] = "error"
+    else:
+        results["groq"] = "no_key"
+
+    if OPENROUTER_KEY:
+        try:
+            r = requests.post("https://openrouter.ai/api/v1/chat/completions",
+                headers={"Authorization": f"Bearer {OPENROUTER_KEY}", "Content-Type":"application/json"},
+                json={"model":"meta-llama/llama-3.3-70b-instruct","messages":ping_msg,"max_tokens":5}, timeout=6)
+            results["openrouter"] = "ok" if r.status_code == 200 else "error"
+        except: results["openrouter"] = "error"
+    else:
+        results["openrouter"] = "no_key"
+
+    if OPENAI_KEY:
+        try:
+            r = requests.post("https://api.openai.com/v1/chat/completions",
+                headers={"Authorization": f"Bearer {OPENAI_KEY}", "Content-Type":"application/json"},
+                json={"model":"gpt-4o-mini","messages":ping_msg,"max_tokens":5}, timeout=6)
+            results["openai"] = "ok" if r.status_code == 200 else "error"
+        except: results["openai"] = "error"
+    else:
+        results["openai"] = "no_key"
+
+    results["any_ok"] = any(v == "ok" for v in results.values())
+    return jsonify(results)
+
+
 @app.route("/api/insights")
 @auth
 def api_insights():
@@ -223,74 +304,60 @@ def api_insights():
     store_today = [r for r in today_s if not r.get("shelf_id")]
     store_yest  = [r for r in yest_s  if not r.get("shelf_id")]
 
-    ts_today = sum(r["amt"] for r in store_today)
-    ts_yest  = sum(r["amt"] for r in store_yest)
-    tb_today = sum(r["amt"] for r in today_b)
-    te_today = sum(r["amt"] for r in today_e)
+    ts_today  = sum(r["amt"] for r in store_today)
+    ts_yest   = sum(r["amt"] for r in store_yest)
+    tb_today  = sum(r["amt"] for r in today_b)
+    te_today  = sum(r["amt"] for r in today_e)
     net_today = ts_today - tb_today - te_today
 
-    today_items = ", ".join(r["desc"] for r in store_today) if store_today else "لا توجد مبيعات بعد"
-    yest_items  = ", ".join(r["desc"] for r in store_yest)  if store_yest  else "لم تكن هناك مبيعات"
+    today_items = "، ".join(r["desc"] for r in store_today) if store_today else "لا توجد مبيعات بعد"
+    yest_items  = "، ".join(r["desc"] for r in store_yest)  if store_yest  else "لم تكن هناك مبيعات"
 
-    diff_pct = ""
+    diff_pct = "يوم جديد بلا مقارنة"
     if ts_yest > 0:
         pct = ((ts_today - ts_yest) / ts_yest) * 100
-        diff_pct = f"ارتفعت بنسبة {pct:.0f}٪" if pct >= 0 else f"انخفضت بنسبة {abs(pct):.0f}٪"
+        diff_pct = f"ارتفعت بنسبة {abs(pct):.0f}٪ عن أمس 📈" if pct >= 0 else f"انخفضت بنسبة {abs(pct):.0f}٪ عن أمس 📉"
 
+    # fallback دائماً يستخدم الفاصل ||
     fallback = (
-        f"اليوم حققنا مبيعات بقيمة {fmt_omr(ts_today)} من {len(store_today)} عملية، "
-        f"وأمس كانت {fmt_omr(ts_yest)}. "
-        f"حافظ على جودة منتجاتك وتواصل مع عملائك لزيادة المبيعات."
+        f"اليوم حققنا مبيعات بقيمة {fmt_omr(ts_today)} من {len(store_today)} عملية 🌸، "
+        f"وأمس كانت المبيعات {fmt_omr(ts_yest)}، و{diff_pct}، "
+        f"استمر في التركيز على الجودة والتواصل مع عملائك الدائمين."
+        f"||"
+        f"بناءً على مبيعات اليوم التي شملت {today_items}، "
+        f"أنصحك بالتركيز على المنتجات الأكثر طلباً وتحضير عروض مبكرة للمناسبات القادمة 💡، "
+        f"والتواصل مع عملائك عبر واتساب لتذكيرهم بالطلبات."
+        f"||"
+        f"نحن الآن في شهر مايو 2026 🗓️، وهذا الوقت مناسب جداً لتحضير عروض خاصة، "
+        f"راجع التقويم الرسمي لسلطنة عُمان للمناسبات القادمة واستغلها مبكراً."
     )
 
-    if GROQ_KEY:
-        try:
-            system_p = f"""أنت مستشار تجاري شخصي لصاحب محل فيروز فلورز للزهور والهدايا في سلطنة عُمان.
+    system_p = f"""أنت مستشار تجاري شخصي لصاحب محل فيروز فلورز للزهور والهدايا في سلطنة عُمان.
 
 بيانات اليوم ({today_str}):
 - إجمالي مبيعات المحل: {fmt_omr(ts_today)} ({len(store_today)} عملية)
 - المبيعات: {today_items}
-- المشتريات: {fmt_omr(tb_today)}
-- المصاريف: {fmt_omr(te_today)}
-- الصافي: {fmt_omr(net_today)}
+- المشتريات: {fmt_omr(tb_today)} | المصاريف: {fmt_omr(te_today)} | الصافي: {fmt_omr(net_today)}
 
 بيانات أمس ({yesterday_str}):
 - إجمالي المبيعات: {fmt_omr(ts_yest)} ({len(store_yest)} عملية)
 - المبيعات: {yest_items}
-- المقارنة: {diff_pct if diff_pct else "يوم أول للمقارنة"}
+- المقارنة: {diff_pct}
 
-مهمتك: اكتب تحليلاً شاملاً كأنك شخص حقيقي يكتب لصديقه صاحب المحل.
-يجب أن يتضمن الرد ثلاثة أقسام مفصولة بـ ||:
+اكتب ثلاثة أقسام مفصولة بـ || فقط (بدون أي نص إضافي قبلها أو بعدها):
 
-القسم الأول (تحليل اليوم): تكلم بصدق عن أداء اليوم مقارنة بالأمس، ماذا بيع وكيف كان الأداء، بأسلوب إنساني دافئ وطبيعي، لا تجعله رسمياً.
+القسم الأول: تحليل أداء اليوم مقارنة بالأمس بأسلوب إنساني دافئ كأنك تكلم صديق، اذكر الأرقام الحقيقية وكيف كان اليوم.
+القسم الثاني: نصائح مخصصة ومفصلة بناءً على ما بيع فعلاً، اقترح خطوات عملية لتحسين الغد والأيام القادمة.
+القسم الثالث: المناسبات والأعياد القريبة في سلطنة عُمان خلال الأسابيع القادمة، وكيف يستغلها لزيادة مبيعات الورد والهدايا بشكل عملي.
 
-القسم الثاني (نصائح مخصصة): بناءً على المبيعات الفعلية، قدم نصائح ذكية ومفصلة لزيادة المبيعات، فكر معه كيف يحسن أداءه غداً وفي الأيام القادمة.
+الأسلوب: جمل طويلة طبيعية، لا قوائم ولا أرقام مرقمة، emoji داخل النص بشكل طبيعي، لا تبدأ بمقدمة رسمية."""
 
-القسم الثالث (المناسبات القادمة في عُمان): ابحث في معرفتك عن المناسبات والأعياد والإجازات الرسمية وغير الرسمية القريبة في سلطنة عُمان خلال الأسابيع القادمة (مثل: العيد الوطني، رأس السنة الهجرية، المولد النبوي، أعياد الفطر والأضحى، اليوم الوطني العُماني، موسم السياحة، إلخ) واشرح كيف يستغلها لزيادة مبيعات الورد والهدايا. كن محدداً وعملياً.
-
-الأسلوب المطلوب:
-- كتابة بشرية طبيعية وليست آلية أو جافة
-- جمل طويلة وكاملة وطبيعية كالحديث بين أصدقاء
-- لا قوائم أو نقاط أو عناوين مرقمة
-- لا تبدأ بـ "بالطبع" أو "إليك" أو أي مقدمة رسمية
-- استخدم emoji بشكل طبيعي داخل النص
-- اللغة العربية فصيحة لكن قريبة وطبيعية"""
-
-            res = requests.post("https://api.groq.com/openai/v1/chat/completions",
-                headers={"Authorization": f"Bearer {GROQ_KEY}", "Content-Type": "application/json"},
-                json={"model":"llama-3.3-70b-versatile",
-                      "messages":[{"role":"system","content":system_p},
-                                  {"role":"user","content":"اكتب التحليل الآن"}],
-                      "max_tokens":900,"temperature":0.85}, timeout=12)
-            insights_text = res.json()["choices"][0]["message"]["content"].strip()
-        except:
-            insights_text = fallback
-    else:
-        insights_text = fallback
+    ai_text, model_used = call_ai(system_p)
+    insights_text = ai_text if ai_text else fallback
 
     db_run("INSERT OR REPLACE INTO app_settings (key,value) VALUES (?,?)", ("insights_text", insights_text))
     db_run("INSERT OR REPLACE INTO app_settings (key,value) VALUES (?,?)", ("insights_date", today))
-    return jsonify({"text": insights_text, "fresh": True})
+    return jsonify({"text": insights_text, "fresh": True, "model": model_used or "fallback"})
 
 @app.route("/api/entries")
 @worker_auth

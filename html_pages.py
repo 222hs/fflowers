@@ -152,7 +152,22 @@ header{
 .bname{font-family:'Playfair Display',serif;font-size:18px;font-weight:700;color:var(--accent2);line-height:1.2;letter-spacing:.3px;}
 .bsub{font-size:9px;color:var(--text3);letter-spacing:2px;font-weight:600;text-transform:uppercase;}
 .header-corner{position:absolute;left:14px;top:50%;transform:translateY(-50%);display:flex;gap:5px;align-items:center;}
-.header-corner-r{position:absolute;right:14px;top:50%;transform:translateY(-50%);display:flex;gap:5px;align-items:center;}
+.header-corner-r{position:absolute;right:14px;top:50%;transform:translateY(-50%);display:flex;gap:6px;align-items:center;}
+/* مؤشرات حالة الـ AI */
+.ai-dots{display:flex;gap:4px;align-items:center;}
+.ai-dot{
+  width:8px;height:8px;border-radius:50%;
+  background:#ccc;transition:background .4s;
+  position:relative;cursor:default;
+}
+.ai-dot.ok{background:#4caf50;box-shadow:0 0 6px rgba(76,175,80,0.7);}
+.ai-dot.ok::after{
+  content:'';position:absolute;inset:-2px;border-radius:50%;
+  border:1px solid rgba(76,175,80,0.4);animation:dot-pulse 2s ease-in-out infinite;
+}
+.ai-dot.error{background:#ef5350;}
+.ai-dot.no_key{background:#bdbdbd;opacity:0.5;}
+@keyframes dot-pulse{0%,100%{transform:scale(1);opacity:1;}50%{transform:scale(1.4);opacity:0.5;}}
 /* الصف الثاني — الأدوات */
 .header-tools-row{
   display:flex;align-items:center;justify-content:space-between;
@@ -677,6 +692,11 @@ input[type="date"]{width:100%;padding:10px 12px;border:1px solid var(--border);b
           <div class="bsub">إدارة المبيعات</div>
         </div>
         <div class="header-corner-r">
+          <div class="ai-dots" id="aiDots" title="حالة الذكاء الاصطناعي">
+            <div class="ai-dot" id="dot-groq" title="Groq"></div>
+            <div class="ai-dot" id="dot-openrouter" title="OpenRouter"></div>
+            <div class="ai-dot" id="dot-openai" title="OpenAI"></div>
+          </div>
           <a href="/logout" class="logout-btn" title="خروج">🔒</a>
         </div>
       </div>
@@ -2250,24 +2270,33 @@ function renderInsights(text, badge){
 }
 
 async function loadInsights(){
-  // أولاً: اعرض بيانات فورية من الـ dashboard المحمّل
-  try{
-    const dash = await api('/api/dashboard');
-    if(dash){
-      const ts = dash.today_sales ?? 0;
-      const cnt = dash.today_count ?? 0;
-      const yts = dash.yesterday_sales ?? 0;
-      const diff = yts > 0 ? ((ts-yts)/yts*100).toFixed(0) : null;
-      const diffTxt = diff !== null ? (diff >= 0 ? `ارتفعت ${diff}٪ عن أمس` : `انخفضت ${Math.abs(diff)}٪ عن أمس`) : 'يوم جديد';
-      const quickText = `مبيعات اليوم ${ts.toFixed(3)} ر.ع من ${cnt} عملية — ${diffTxt} 📊||جاري تحليل نصائح مخصصة لك بالذكاء الاصطناعي... ⏳||جاري البحث عن المناسبات القادمة في عُمان... 🗓️`;
-      renderInsights(quickText, '');
-    }
-  }catch(e){}
-  // ثانياً: جلب التحليل الكامل من Groq (في الخلفية)
+  // عرض نص انتظار فوري
+  renderInsights(
+    'جاري تحليل أداء اليوم ومقارنته بالأمس... ⏳||جاري إعداد نصائح مخصصة لك بالذكاء الاصطناعي... 💡||جاري البحث عن المناسبات القادمة في سلطنة عُمان... 🗓️',
+    'جاري...'
+  );
   try{
     const r = await api('/api/insights');
-    if(r && r.text) renderInsights(r.text, r.fresh ? 'جديد ✨' : 'اليوم');
-  }catch(e){ console.log('insights error',e); }
+    if(r && r.text){
+      renderInsights(r.text, r.fresh ? 'جديد ✨' : 'اليوم');
+    }
+  }catch(e){
+    renderInsights(
+      'تعذّر الاتصال بالذكاء الاصطناعي حالياً ⚠️||تأكد من إعدادات المفاتيح في لوحة Render||سيحاول مجدداً عند التحديث التالي',
+      'خطأ'
+    );
+  }
+}
+
+/* ── حالة الذكاء الاصطناعي ── */
+async function loadAiStatus(){
+  try{
+    const r = await api('/api/ai-status');
+    ['groq','openrouter','openai'].forEach(name=>{
+      const dot = document.getElementById('dot-'+name);
+      if(dot){ dot.className = 'ai-dot ' + (r[name] || 'no_key'); }
+    });
+  }catch(e){}
 }
 
 // تحميل البيانات فور اكتمال الصفحة
@@ -2275,6 +2304,7 @@ function initApp(){
   load();
   loadFlowerInvPage();
   loadInsights();
+  loadAiStatus();
 }
 if(document.readyState === 'loading'){
   document.addEventListener('DOMContentLoaded', initApp);
