@@ -106,37 +106,68 @@ body{font-family:'Tajawal',sans-serif;background:var(--bg);color:var(--text);
 #app{position:relative;z-index:1;min-height:100vh;display:flex;flex-direction:column;}
 
 /* ══════════════════════════════════════════
-   HEADER — فاخر ومتناسق
+   HEADER — إطار مستقل فاخر
 ══════════════════════════════════════════ */
 header{
-  background:var(--nav-bg);backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px);
-  border-bottom:1px solid var(--border);position:sticky;top:0;z-index:100;
+  position:sticky;top:0;z-index:100;
+  padding:10px 12px 0;
+  background:var(--bg);
   transition:background .4s;
-  box-shadow:0 2px 20px var(--shadow);
 }
-.header-top{
-  display:flex;align-items:center;justify-content:space-between;
-  padding:9px 14px;min-height:58px;
+.header-frame{
+  background:linear-gradient(135deg,var(--accent2) 0%,var(--accent) 50%,var(--gold) 100%);
+  border-radius:20px;
+  padding:2px;
+  box-shadow:0 6px 28px var(--accent-glow), 0 2px 8px var(--shadow);
+  animation:glow 4s ease-in-out infinite;
 }
-.brand{display:flex;align-items:center;gap:10px;}
+.header-inner{
+  background:var(--nav-bg);
+  backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px);
+  border-radius:18px;
+  overflow:hidden;
+}
+/* الصف العلوي — اسم المحل */
+.header-brand-row{
+  display:flex;align-items:center;justify-content:center;
+  padding:10px 14px 6px;gap:10px;
+  border-bottom:1px solid var(--border);
+  position:relative;
+}
 .emblem{
-  width:40px;height:40px;
+  width:36px;height:36px;
   background:linear-gradient(135deg,var(--accent),var(--accent2));
-  border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:19px;
-  box-shadow:0 4px 14px var(--accent-glow);
-  animation:glow 3s ease-in-out infinite;flex-shrink:0;
+  border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:18px;
+  box-shadow:0 3px 10px var(--accent-glow);flex-shrink:0;
   position:relative;overflow:hidden;
 }
 .emblem::after{
   content:'';position:absolute;inset:0;
-  background:linear-gradient(135deg,rgba(255,255,255,0.25),transparent);
+  background:linear-gradient(135deg,rgba(255,255,255,0.3),transparent);
   border-radius:inherit;
 }
-@keyframes glow{0%,100%{box-shadow:0 4px 14px var(--accent-glow);}50%{box-shadow:0 4px 26px var(--accent-glow),0 0 40px var(--accent-glow);}}
-.brand-text{display:flex;flex-direction:column;gap:1px;}
-.bname{font-family:'Playfair Display',serif;font-size:17px;font-weight:700;color:var(--accent2);line-height:1.2;}
-.bsub{font-size:10px;color:var(--text3);display:block;letter-spacing:0.5px;font-weight:500;}
-.header-actions{display:flex;align-items:center;gap:6px;}
+@keyframes glow{0%,100%{box-shadow:0 6px 28px var(--accent-glow),0 2px 8px var(--shadow);}
+  50%{box-shadow:0 6px 36px var(--accent-glow),0 0 50px var(--accent-glow),0 2px 8px var(--shadow);}}
+.brand-center{display:flex;flex-direction:column;align-items:center;gap:1px;}
+.bname{font-family:'Playfair Display',serif;font-size:18px;font-weight:700;color:var(--accent2);line-height:1.2;letter-spacing:.3px;}
+.bsub{font-size:9px;color:var(--text3);letter-spacing:2px;font-weight:600;text-transform:uppercase;}
+.header-corner{position:absolute;left:14px;top:50%;transform:translateY(-50%);display:flex;gap:5px;align-items:center;}
+.header-corner-r{position:absolute;right:14px;top:50%;transform:translateY(-50%);display:flex;gap:5px;align-items:center;}
+/* الصف الثاني — الأدوات */
+.header-tools-row{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:7px 14px;gap:6px;
+}
+.brand{display:none;}
+.brand-text{display:none;}
+.header-top{display:none;}
+.header-actions{display:contents;}
+.theme-btn{
+  width:30px;height:30px;border-radius:50%;border:1px solid var(--border);
+  cursor:pointer;font-size:14px;display:flex;align-items:center;justify-content:center;
+  background:var(--glass);transition:.2s;flex-shrink:0;
+}
+.theme-btn:hover{transform:scale(1.1);}
 
 /* ── بطاقة التحليل الذكي ── */
 .insights-card{
@@ -629,22 +660,32 @@ input[type="date"]{width:100%;padding:10px 12px;border:1px solid var(--border);b
   <!-- خلفية ورود متحركة للثيم bloom -->
   <div class="rose-bg" id="roseBg"></div>
 
-  <div class="header-top">
-    <div class="brand">
-      <div class="emblem">🌹</div>
-      <div class="brand-text">
-        <div class="bname">فيروز فلورز</div>
-        <div class="bsub">✦ إدارة المبيعات ✦</div>
+  <div class="header-frame">
+    <div class="header-inner">
+
+      <!-- الصف العلوي: اسم المحل في المنتصف -->
+      <div class="header-brand-row">
+        <div class="header-corner">
+          <div id="flowerPill" onclick="toggleFlowerPanel()">
+            <span>🌸</span>
+            <span id="flowerCount">0</span>
+          </div>
+        </div>
+        <div class="emblem">🌹</div>
+        <div class="brand-center">
+          <div class="bname">فيروز فلورز</div>
+          <div class="bsub">إدارة المبيعات</div>
+        </div>
+        <div class="header-corner-r">
+          <a href="/logout" class="logout-btn" title="خروج">🔒</a>
+        </div>
       </div>
-    </div>
-    <div class="header-actions">
-      <div id="flowerPill" onclick="toggleFlowerPanel()">
-        <span>🌸</span>
-        <span id="flowerCount">0</span>
-      </div>
-      <div class="mpill">
-        <label>📅</label>
-        <select id="msel" onchange="changeMonth()">
+
+      <!-- الصف الثاني: الأدوات -->
+      <div class="header-tools-row">
+        <div class="mpill">
+          <label>📅</label>
+          <select id="msel" onchange="changeMonth()">
           <option value="2025-01">يناير 2025</option><option value="2025-02">فبراير 2025</option>
           <option value="2025-03">مارس 2025</option><option value="2025-04">أبريل 2025</option>
           <option value="2025-05">مايو 2025</option><option value="2025-06">يونيو 2025</option>
@@ -657,15 +698,16 @@ input[type="date"]{width:100%;padding:10px 12px;border:1px solid var(--border);b
           <option value="2026-07">يوليو 2026</option><option value="2026-08">أغسطس 2026</option>
           <option value="2026-09">سبتمبر 2026</option><option value="2026-10">أكتوبر 2026</option>
           <option value="2026-11">نوفمبر 2026</option><option value="2026-12">ديسمبر 2026</option>
-        </select>
+          </select>
+        </div>
+        <button class="theme-btn" id="refreshBtn" onclick="refreshData()" title="تحديث البيانات">🔄</button>
+        <button class="theme-btn" onclick="toggleThemePanel()" title="تغيير الثيم">🎨</button>
+        <button class="theme-btn" onclick="toggleBgPanel()" title="تغيير الخلفية">🖼️</button>
+        <button class="theme-btn" id="langBtn" onclick="toggleLang()" title="تغيير اللغة" style="font-size:12px;font-weight:700;font-family:'Tajawal',sans-serif;">EN</button>
       </div>
-      <button class="theme-btn" id="refreshBtn" onclick="refreshData()" title="تحديث البيانات">🔄</button>
-      <button class="theme-btn" onclick="toggleThemePanel()" title="تغيير الثيم">🎨</button>
-      <button class="theme-btn" onclick="toggleBgPanel()" title="تغيير الخلفية">🖼️</button>
-      <button class="theme-btn" id="langBtn" onclick="toggleLang()" title="تغيير اللغة" style="font-size:12px;font-weight:700;font-family:'Tajawal',sans-serif;">EN</button>
-      <a href="/logout" class="logout-btn" title="خروج">🔒</a>
-    </div>
-  </div>
+
+    </div><!-- /header-inner -->
+  </div><!-- /header-frame -->
 
   <!-- Theme Panel -->
   <div class="theme-panel" id="themePanel">
@@ -710,7 +752,7 @@ input[type="date"]{width:100%;padding:10px 12px;border:1px solid var(--border);b
 
 
   <!-- Nav Tabs -->
-  <div class="mobile-tabs">
+  <div class="mobile-tabs" style="margin-top:8px;padding-bottom:6px;">
     <button class="mtab on" onclick="switchTab('home')">📊 الرئيسية</button>
     <button class="mtab" onclick="switchTab('shelves')">🗄️ الرفوف</button>
     <button class="mtab" onclick="switchTab('flowerinv')">🧾 فواتير الورد</button>
@@ -2188,26 +2230,43 @@ function toggleLang(){
 setLang(lang);
 
 /* ── بطاقة التحليل الذكي ── */
+function renderInsights(text, badge){
+  const parts = text.split('||');
+  const labels = [
+    {icon:'📊', title:'تحليل أداء اليوم'},
+    {icon:'💡', title:'نصائح لزيادة المبيعات'},
+    {icon:'🗓️', title:'المناسبات القادمة في عُمان'},
+  ];
+  let html = '';
+  parts.forEach((part, i)=>{
+    const lbl = labels[i] || {icon:'✨', title:'ملاحظات'};
+    html += `<div class="insights-section">
+      <div class="insights-section-label"><span>${lbl.icon} ${lbl.title}</span></div>
+      <div class="insights-text">${part.trim()}</div>
+    </div>`;
+  });
+  document.getElementById('insightsSections').innerHTML = html;
+  document.getElementById('insightsBadge').textContent = badge || 'اليوم';
+}
+
 async function loadInsights(){
+  // أولاً: اعرض بيانات فورية من الـ dashboard المحمّل
+  try{
+    const dash = await api('/api/dashboard');
+    if(dash){
+      const ts = dash.today_sales ?? 0;
+      const cnt = dash.today_count ?? 0;
+      const yts = dash.yesterday_sales ?? 0;
+      const diff = yts > 0 ? ((ts-yts)/yts*100).toFixed(0) : null;
+      const diffTxt = diff !== null ? (diff >= 0 ? `ارتفعت ${diff}٪ عن أمس` : `انخفضت ${Math.abs(diff)}٪ عن أمس`) : 'يوم جديد';
+      const quickText = `مبيعات اليوم ${ts.toFixed(3)} ر.ع من ${cnt} عملية — ${diffTxt} 📊||جاري تحليل نصائح مخصصة لك بالذكاء الاصطناعي... ⏳||جاري البحث عن المناسبات القادمة في عُمان... 🗓️`;
+      renderInsights(quickText, '');
+    }
+  }catch(e){}
+  // ثانياً: جلب التحليل الكامل من Groq (في الخلفية)
   try{
     const r = await api('/api/insights');
-    if(!r || !r.text){ return; }
-    const parts = r.text.split('||');
-    const labels = [
-      {icon:'📊', title:'تحليل أداء اليوم'},
-      {icon:'💡', title:'نصائح لزيادة المبيعات'},
-      {icon:'🗓️', title:'المناسبات القادمة في عُمان'},
-    ];
-    let html = '';
-    parts.forEach((part, i)=>{
-      const lbl = labels[i] || {icon:'✨', title:'ملاحظات'};
-      html += `<div class="insights-section">
-        <div class="insights-section-label"><span>${lbl.icon} ${lbl.title}</span></div>
-        <div class="insights-text">${part.trim()}</div>
-      </div>`;
-    });
-    document.getElementById('insightsSections').innerHTML = html;
-    document.getElementById('insightsBadge').textContent = r.fresh ? 'جديد ✨' : 'اليوم';
+    if(r && r.text) renderInsights(r.text, r.fresh ? 'جديد ✨' : 'اليوم');
   }catch(e){ console.log('insights error',e); }
 }
 

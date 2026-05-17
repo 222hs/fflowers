@@ -184,15 +184,24 @@ def api_dashboard():
             "count": len(sh_sales)
         })
 
+    now = datetime.now()
+    today_str     = now.strftime("%d/%m/%Y")
+    yesterday_str = (now - timedelta(days=1)).strftime("%d/%m/%Y")
+    today_s   = [e for e in s if e.get("date") == today_str]
+    yest_s    = [e for e in s if e.get("date") == yesterday_str]
+
     return jsonify({
-        "month":          month,
-        "sales":          s,
-        "buys":           b,
-        "shelf_sales":    shelf_sales,
+        "month":           month,
+        "sales":           s,
+        "buys":            b,
+        "shelf_sales":     shelf_sales,
         "shelves_summary": shelves_summary,
-        "expenses":       {"expenses": expenses, "paid": paid},
-        "charts":         months_data,
-        "flowers":        {"flowers": flowers, "total": flowers_total}
+        "expenses":        {"expenses": expenses, "paid": paid},
+        "charts":          months_data,
+        "flowers":         {"flowers": flowers, "total": flowers_total},
+        "today_sales":     round(sum(e["amt"] for e in today_s), 3),
+        "today_count":     len(today_s),
+        "yesterday_sales": round(sum(e["amt"] for e in yest_s), 3),
     })
 
 @app.route("/api/insights")
@@ -272,7 +281,7 @@ def api_insights():
                 json={"model":"llama-3.3-70b-versatile",
                       "messages":[{"role":"system","content":system_p},
                                   {"role":"user","content":"اكتب التحليل الآن"}],
-                      "max_tokens":900,"temperature":0.85}, timeout=20)
+                      "max_tokens":900,"temperature":0.85}, timeout=12)
             insights_text = res.json()["choices"][0]["message"]["content"].strip()
         except:
             insights_text = fallback
