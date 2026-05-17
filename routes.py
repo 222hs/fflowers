@@ -280,9 +280,14 @@ def api_insights():
     today = datetime.now().strftime("%Y-%m-%d")
     cached      = db_one("SELECT value FROM app_settings WHERE key='insights_text'")
     cached_date = db_one("SELECT value FROM app_settings WHERE key='insights_date'")
-    # نستخدم الكاش فقط إذا كان من نفس اليوم ويحتوي على الفاصل ||
+    # نستخدم الكاش فقط إذا: نفس اليوم + يحتوي || + تم توليده بـ AI حقيقي (ليس fallback قصير)
     cached_val = cached.get("value","") if cached else ""
-    if cached_date and cached_date.get("value") == today and "||" in cached_val:
+    force_refresh = request.args.get("refresh") == "1"
+    has_ai_key = bool(GROQ_KEY or GEMINI_KEY or OPENROUTER_KEY or OPENAI_KEY)
+    cache_valid = (cached_date and cached_date.get("value") == today
+                   and "||" in cached_val and len(cached_val) > 400
+                   and not force_refresh)
+    if cache_valid:
         return jsonify({"text": cached_val, "fresh": False})
 
     now = datetime.now()
