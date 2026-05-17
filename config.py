@@ -29,6 +29,26 @@ def _keep_alive():
 _t = threading.Thread(target=_keep_alive, daemon=True)
 _t.start()
 
+# ── مسح كاش التحليل الذكي كل يوم الساعة 22:00 بتوقيت عُمان (18:00 UTC) ──
+def _insights_scheduler():
+    time.sleep(30)  # انتظر حتى تكتمل تهيئة قاعدة البيانات
+    while True:
+        try:
+            from datetime import timezone
+            oman_offset = timedelta(hours=4)
+            now_oman = datetime.now(timezone.utc) + oman_offset
+            # إذا الساعة 22:00 بتوقيت عُمان → امسح الكاش لإجبار التجديد
+            if now_oman.hour == 22 and now_oman.minute < 10:
+                from database import db_run
+                db_run("DELETE FROM app_settings WHERE key IN ('insights_text','insights_date')")
+            # افحص كل 5 دقائق
+            time.sleep(300)
+        except:
+            time.sleep(300)
+
+_ti = threading.Thread(target=_insights_scheduler, daemon=True)
+_ti.start()
+
 # ── Config ────────────────────────────────────────────────────
 BOT_TOKEN       = os.environ.get("BOT_TOKEN", "")
 GROQ_KEY        = os.environ.get("GROQ_API_KEY", "")
