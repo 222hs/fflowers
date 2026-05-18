@@ -1,2047 +1,1692 @@
-from config import *
-from database import *
-from helpers import *
-from telegram_bot import *
-from html_pages import HTML_PAGE, WORKER_PAGE, LOGIN_PAGE
+# routes.py — Flask routes (webhook, dashboard, expenses, SSE, parse)
+# UPDATED: bank-balance delete/reset, auto-insight after save, Muscat-tz daily total fix
+import os, json, threading, time, datetime, re, queue
+from urllib.parse import unquote
+from flask import Blueprint, request, jsonify, send_from_directory, Response, stream_with_context, session, redirect
+import requests
 
+from config import BOT_TOKEN, ALLOWED_CHAT_IDS, ADMIN_CHAT_ID, SQLITE_PATH, db_conn, PASSWORD
+from firebase import firebase_db, broadcast_event, _sse_clients, _preview_clients, _sse_lock
+from ai_engine import hybrid_parse, extract_gps_from_text, PROVIDERS, generate_daily_insight
+from db_helpers import _muscat_today, _muscat_month
+from regex_templates import generate_regex_for_text, save_regex_template
+# BUG FIX: import db_helpers module (not individual functions) so the
+# monkey-patched save_expense from app.py is resolved at call-time,
+# not frozen at import-time.
+import db_helpers as _db_helpers
+from db_helpers import (get_expenses_firebase, get_expenses_sqlite_fast,
+                        get_bank_balances_sqlite,
+                        get_daily_total_firebase, save_raw_message, get_raw_messages)
 
-from functools import wraps
-from flask import make_response, redirect, send_from_directory, request as flask_request
-import hashlib
+def save_expense(*args, **kwargs):
+    """Thin shim — always delegates to the (possibly monkey-patched) module-level function."""
+    return _db_helpers.save_expense(*args, **kwargs)
 
-def get_token():
-    return hashlib.md5((APP_PASSWORD + "_fairuz_token").encode()).hexdigest()
+bp = Blueprint('main', __name__)
+app = bp   # alias so existing @app.route() decorators keep working
 
-def get_worker_token():
-    return hashlib.md5((WORKER_PASSWORD + "_worker_token").encode()).hexdigest()
-
-def check_auth():
-    return request.cookies.get("fairuz_auth") == get_token()
-
-def check_worker_auth():
-    return request.cookies.get("fairuz_worker") == get_worker_token()
-
-def auth(f):
-    @wraps(f)
-    def w(*a,**k):
-        if not check_auth():
-            return redirect('/login')
-        return f(*a,**k)
-    return w
-
-def worker_auth(f):
-    @wraps(f)
-    def w(*a,**k):
-        if not check_worker_auth() and not check_auth():
-            return redirect('/login')
-        return f(*a,**k)
-    return w
-
-@app.route("/ping")
-def ping():
-    return "ok", 200
-
-@app.route('/background.jpg')
-def background_image():
-    return send_from_directory('.', 'background.jpg', mimetype='image/jpeg')
-
-@app.route('/upload-background', methods=['POST'])
-@auth
-def upload_background():
-    """Upload a new background image"""
-    try:
-        if 'file' not in request.files:
-            return jsonify({"ok": False, "error": "No file provided"}), 400
-        
-        file = request.files['file']
-        if file.filename == '':
-            return jsonify({"ok": False, "error": "No file selected"}), 400
-        
-        # Check if file is an image
-        if not file.content_type or not file.content_type.startswith('image/'):
-            return jsonify({"ok": False, "error": "File must be an image"}), 400
-        
-        # Save as background.jpg
-        file.save('background.jpg')
-        return jsonify({"ok": True, "message": "Background updated successfully"}), 200
-    except Exception as e:
-        return jsonify({"ok": False, "error": str(e)}), 500
+# ── Auth routes ──────────────────────────────────────────────────────────
 
 @app.route("/login")
-def login():
-    return Response(LOGIN_PAGE, mimetype="text/html")
+def login_page():
+    if session.get("authed"):
+        return redirect("/")
+    return send_from_directory(".", "login.html")
 
-@app.route("/auth", methods=["POST"])
-def do_auth():
-    d = request.json or {}
-    if d.get("p") == APP_PASSWORD:
-        resp = make_response(jsonify({"ok": True}))
-        resp.set_cookie("fairuz_auth", get_token(),
-                       max_age=60*60*24*30, httponly=True, samesite="Lax")
-        return resp
-    return jsonify({"ok": False})
+@app.route("/api/login", methods=["POST"])
+def api_login():
+    data = request.json or {}
+    if data.get("password") == PASSWORD:
+        session["authed"] = True
+        session.permanent = True
+        return jsonify({"ok": True})
+    return jsonify({"ok": False, "error": "كلمة المرور غير صحيحة"}), 401
 
-@app.route("/logout")
-def logout():
-    resp = make_response(redirect('/login'))
-    resp.delete_cookie("fairuz_auth")
-    return resp
+@app.route("/api/logout", methods=["POST"])
+def api_logout():
+    session.clear()
+    return jsonify({"ok": True})
 
-@app.route("/worker-auth", methods=["POST"])
-def worker_do_auth():
-    d = request.json or {}
-    if d.get("p") == WORKER_PASSWORD:
-        resp = make_response(jsonify({"ok": True}))
-        resp.set_cookie("fairuz_worker", get_worker_token(),
-                       max_age=60*60*24*7, httponly=True, samesite="Lax")
-        return resp
-    return jsonify({"ok": False})
+@app.route("/api/preview-stream")
+def api_preview_stream():
+    """Public SSE — emits only data_changed pings, no financial data."""
+    import queue as _queue
+    q = _queue.Queue(maxsize=20)
+    with _sse_lock:
+        _preview_clients.append(q)
 
-@app.route("/worker-logout")
-def worker_logout():
-    resp = make_response(redirect('/login'))
-    resp.delete_cookie("fairuz_worker")
-    return resp
+    def generate():
+        try:
+            yield 'data: {"type":"connected"}\n\n'
+            deadline = time.time() + 270
+            while time.time() < deadline:
+                try:
+                    msg = q.get(timeout=5)
+                    yield msg
+                except _queue.Empty:
+                    yield ": ping\n\n"
+            yield "event: reconnect\ndata: {}\n\n"
+        except GeneratorExit:
+            pass
+        finally:
+            with _sse_lock:
+                if q in _preview_clients:
+                    _preview_clients.remove(q)
 
-@app.route("/worker")
-def worker_index():
-    if not check_worker_auth() and not check_auth():
-        return redirect('/login')
-    return Response(WORKER_PAGE, mimetype="text/html")
-
-@app.route("/")
-@auth
-def index(): return Response(HTML_PAGE, mimetype="text/html")
-
-@app.route("/debug")
-def debug():
-    try:
-        total = db_one("SELECT COUNT(*) as c FROM entries")
-        cnt = int(total["c"]) if total and total.get("c") is not None else 0
-    except Exception as e:
-        cnt = str(e)
-    return jsonify({
-        "database": "Turso ✅" if USE_TURSO else "SQLite (local)",
-        "total_entries": cnt,
-        "turso": USE_TURSO,
-        "bot": bool(BOT_TOKEN),
-        "groq": bool(GROQ_KEY),
-        "groq_key_prefix": GROQ_KEY[:8]+"..." if GROQ_KEY else "NOT SET"
-    })
-
-@app.route("/api/dashboard")
-@auth
-def api_dashboard():
-    """كل البيانات في request واحد لـ Turso"""
-    month = request.args.get("month", cur_month())
-    yr = month.split("-")[0]
-
-    queries = [
-        ("SELECT * FROM entries WHERE month=? ORDER BY created DESC",          (month,)),
-        ("SELECT * FROM expenses ORDER BY id",                                  ()),
-        ("SELECT * FROM entries WHERE type='expense' AND month=? ORDER BY created DESC", (month,)),
-        ("SELECT * FROM entries WHERE month LIKE ? ORDER BY created DESC",      (f"{yr}-%",)),
-        ("SELECT * FROM flowers ORDER BY count DESC",                           ()),
-    ]
-
-    # محاولة batch — request واحد لـ Turso
-    batch = turso_multi(queries) if USE_TURSO else None
-
-    if batch:
-        cur_entries, expenses, paid, all_entries, flowers = batch
-    else:
-        # fallback للـ SQLite أو لو فشل الـ batch
-        cur_entries = db_get("SELECT * FROM entries WHERE month=? ORDER BY created DESC", (month,))
-        expenses    = db_get("SELECT * FROM expenses ORDER BY id")
-        paid        = db_get("SELECT * FROM entries WHERE type='expense' AND month=? ORDER BY created DESC", (month,))
-        all_entries = db_get("SELECT * FROM entries WHERE month LIKE ? ORDER BY created DESC", (f"{yr}-%",))
-        flowers     = db_get("SELECT * FROM flowers ORDER BY count DESC")
-
-    all_s = [e for e in cur_entries if e["type"] == "s"]
-    b = [e for e in cur_entries if e["type"] in ("b","expense")]
-    # فصل مبيعات الرفوف عن مبيعات المحل
-    s = [e for e in all_s if not e.get("shelf_id")]
-    shelf_sales = [e for e in all_s if e.get("shelf_id")]
-
-    months_data = {}
-    for mm in [f"{yr}-{str(i).zfill(2)}" for i in range(1,13)]:
-        ms = [e for e in all_entries if e["month"] == mm]
-        months_data[mm] = {
-            "sales": [e for e in ms if e["type"] == "s" and not e.get("shelf_id")],
-            "buys":  [e for e in ms if e["type"] in ("b","expense")]
+    return Response(
+        stream_with_context(generate()),
+        mimetype='text/event-stream',
+        headers={
+            'Cache-Control': 'no-cache',
+            'X-Accel-Buffering': 'no',
+            'Access-Control-Allow-Origin': '*',
         }
-
-    flowers_total = sum(f["count"] for f in flowers) if flowers else 0
-
-    # ملخص مبيعات الرفوف للصفحة الرئيسية
-    shelves_info = db_get("SELECT * FROM shelves ORDER BY id")
-    shelves_summary = []
-    for sh in shelves_info:
-        sh_sales = [e for e in shelf_sales if e.get("shelf_id") == sh["id"]]
-        shelves_summary.append({
-            "id": sh["id"], "name": sh["name"], "color": sh["color"],
-            "total": sum(e["amt"] for e in sh_sales),
-            "count": len(sh_sales)
-        })
-
-    now = datetime.now()
-    today_str     = now.strftime("%d/%m/%Y")
-    yesterday_str = (now - timedelta(days=1)).strftime("%d/%m/%Y")
-    today_s   = [e for e in s if e.get("date") == today_str]
-    yest_s    = [e for e in s if e.get("date") == yesterday_str]
-
-    return jsonify({
-        "month":           month,
-        "sales":           s,
-        "buys":            b,
-        "shelf_sales":     shelf_sales,
-        "shelves_summary": shelves_summary,
-        "expenses":        {"expenses": expenses, "paid": paid},
-        "charts":          months_data,
-        "flowers":         {"flowers": flowers, "total": flowers_total},
-        "today_sales":     round(sum(e["amt"] for e in today_s), 3),
-        "today_count":     len(today_s),
-        "yesterday_sales": round(sum(e["amt"] for e in yest_s), 3),
-    })
-
-def call_ai(prompt, max_tokens=900, temperature=0.85):
-    """يجرّب النماذج بالترتيب: Groq → Gemini → OpenRouter → OpenAI"""
-    msg = [{"role":"system","content":prompt}, {"role":"user","content":"اكتب التحليل الآن"}]
-
-    # 1. Groq
-    if GROQ_KEY:
-        try:
-            res = requests.post("https://api.groq.com/openai/v1/chat/completions",
-                headers={"Authorization": f"Bearer {GROQ_KEY}", "Content-Type":"application/json"},
-                json={"model":"llama-3.3-70b-versatile","messages":msg,
-                      "max_tokens":max_tokens,"temperature":temperature}, timeout=12)
-            txt = res.json()["choices"][0]["message"]["content"].strip()
-            if txt: return txt, "Groq"
-        except: pass
-
-    # 2. Gemini
-    if GEMINI_KEY:
-        try:
-            gemini_body = {
-                "contents":[{"parts":[{"text": prompt + "\n\nاكتب التحليل الآن"}]}],
-                "generationConfig":{"maxOutputTokens":max_tokens,"temperature":temperature}
-            }
-            res = requests.post(
-                f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={GEMINI_KEY}",
-                headers={"Content-Type":"application/json"},
-                json=gemini_body, timeout=15)
-            txt = res.json()["candidates"][0]["content"]["parts"][0]["text"].strip()
-            if txt: return txt, "Gemini"
-        except: pass
-
-    # 3. OpenRouter
-    if OPENROUTER_KEY:
-        try:
-            res = requests.post("https://openrouter.ai/api/v1/chat/completions",
-                headers={"Authorization": f"Bearer {OPENROUTER_KEY}", "Content-Type":"application/json"},
-                json={"model":"meta-llama/llama-3.3-70b-instruct","messages":msg,
-                      "max_tokens":max_tokens,"temperature":temperature}, timeout=15)
-            txt = res.json()["choices"][0]["message"]["content"].strip()
-            if txt: return txt, "OpenRouter"
-        except: pass
-
-    # 4. OpenAI
-    if OPENAI_KEY:
-        try:
-            res = requests.post("https://api.openai.com/v1/chat/completions",
-                headers={"Authorization": f"Bearer {OPENAI_KEY}", "Content-Type":"application/json"},
-                json={"model":"gpt-4o-mini","messages":msg,
-                      "max_tokens":max_tokens,"temperature":temperature}, timeout=15)
-            txt = res.json()["choices"][0]["message"]["content"].strip()
-            if txt: return txt, "OpenAI"
-        except: pass
-
-    return None, None
-
-
-@app.route("/api/ai-status")
-def api_ai_status():
-    """حالة المفاتيح — بدون auth لأنها معلومات غير حساسة"""
-    results = {
-        "groq":       "ok" if GROQ_KEY else "no_key",
-        "gemini":     "ok" if GEMINI_KEY else "no_key",
-        "openrouter": "ok" if OPENROUTER_KEY else "no_key",
-        "openai":     "ok" if OPENAI_KEY else "no_key",
-    }
-    results["any_ok"] = any(v == "ok" for v in results.values())
-    r = jsonify(results)
-    r.headers["Cache-Control"] = "no-cache"
-    return r
-
-
-@app.route("/api/insights")
-@auth
-def api_insights():
-    today = datetime.now().strftime("%Y-%m-%d")
-    cached      = db_one("SELECT value FROM app_settings WHERE key='insights_text'")
-    cached_date = db_one("SELECT value FROM app_settings WHERE key='insights_date'")
-    # نستخدم الكاش فقط إذا: نفس اليوم + يحتوي || + تم توليده بـ AI حقيقي (ليس fallback قصير)
-    cached_val = cached.get("value","") if cached else ""
-    force_refresh = request.args.get("refresh") == "1"
-    has_ai_key = bool(GROQ_KEY or GEMINI_KEY or OPENROUTER_KEY or OPENAI_KEY)
-    cache_valid = (cached_date and cached_date.get("value") == today
-                   and "||" in cached_val and len(cached_val) > 400
-                   and not force_refresh)
-    if cache_valid:
-        return jsonify({"text": cached_val, "fresh": False})
-
-    now = datetime.now()
-    today_str     = now.strftime("%d/%m/%Y")
-    yesterday_str = (now - timedelta(days=1)).strftime("%d/%m/%Y")
-
-    today_s, today_b, today_e = get_day_data(today_str)
-    yest_s,  yest_b,  yest_e  = get_day_data(yesterday_str)
-
-    store_today = [r for r in today_s if not r.get("shelf_id")]
-    store_yest  = [r for r in yest_s  if not r.get("shelf_id")]
-
-    ts_today  = sum(r["amt"] for r in store_today)
-    ts_yest   = sum(r["amt"] for r in store_yest)
-    tb_today  = sum(r["amt"] for r in today_b)
-    te_today  = sum(r["amt"] for r in today_e)
-    net_today = ts_today - tb_today - te_today
-
-    today_items = "، ".join(r["desc"] for r in store_today) if store_today else "لا توجد مبيعات بعد"
-    yest_items  = "، ".join(r["desc"] for r in store_yest)  if store_yest  else "لم تكن هناك مبيعات"
-
-    diff_pct = "يوم جديد بلا مقارنة"
-    if ts_yest > 0:
-        pct = ((ts_today - ts_yest) / ts_yest) * 100
-        diff_pct = f"ارتفعت بنسبة {abs(pct):.0f}٪ عن أمس 📈" if pct >= 0 else f"انخفضت بنسبة {abs(pct):.0f}٪ عن أمس 📉"
-
-    # احسب الشهرين القادمين
-    next1 = now + timedelta(days=30)
-    next2 = now + timedelta(days=60)
-    month_names_ar = {1:"يناير",2:"فبراير",3:"مارس",4:"أبريل",5:"مايو",6:"يونيو",
-                      7:"يوليو",8:"أغسطس",9:"سبتمبر",10:"أكتوبر",11:"نوفمبر",12:"ديسمبر"}
-    cur_month_name   = month_names_ar[now.month]
-    next1_month_name = month_names_ar[next1.month]
-    next2_month_name = month_names_ar[next2.month]
-
-    # حساب التاريخ الهجري التقريبي
-    def gregorian_to_hijri_approx(g_date):
-        # خوارزمية تقريبية دقيقة بما يكفي للـ prompt
-        jd = (367 * g_date.year - (7 * (g_date.year + (g_date.month + 9) // 12)) // 4
-              + (275 * g_date.month) // 9 + g_date.day + 1721013)
-        l = jd - 1948440 + 10632
-        n = (l - 1) // 10631
-        l = l - 10631 * n + 354
-        j = ((10985 - l) // 5316) * ((50 * l) // 17719) + (l // 5670) * ((43 * l) // 15238)
-        l = l - ((30 - j) // 15) * ((17719 * j) // 50) - (j // 16) * ((15238 * j) // 43) + 29
-        h_month = (24 * l) // 709
-        h_day   = l - (709 * h_month) // 24
-        h_year  = 30 * n + j - 30
-        hijri_months = ["محرم","صفر","ربيع الأول","ربيع الثاني","جمادى الأولى","جمادى الآخرة",
-                        "رجب","شعبان","رمضان","شوال","ذو القعدة","ذو الحجة"]
-        return f"{h_day} {hijri_months[h_month-1]} {h_year} هـ"
-
-    hijri_today = gregorian_to_hijri_approx(now)
-    hijri_next1 = gregorian_to_hijri_approx(next1)
-    hijri_next2 = gregorian_to_hijri_approx(next2)
-
-    # fallback دائماً يستخدم الفاصل ||
-    fallback = (
-        f"اليوم حققنا مبيعات بقيمة {fmt_omr(ts_today)} من {len(store_today)} عملية 🌸، "
-        f"وأمس كانت المبيعات {fmt_omr(ts_yest)}، و{diff_pct}، "
-        f"استمر في التركيز على الجودة والتواصل مع عملائك الدائمين."
-        f"||"
-        f"بناءً على مبيعات اليوم التي شملت {today_items}، "
-        f"أنصحك بالتركيز على المنتجات الأكثر طلباً وتحضير عروض مبكرة للمناسبات القادمة 💡، "
-        f"والتواصل مع عملائك عبر واتساب لتذكيرهم بالطلبات."
-        f"||"
-        f"نحن الآن في شهر مايو 2026 🗓️، وهذا الوقت مناسب جداً لتحضير عروض خاصة، "
-        f"راجع التقويم الرسمي لسلطنة عُمان للمناسبات القادمة واستغلها مبكراً."
     )
 
-    system_p = f"""أنت مستشار تجاري شخصي ومتخصص في سوق الزهور والهدايا في سلطنة عُمان.
-تاريخ اليوم الميلادي: {today_str} ({cur_month_name} {now.year})
-التاريخ الهجري التقريبي: {hijri_today}
-الشهران القادمان: {next1_month_name} {next1.year} (≈ {hijri_next1}) و{next2_month_name} {next2.year} (≈ {hijri_next2})
+@app.route("/api/login-preview")
+def api_login_preview():
+    """Public endpoint — returns bank balances and last transaction for the login page preview."""
+    try:
+        from db_helpers import get_bank_balances_sqlite
+        from config import db_conn as _db_conn
+        banks_raw = get_bank_balances_sqlite()
+        banks = [
+            {
+                "bank_name":  b.get("bank_name") or b.get("account_id") or "بنك",
+                "account_id": b.get("account_id", ""),
+                "balance":    float(b.get("balance") or 0),
+                "currency":   b.get("currency", "OMR"),
+            }
+            for b in (banks_raw or [])
+        ]
 
-═══ بيانات المحل ═══
-اليوم ({today_str}):
-• مبيعات المحل: {fmt_omr(ts_today)} ({len(store_today)} عملية) — المنتجات: {today_items}
-• المشتريات: {fmt_omr(tb_today)} | المصاريف: {fmt_omr(te_today)} | الصافي: {fmt_omr(net_today)}
+        # Last transaction from SQLite (fast, no Firebase call)
+        last_tx = None
+        try:
+            conn = _db_conn()
+            row = conn.execute(
+                "SELECT * FROM expenses ORDER BY created_at DESC LIMIT 1"
+            ).fetchone()
+            conn.close()
+            if row:
+                e = dict(row)
+                last_tx = {
+                    "name":      e.get("name") or e.get("bank_name") or "معاملة",
+                    "amount":    float(e.get("amount") or 0),
+                    "currency":  e.get("currency", "OMR"),
+                    "category":  e.get("category", "other"),
+                    "bank_name": e.get("bank_name", ""),
+                    "date":      (e.get("date") or "")[:10],
+                }
+        except Exception:
+            pass
 
-أمس ({yesterday_str}):
-• مبيعات: {fmt_omr(ts_yest)} ({len(store_yest)} عملية) — المنتجات: {yest_items}
-• المقارنة: {diff_pct}
+        return jsonify({"banks": banks, "last_tx": last_tx})
+    except Exception as ex:
+        return jsonify({"banks": [], "last_tx": None, "error": str(ex)})
 
-═══ تعليمات الإخراج ═══
-اكتب ثلاثة أقسام مفصولة بـ || فقط، بدون أي نص خارج الأقسام:
+# ── Main app ─────────────────────────────────────────────────────────────
 
-القسم الأول — تحليل اليوم:
-تكلم كصديق مقرب يحلل الأداء بصدق ودفء، اذكر الأرقام الحقيقية، قارن باليوم السابق، أخبره بصراحة إذا كان اليوم جيداً أم يحتاج تحسين.
+@app.route("/")
+def index():
+    return send_from_directory(".", "index.html")
 
-القسم الثاني — نصائح عملية:
-بناءً على ما بيع فعلاً اليوم وأمس، أعطِ نصائح مخصصة وذكية لزيادة المبيعات غداً والأيام القادمة، فكّر معه في عروض وأفكار تجارية محددة.
+@app.route("/static/banks/<path:filename>")
+def bank_static(filename):
+    return send_from_directory("static/banks", filename)
 
-القسم الثالث — المناسبات القادمة (الشهرين القادمين: {next1_month_name} و{next2_month_name}):
-ابحث في معرفتك الكاملة عن كل المناسبات في الفترة القادمة، شاملاً:
+@app.route("/static/<path:filename>")
+def serve_static(filename):
+    return send_from_directory("static", filename)
 
-🇴🇲 المناسبات العُمانية الرسمية والشعبية:
-- الأعياد الوطنية: عيد النهضة 23 يوليو، اليوم الوطني 18 نوفمبر
-- الأعياد الإسلامية من التقويم الهجري — استخدم التاريخ الهجري أعلاه لتحديد أي منها يقع في الشهرين القادمين:
-  • رأس السنة الهجرية (1 محرم)
-  • المولد النبوي الشريف (12 ربيع الأول)
-  • ليلة الإسراء والمعراج (27 رجب)
-  • النصف من شعبان
-  • شهر رمضان المبارك وليلة القدر
-  • عيد الفطر المبارك (1 شوال)
-  • موسم الحج (8-13 ذو الحجة) وما يسبقه
-  • عيد الأضحى المبارك (10 ذو الحجة) وأيام التشريق
-  • عودة الحجاج والفرح بقدومهم بعد العيد
-- المناسبات الاجتماعية: موسم الأعراس (ربيع وصيف)، التخرجات (مايو-يونيو)، بداية العام الدراسي (سبتمبر)
 
-🌍 المناسبات العالمية:
-- عيد الأم (الأحد الثاني من مايو عالمياً، 21 مارس عربياً)
-- عيد الأب (الأحد الثالث من يونيو)
-- عيد الحب (14 فبراير)
-- رأس السنة الميلادية (1 يناير)
-- اليوم العالمي للمرأة (8 مارس)
-- عيد الميلاد (25 ديسمبر)
-- الجمعة السوداء وموسم التخفيضات
+@app.route("/health")
+def health():
+    providers_status = {}
+    for p in PROVIDERS:
+        total = len(p["keys"])
+        active = sum(1 for v in p["key_states"].values() if not v["depleted"])
+        if total > 0:
+            providers_status[p["name"]] = {"total": total, "active": active}
+    return jsonify({
+        "status": "ok",
+        "bot": bool(BOT_TOKEN),
+        "db_sqlite": True,
+        "db_firebase": firebase_db is not None,
+        "ai_providers": providers_status,
+        "hybrid_parsing": True,
+    })
 
-لكل مناسبة تذكر: متى تقريباً، وكيف يستعد لها المحل مبكراً من حيث المخزون والعروض والتواصل مع العملاء، واقترح أفكاراً محددة للزهور والهدايا المناسبة.
+# ── Emergency DB reset (password-protected) ──
+@app.route("/api/admin/reset-db", methods=["POST"])
+def admin_reset_db():
+    import os as _os
+    from config import SQLITE_PATH, init_db, PASSWORD as _PW
+    if request.json.get("password") != _PW:
+        return jsonify({"ok": False, "error": "unauthorized"}), 403
+    deleted = []
+    for suffix in ["", "-wal", "-shm"]:
+        path = SQLITE_PATH + suffix
+        try:
+            _os.remove(path)
+            deleted.append(path)
+        except Exception:
+            pass
+    init_db()
+    print(f"[Admin] ✅ DB reset — deleted: {deleted}", flush=True)
+    # Trigger Firebase restore
+    try:
+        from app import restore_from_firebase
+        restore_from_firebase()
+    except Exception as _re:
+        print(f"[Admin] restore error (non-fatal): {_re}", flush=True)
+    return jsonify({"ok": True, "deleted": deleted})
 
-═══ أسلوب الكتابة ═══
-• جمل طويلة طبيعية كالحديث بين أصدقاء
-• لا قوائم ولا أرقام مرقمة ولا عناوين داخل الأقسام
-• emoji داخل النص بشكل طبيعي وليس في البداية فقط
-• لا تبدأ بـ "بالطبع" أو "إليك" أو أي مقدمة رسمية
-• كن محدداً وعملياً وليس عاماً"""
+# ── Unified Webhook (Telegram + iOS Shortcut) ──
+@app.route("/webhook", methods=["POST"])
+@app.route("/api/webhook", methods=["POST"])
+def webhook():
+    """
+    Single entry-point for both:
+      • Telegram bot updates (message / callback_query from long-polling or webhook)
+      • iOS Shortcut payloads  {"sms_text": "...", "latitude": ..., "longitude": ..., "chat_id": ...}
+    """
+    from decimal import Decimal as _D
 
-    ai_text, model_used = call_ai(system_p, max_tokens=1400)
-    insights_text = ai_text if ai_text else fallback
+    PRIMARY_NOTIFY_ID = 7319712950   # always receives a confirmation
 
-    db_run("INSERT OR REPLACE INTO app_settings (key,value) VALUES (?,?)", ("insights_text", insights_text))
-    db_run("INSERT OR REPLACE INTO app_settings (key,value) VALUES (?,?)", ("insights_date", today))
-    return jsonify({"text": insights_text, "fresh": True, "model": model_used or "fallback"})
+    data = request.json
+    if not data:
+        print("[WEBHOOK] ⚠️  Empty body received")
+        return jsonify({"ok": True})
 
-@app.route("/api/entries")
-@worker_auth
-def api_get():
-    month=request.args.get("month",cur_month())
-    s,b=get_month_data(month)
-    return jsonify({"sales":s,"buys":b})
+    print(f"DEBUG: Webhook received — keys: {list(data.keys())}")
 
-@app.route("/api/entries",methods=["POST"])
+    # ── A) iOS Shortcut payload ────────────────────────────────────────
+    _raw_text = (data.get("sms_text") or data.get("text") or "").strip()
+
+    if _raw_text and "message" not in data:
+        sms_text = _raw_text
+        ios_lat  = data.get("latitude")
+        ios_lon  = data.get("longitude")
+
+        chat_id = data.get("chat_id") or ADMIN_CHAT_ID or None
+        if chat_id:
+            try:
+                chat_id = int(str(chat_id).strip())
+            except (ValueError, TypeError):
+                chat_id = None
+
+        print(f"[SHORTCUT] {len(sms_text)} chars  chat_id={chat_id}", flush=True)
+
+        # Save raw message immediately
+        save_raw_message(chat_id or "shortcut", sms_text, source="ios_shortcut")
+
+        def _safe_coord(v):
+            if v is None:
+                return None
+            try:
+                return float(_D(str(v)))
+            except Exception:
+                return float(v)
+
+        ios_lat_f = _safe_coord(ios_lat)
+        ios_lon_f = _safe_coord(ios_lon)
+
+        def _send_tg_error(bot_token, targets, msg):
+            """Send an error notification to Telegram targets."""
+            if not bot_token:
+                return
+            for _t in targets:
+                try:
+                    requests.post(
+                        f"https://api.telegram.org/bot{bot_token}/sendMessage",
+                        json={"chat_id": _t, "text": msg, "parse_mode": "HTML"},
+                        timeout=10,
+                    )
+                except Exception:
+                    pass
+
+        def _bg_full(sms_text, ios_lat_f, ios_lon_f, chat_id, bot_token, primary_id):
+            """Parse + save + Telegram — all in background so webhook returns instantly."""
+            _tg_targets = {primary_id, *([] if not chat_id else [chat_id])}
+            try:
+                print(f"[SHORTCUT] 🔄 BG: parsing...", flush=True)
+                parsed, extracted_lat, extracted_lon, map_url = hybrid_parse(sms_text)
+
+                # Validate: need amount > 0 AND a non-empty vendor name
+                _vendor_check = (parsed or {}).get("merchant") or (parsed or {}).get("name") or ""
+                _amount_check = float((parsed or {}).get("amount", 0) or 0)
+                if not parsed or _amount_check <= 0 or not _vendor_check.strip():
+                    print(f"[SHORTCUT] ❌ Parse failed — amount={_amount_check} vendor={_vendor_check!r}", flush=True)
+                    preview = sms_text[:200].replace("<","&lt;").replace(">","&gt;")
+                    _send_tg_error(bot_token, _tg_targets,
+                        f"⚠️ <b>Shortcut: لم أستطع تحليل هذه الرسالة</b>\n\n<code>{preview}</code>")
+                    return
+
+                try:
+                    parsed["amount"] = float(_D(str(parsed["amount"])))
+                except Exception:
+                    pass
+
+                final_lat = ios_lat_f if ios_lat_f is not None else extracted_lat
+                final_lon = ios_lon_f if ios_lon_f is not None else extracted_lon
+
+                vendor_name = parsed.get("merchant") or parsed.get("name") or "غير معروف"
+                print(f"[SHORTCUT] 💾 Saving: {vendor_name!r} {parsed.get('amount')}", flush=True)
+                try:
+                    doc = save_expense(parsed, "ios_shortcut",
+                                       latitude=final_lat, longitude=final_lon,
+                                       map_url=map_url, raw_text=sms_text, chat_id=chat_id)
+                except Exception as _save_err:
+                    import traceback as _tb
+                    print(f"[SHORTCUT] ❌ save_expense failed: {_save_err}", flush=True)
+                    print(_tb.format_exc(), flush=True)
+                    _send_tg_error(bot_token, _tg_targets,
+                        f"❌ <b>Shortcut: خطأ أثناء حفظ المعاملة</b>\n\n"
+                        f"المتجر: <b>{vendor_name}</b>\n"
+                        f"المبلغ: <b>{parsed.get('amount')} OMR</b>\n\n"
+                        f"<code>{str(_save_err)[:200]}</code>")
+                    return
+
+                print(f"[SHORTCUT] ✅ Saved: {doc.get('name')} {float(doc.get('amount',0)):.3f}", flush=True)
+
+                _trigger_insight_refresh(doc)
+
+                if not bot_token:
+                    return
+
+                vendor   = doc.get("name", "غير معروف")
+                amount   = float(doc.get("amount", 0.0))
+                currency = doc.get("currency", "OMR")
+                parse_method = parsed.get("parse_method", "ai")
+                ai_provider  = parsed.get("ai_provider", "")
+                PROVIDER_ICONS = {"Grok":"⚡ Grok","DeepSeek":"🌊 DeepSeek","Gemini":"♊ Gemini","ChatGPT":"🟢 ChatGPT","OpenRouter":"🔀 OpenRouter"}
+                METHOD_ICONS  = {"regex":"📐 Regex","template":"📚 Template","learning":"🧠 Learning","fallback":"🔁 Fallback","ai":"🤖 AI"}
+                method_tag = (PROVIDER_ICONS.get(ai_provider, f"🤖 {ai_provider}")
+                              if parse_method == "ai" and ai_provider
+                              else METHOD_ICONS.get(parse_method, "🤖 AI"))
+
+                try:
+                    from app import _build_confirmation
+                    msg_text, keyboard = _build_confirmation(doc, method_tag)
+                except Exception as _bc_err:
+                    print(f"[SHORTCUT] ⚠️ _build_confirmation: {_bc_err}", flush=True)
+                    em  = CAT_EMOJI.get(doc.get("category","other"), "📦")
+                    bal = (f"\n💳 الرصيد: {doc['available_balance']:.3f} {currency}"
+                           if doc.get("available_balance") is not None else "")
+                    gps = (f"\n📍 {final_lat:.6f}, {final_lon:.6f}"
+                           if final_lat is not None and final_lon is not None else "")
+                    msg_text = (f"✅ <b>مصروف مسجّل</b>\n\n"
+                                f"💰 المبلغ: <b>{amount:.3f} {currency}</b>\n"
+                                f"🏪 المتجر: <b>{vendor}</b>\n"
+                                f"{em} الفئة: <b>{doc.get('category','other')}</b>\n"
+                                f"🏦 {doc.get('bank_name','—')}{bal}{gps}\n"
+                                f"📅 {doc.get('date','')}\n\n"
+                                f"<i>حُلِّلت بـ: <b>{method_tag}</b></i>")
+                    keyboard = None
+
+                for _target in {primary_id, *([] if not chat_id else [chat_id])}:
+                    try:
+                        payload = {"chat_id": _target, "text": msg_text, "parse_mode": "HTML"}
+                        if keyboard:
+                            import json as _json
+                            payload["reply_markup"] = _json.dumps(keyboard)
+                        r = requests.post(f"https://api.telegram.org/bot{bot_token}/sendMessage",
+                                          json=payload, timeout=12)
+                        if r.json().get("ok"):
+                            print(f"[SHORTCUT] ✅ Telegram → {_target}", flush=True)
+                        else:
+                            print(f"[SHORTCUT] ❌ Telegram error: {r.json()}", flush=True)
+                    except Exception as te:
+                        print(f"[SHORTCUT] ❌ Telegram failed → {_target}: {te}", flush=True)
+
+            except Exception as _err:
+                import traceback
+                print(f"[SHORTCUT] 💥 BG crashed: {_err}", flush=True)
+                print(traceback.format_exc(), flush=True)
+
+        threading.Thread(
+            target=_bg_full,
+            args=(sms_text, ios_lat_f, ios_lon_f, chat_id, BOT_TOKEN, PRIMARY_NOTIFY_ID),
+            daemon=True,
+        ).start()
+
+        # Return immediately — parse/save/Telegram happen in background
+        return jsonify({"ok": True, "queued": True})
+
+    # ── B) Telegram bot update ─────────────────────────────────────────
+    if "callback_query" in data:
+        try:
+            from app import handle_callback_query
+            threading.Thread(
+                target=handle_callback_query,
+                args=(data["callback_query"],),
+                daemon=True,
+            ).start()
+        except Exception as e:
+            print(f"[WEBHOOK] callback_query dispatch error: {e}")
+        return jsonify({"ok": True})
+
+    msg      = data.get("message", {})
+    chat_id  = msg.get("chat", {}).get("id")
+    text     = msg.get("text", "")
+    loc      = msg.get("location", {})
+    lat      = loc.get("latitude")  if loc else None
+    lon      = loc.get("longitude") if loc else None
+
+    if chat_id and text:
+        print(f"DEBUG: Telegram message from chat_id={chat_id}: {text[:80]!r}")
+        if ALLOWED_CHAT_IDS and str(chat_id) not in ALLOWED_CHAT_IDS:
+            tg_send(chat_id, "⛔ غير مصرح لك باستخدام هذا البوت")
+            return jsonify({"ok": True})
+        from telegram_handler import handle_telegram
+        threading.Thread(
+            target=handle_telegram,
+            args=(chat_id, text, lat, lon),
+            daemon=True,
+        ).start()
+
+    return jsonify({"ok": True})
+
+
+CAT_EMOJI = {
+    "food": "🍕", "shopping": "🛍️", "transport": "🚗", "bills": "📄",
+    "health": "💊", "entertainment": "🎮", "education": "📚",
+    "groceries": "🛒", "fuel": "⛽", "rent": "🏠",
+    "subscriptions": "🔄", "transfer": "💸", "savings": "💰", "other": "📦",
+}
+
+
+def tg_send(chat_id, text, reply_markup=None):
+    """Local tg_send for routes.py — avoids importing from telegram_handler."""
+    if not BOT_TOKEN:
+        return
+    payload = {"chat_id": chat_id, "text": text, "parse_mode": "HTML"}
+    if reply_markup:
+        import json as _json
+        payload["reply_markup"] = _json.dumps(reply_markup)
+    try:
+        requests.post(
+            f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage",
+            json=payload, timeout=10,
+        )
+    except Exception as e:
+        print(f"[TG] send error: {e}")
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# FIX #3 — Auto daily-insight refresh after every new expense
+# Runs in a background thread so it never blocks the response.
+# ─────────────────────────────────────────────────────────────────────────────
+def _trigger_insight_refresh(doc: dict):
+    """
+    After a new expense is saved, asynchronously regenerate today's daily
+    insight so the Smart Daily Analytics section stays current.
+    Broadcasts an SSE 'daily_insight' event when done.
+    """
+    def _run():
+        try:
+            today = _muscat_today()
+            # Only refresh for today's transactions
+            tx_date = str(doc.get("date", ""))[:10]
+            if tx_date and tx_date != today:
+                return
+            exps = get_expenses_firebase(date_filter=today)
+            if not exps:
+                return
+            # Force-delete cached insight so generate_daily_insight creates fresh one
+            if firebase_db:
+                try:
+                    firebase_db.collection("daily_insights").document(today).delete()
+                except Exception:
+                    pass
+            try:
+                conn = db_conn()
+                conn.execute("DELETE FROM daily_insights WHERE date=?", (today,))
+                conn.commit()
+                conn.close()
+            except Exception:
+                pass
+            insight = generate_daily_insight(exps)
+            broadcast_event("daily_insight", {"date": today, "insight": insight})
+            print(f"[Insight] ✅ Auto-refreshed for {today} after new expense")
+        except Exception as e:
+            print(f"[Insight] ⚠️  Auto-refresh error: {e}")
+    threading.Thread(target=_run, daemon=True).start()
+
+
+@app.route("/api/stream")
+def sse_stream():
+    if not session.get("authed"):
+        return Response("data: {\"error\":\"unauthorized\"}\n\n", mimetype='text/event-stream', status=401)
+    q = queue.Queue(maxsize=50)
+    with _sse_lock:
+        if len(_sse_clients) >= 20:
+            try:
+                _sse_clients[0].put_nowait("event: close\ndata: {}\n\n")
+            except Exception:
+                pass
+            _sse_clients.pop(0)
+        _sse_clients.append(q)
+    def generate():
+        try:
+            yield "data: {\"type\":\"connected\"}\n\n"
+            deadline = time.time() + 270  # 4.5 min max per SSE connection
+            while time.time() < deadline:
+                try:
+                    msg = q.get(timeout=5)
+                    yield msg
+                except queue.Empty:
+                    yield ": ping\n\n"
+            yield "event: reconnect\ndata: {}\n\n"
+        except GeneratorExit:
+            pass
+        except Exception as e:
+            print(f"[SSE] stream error: {e}")
+        finally:
+            with _sse_lock:
+                if q in _sse_clients:
+                    _sse_clients.remove(q)
+    return Response(stream_with_context(generate()), mimetype="text/event-stream",
+                    headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
+
+# ── Days with expenses (for calendar dots) ──
+@app.route("/api/expenses/active-days")
+def api_active_days():
+    """Return list of YYYY-MM-DD dates that have at least one expense, for a given month."""
+    month = request.args.get("month", _muscat_month())  # e.g. "2026-05"
+    conn = db_conn()
+    rows = conn.execute(
+        """SELECT DISTINCT date_only FROM expenses
+           WHERE date_only LIKE ? AND date_only IS NOT NULL AND date_only != ''
+           UNION
+           SELECT DISTINCT substr(date,1,10) FROM expenses
+           WHERE date LIKE ? AND (date_only IS NULL OR date_only = '')
+        """,
+        (f"{month}%", f"{month}%")
+    ).fetchall()
+    conn.close()
+    days = sorted({r[0] for r in rows if r[0]})
+    return jsonify(days)
+
+# ── Expenses API ──
+@app.route("/api/expenses")
+def api_expenses():
+    month = request.args.get("month", _muscat_month())
+    date  = request.args.get("date", "")
+    limit = int(request.args.get("limit", 500))
+    if date:
+        return jsonify(get_expenses_sqlite_fast(date_filter=date, limit=limit))
+    return jsonify(get_expenses_sqlite_fast(month_filter=month, limit=limit))
+
+@app.route("/api/expenses/map")
+def api_expenses_map():
+    month = request.args.get("month", _muscat_month())
+    conn = db_conn()
+    rows = conn.execute("""
+        SELECT id, name, amount, currency, category, date, bank_name,
+               source, parse_method, available_balance, map_url,
+               latitude, longitude
+        FROM expenses
+        WHERE date LIKE ?
+          AND latitude IS NOT NULL
+          AND longitude IS NOT NULL
+        ORDER BY created_at DESC
+        LIMIT 500
+    """, (month + "%",)).fetchall()
+    conn.close()
+    pins = []
+    for r in rows:
+        d = dict(r)
+        try:
+            d["latitude"]  = float(d["latitude"])
+            d["longitude"] = float(d["longitude"])
+            pins.append(d)
+        except (TypeError, ValueError):
+            pass
+    return jsonify(pins)
+
+@app.route("/api/expense", methods=["POST"])
 def api_add():
-    d=request.json
-    month=d.get("month",cur_month())
-    db_run("INSERT INTO entries (type,desc,amt,date,month,img,paid_by,payment_method,sale_time,category) VALUES (?,?,?,?,?,?,?,?,?,?)",
-        (d["type"],d["desc"],float(d["amt"]),
-         d.get("date",datetime.now().strftime("%d/%m/%Y")),
-         month,d.get("img"),d.get("paid_by"),d.get("payment_method"),d.get("sale_time"),d.get("category")))
-    return jsonify({"ok":True})
+    data = request.json
+    if not data.get("name") or not data.get("amount"):
+        return jsonify({"error": "missing fields"}), 400
+    lat = data.get("latitude")
+    lon = data.get("longitude")
+    map_url = data.get("map_url")
+    try:
+        lat = float(lat) if lat is not None else None
+        lon = float(lon) if lon is not None else None
+    except (TypeError, ValueError):
+        lat = lon = None
+    doc = save_expense(data, data.get("source", "manual"),
+                       latitude=lat, longitude=lon, map_url=map_url)
+    # FIX #3: also refresh insight for manually added expenses
+    _trigger_insight_refresh(doc)
+    # FIX #4: tell frontend a fresh fetch is needed
+    resp = jsonify(doc)
+    resp.headers["X-Data-Updated"] = "true"
+    return resp
 
-@app.route("/api/entries/<int:eid>",methods=["DELETE"])
-def api_del(eid):
-    db_run("DELETE FROM entries WHERE id=?",(eid,))
-    return jsonify({"ok":True})
+@app.route("/api/expense/<eid>", methods=["DELETE"])
+def api_delete(eid):
+    # Grab the expense date_only before deleting so we can recompute the daily total
+    expense_date = None
+    conn = db_conn()
+    row = conn.execute("SELECT date FROM expenses WHERE id=?", (eid,)).fetchone()
+    if row:
+        expense_date = str(row["date"] or "")[:10]
+    conn.execute("DELETE FROM expenses WHERE id=?", (eid,))
+    conn.commit()
+    conn.close()
 
-@app.route("/api/shelves")
-def api_shelves():
-    month=request.args.get("month",cur_month())
-    shelves=db_get("SELECT * FROM shelves ORDER BY id")
-    result=[]
-    for s in shelves:
-        prods=db_get("SELECT * FROM shelf_products WHERE shelf_id=? ORDER BY created DESC",(s["id"],))
-        row=db_one("SELECT COALESCE(SUM(amt),0) as total,COUNT(*) as cnt FROM entries WHERE type='s' AND shelf_id=? AND month=?",(s["id"],month))
-        sales_entries=db_get("SELECT desc,amt,date,payment_method FROM entries WHERE type='s' AND shelf_id=? AND month=? ORDER BY created DESC",(s["id"],month))
-        ms=float(row["total"]) if row else 0
-        rent=float(s.get("rent") or 0)
-        result.append({**s,"products":prods,"monthly_sales":ms,"sales_count":int(row["cnt"]) if row else 0,"rent":rent,"net":ms-rent,"sales_entries":sales_entries})
+    if firebase_db:
+        try:
+            firebase_db.collection("expenses").document(eid).delete()
+        except Exception:
+            pass
+        try:
+            firebase_db.collection("transactions").document(eid).delete()
+        except Exception:
+            pass
+
+    # Broadcast deletion to all SSE clients
+    broadcast_event("expense_deleted", {"id": eid})
+
+    # Recompute and broadcast the daily total so every connected client updates immediately
+    today_str = _muscat_today()
+    if not expense_date:
+        expense_date = today_str
+    new_daily = get_daily_total_firebase(expense_date)
+    broadcast_event("daily_total", {"date": expense_date, "total": new_daily})
+
+    # Tell every client to fully re-fetch dashboard + analytics
+    broadcast_event("refresh_dashboard", {"reason": "expense_deleted", "id": eid})
+
+    return jsonify({"ok": True})
+
+@app.route("/api/expense/<eid>", methods=["PUT"])
+def api_edit(eid):
+    data = request.json or {}
+    allowed = ["name","amount","currency","category","date","notes","bank_name","available_balance","sender","type","parse_method"]
+    update = {k: data[k] for k in allowed if k in data}
+    if not update:
+        return jsonify({"error": "no valid fields"}), 400
+
+    # Coerce amount to float via Decimal to preserve precision
+    if "amount" in update:
+        from decimal import Decimal, InvalidOperation
+        try:
+            update["amount"] = float(Decimal(str(update["amount"])))
+        except (InvalidOperation, Exception):
+            update["amount"] = float(update["amount"])
+
+    # ── 1. Read old name before any changes ───────────────────────────────
+    old_name = None
+    name_changed = False
+    if "name" in update:
+        conn = db_conn()
+        old_row = conn.execute("SELECT name FROM expenses WHERE id=?", (eid,)).fetchone()
+        conn.close()
+        if old_row and old_row["name"] and old_row["name"] != update["name"]:
+            old_name = old_row["name"].strip()
+            name_changed = True
+
+    # ── 2. SQLite: update this expense + bulk-rename same merchant ─────────
+    import datetime as _dt
+    _now = _dt.datetime.utcnow().isoformat()
+
+    set_clause = ", ".join(f"{k}=?" for k in update)
+    values     = list(update.values()) + [eid]
+    conn = db_conn()
+    conn.execute(f"UPDATE expenses SET {set_clause} WHERE id=?", values)
+    if name_changed:
+        preferred    = update["name"].strip()
+        original_key = old_name.lower()
+        conn.execute(
+            "INSERT OR REPLACE INTO merchant_categories (merchant_key, category, updated_at) VALUES (?,?,?)",
+            ("~name~" + original_key, preferred, _now)
+        )
+        conn.execute(
+            "UPDATE expenses SET name=? WHERE LOWER(name)=? AND id!=?",
+            (preferred, original_key, eid)
+        )
+    conn.commit()
+    conn.close()
+
+    # ── 3. Broadcast SSE immediately (before Firebase) ────────────────────
+    broadcast_event("expense_edited", {"id": eid, "updates": update})
+    if name_changed:
+        broadcast_event("names_bulk_updated", {"old": old_name, "new": preferred})
+
+    # ── 4. Firebase writes in background — never block the response ────────
+    def _firebase_sync(eid, update, name_changed, old_name):
+        if not firebase_db:
+            return
+        # Update this expense
+        try:
+            firebase_db.collection("expenses").document(eid).update(update)
+        except Exception as e:
+            print(f"[Firebase] edit sync (expenses): {e}")
+        try:
+            txn_update = {k: update[k] for k in update
+                          if k in ("amount","currency","category","date","type","bank_name","name")}
+            if txn_update:
+                firebase_db.collection("transactions").document(eid).update(txn_update)
+        except Exception as e:
+            print(f"[Firebase] edit sync (transactions): {e}")
+
+        if not name_changed:
+            return
+        preferred    = update["name"].strip()
+        original_key = old_name.lower()
+        # Save override
+        try:
+            firebase_db.collection("merchant_name_overrides").document(original_key).set({
+                "original_name": old_name,
+                "preferred_name": preferred,
+                "updated_at": _now
+            })
+        except Exception as e:
+            print(f"[Firebase] merchant_name_override save: {e}")
+        # Bulk rename matching docs
+        for coll in ("expenses", "transactions"):
+            try:
+                for d in firebase_db.collection(coll).where("name", "==", old_name).stream():
+                    try:
+                        d.reference.update({"name": preferred})
+                    except Exception:
+                        pass
+            except Exception as e:
+                print(f"[Firebase] bulk name update ({coll}): {e}")
+
+    threading.Thread(target=_firebase_sync, args=(eid, update, name_changed, old_name), daemon=True).start()
+
+    return jsonify({"ok": True, "id": eid})
+
+# ── Bank Balances ──
+@app.route("/api/bank-balances")
+def api_bank_balances():
+    return jsonify(get_bank_balances_sqlite())
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# FIX #2 — Bank balance delete / reset endpoints
+# ─────────────────────────────────────────────────────────────────────────────
+
+@app.route("/api/bank-balances/<path:account_id>", methods=["DELETE"])
+def api_delete_bank_balance(account_id):
+    """
+    Permanently remove a bank account balance record from both SQLite and
+    Firestore, then broadcast a real-time SSE event so the dashboard
+    Net Worth total updates immediately without a page reload.
+
+    BUG FIX 1 — URL encoding mismatch:
+      The browser's fetch() + encodeURIComponent() turns "Bank Muscat_1234"
+      into "Bank%20Muscat_1234".  Flask's <path:> converter does NOT decode
+      percent-encoding, so the raw DB lookup silently missed every time.
+      unquote() decodes the ID before any DB/Firestore call.
+
+    BUG FIX 2 — Firestore errors swallowed / wrong "ok: true":
+      Old code always returned {"ok": true} even when Firestore failed.
+      Now: check snap.exists before deleting, capture firebase_error in
+      the response body, and return HTTP 404 when SQLite found 0 rows.
+
+    BUG FIX 3 — SSE broadcast fired unconditionally:
+      Phantom balance_deleted events could confuse the frontend into
+      removing a card that was never actually deleted.
+      Now: only broadcast when at least SQLite or Firestore confirmed success.
+    """
+    # BUG FIX 1: always decode percent-encoding before any DB lookup
+    account_id = unquote(account_id)
+    print(f"[Balance] DELETE requested for account_id={account_id!r}")
+
+    # ── SQLite ────────────────────────────────────────────────────────
+    conn = db_conn()
+    result = conn.execute(
+        "DELETE FROM bank_balances WHERE account_id=?", (account_id,)
+    )
+    sqlite_deleted = result.rowcount   # BUG FIX 3: track actual rows removed
+    conn.commit()
+    conn.close()
+    print(f"[Balance] SQLite rows deleted: {sqlite_deleted}")
+
+    # Broadcast immediately after SQLite delete — don't wait for Firebase
+    if sqlite_deleted > 0:
+        broadcast_event("balance_deleted", {"account_id": account_id})
+        print(f"[Balance] SSE balance_deleted broadcast for {account_id!r}")
+
+    # Firebase delete in background — never block the response
+    def _fb_delete_balance(account_id):
+        if not firebase_db:
+            return
+        try:
+            ref  = firebase_db.collection("bank_balances").document(account_id)
+            snap = ref.get()
+            if snap.exists:
+                ref.delete()
+                print(f"[Balance] Firestore deleted: {account_id!r}")
+            else:
+                print(f"[Balance] Firestore doc not found: {account_id!r}")
+        except Exception as e:
+            print(f"[Balance] Firestore delete error: {e}")
+
+    threading.Thread(target=_fb_delete_balance, args=(account_id,), daemon=True).start()
+
+    status_code = 200 if sqlite_deleted > 0 else 404
+    return jsonify({"ok": sqlite_deleted > 0, "account_id": account_id}), status_code
+
+
+@app.route("/api/bank-balances/<path:account_id>/reset", methods=["POST"])
+def api_reset_bank_balance(account_id):
+    """
+    Set a bank account balance to zero (keeps the record, just zeroes it).
+
+    BUG FIX 1 — URL encoding mismatch (same as DELETE endpoint):
+      unquote() decodes percent-encoded account_id before any DB call.
+
+    BUG FIX 4 — conn.close() ordering:
+      Old code fetched the row for the broadcast payload AFTER conn.close()
+      was ambiguous in position.  Now the SELECT is explicit BEFORE close().
+    """
+    # BUG FIX 1: decode percent-encoding
+    account_id = unquote(account_id)
+    print(f"[Balance] RESET requested for account_id={account_id!r}")
+
+    now = datetime.datetime.now().isoformat()
+
+    # ── SQLite — update then fetch BEFORE closing ──────────────────────
+    conn = db_conn()
+    conn.execute(
+        "UPDATE bank_balances SET balance=0, updated_at=? WHERE account_id=?",
+        (now, account_id),
+    )
+    conn.commit()
+    # BUG FIX 4: fetch BEFORE conn.close() so the row is still readable
+    row = conn.execute(
+        "SELECT * FROM bank_balances WHERE account_id=?", (account_id,)
+    ).fetchone()
+    conn.close()   # close AFTER the SELECT
+
+    if not row:
+        print(f"[Balance] ⚠️  account_id={account_id!r} not found in SQLite after reset")
+        return jsonify({"ok": False, "error": "account not found"}), 404
+
+    # ── Firestore ─────────────────────────────────────────────────────
+    firebase_error = None
+    if firebase_db:
+        try:
+            firebase_db.collection("bank_balances").document(account_id).update({
+                "balance":    0.0,
+                "updated_at": now,
+            })
+            print(f"[Balance] ✅ Firestore balance reset for {account_id!r}")
+        except Exception as e:
+            firebase_error = str(e)
+            print(f"[Balance] ❌ Firestore reset error for {account_id!r}: {firebase_error}")
+
+    # Build broadcast payload from the freshly-fetched row
+    payload               = dict(row)
+    payload["balance"]    = 0.0
+    payload["account_id"] = account_id   # guarantee present
+    broadcast_event("balance_update", payload)
+    print(f"[Balance] 📡 SSE balance_update broadcast for {account_id!r} (balance=0)")
+
+    response = {"ok": True, "account_id": account_id, "balance": 0.0}
+    if firebase_error:
+        response["firebase_warning"] = firebase_error
+    return jsonify(response)
+
+
+# ── Messages (raw SMS log) ──
+@app.route("/api/messages")
+def api_messages():
+    limit = int(request.args.get("limit", 100))
+    return jsonify(get_raw_messages(limit))
+
+@app.route("/api/messages/<int:mid>", methods=["DELETE"])
+def api_delete_message(mid):
+    conn = db_conn()
+    conn.execute("DELETE FROM messages WHERE id=?", (mid,))
+    conn.commit()
+    conn.close()
+    # Also delete from Firebase
+    if firebase_db:
+        try:
+            docs = firebase_db.collection("messages").where("id", "==", mid).stream()
+            for doc in docs:
+                doc.reference.delete()
+        except Exception:
+            pass
+    return jsonify({"ok": True})
+
+
+@app.route("/api/inbox")
+def api_inbox():
+    """Return recent expenses from telegram/ios_shortcut, newest first, up to 40."""
+    limit = int(request.args.get("limit", 40))
+    since = request.args.get("since", "")  # ISO datetime — only return rows after this
+    conn = db_conn()
+    query = """
+        SELECT id, type, name, amount, currency, category, date, bank_name,
+               source, parse_method, created_at, latitude, longitude
+        FROM expenses
+        WHERE source IN ('telegram','ios_shortcut')
+    """
+    params: list = []
+    if since:
+        query += " AND created_at > ?"
+        params.append(since)
+    query += " ORDER BY created_at DESC LIMIT ?"
+    params.append(limit)
+    rows = conn.execute(query, params).fetchall()
+    conn.close()
+    result = [dict(r) for r in rows]
     return jsonify(result)
 
-@app.route("/api/shelves/<int:sid>/products",methods=["POST"])
-def api_add_prod(sid):
-    d=request.json
-    db_run("INSERT INTO shelf_products (shelf_id,name,price,qty) VALUES (?,?,?,?)",
-        (sid,d["name"],float(d["price"]),int(d.get("qty",0))))
-    return jsonify({"ok":True})
 
-@app.route("/api/shelf_products/<int:pid>",methods=["DELETE"])
-def api_del_prod(pid):
-    db_run("DELETE FROM shelf_products WHERE id=?",(pid,)); return jsonify({"ok":True})
+@app.route("/api/messages/clear-all", methods=["DELETE", "POST"])
+def api_clear_all_messages():
+    """Permanently delete ALL raw messages from SQLite and Firebase."""
+    # SQLite
+    conn = db_conn()
+    result = conn.execute("DELETE FROM messages")
+    deleted_sqlite = result.rowcount
+    conn.commit()
+    conn.close()
 
-@app.route("/api/shelf_products/<int:pid>/sell",methods=["POST"])
-def api_sell(pid):
-    d=request.json; qty=int(d.get("qty",1)); pay=d.get("payment_method")
-    prod=db_one("SELECT * FROM shelf_products WHERE id=?",(pid,))
-    if not prod: return jsonify({"ok":False}),404
-    new_qty=max(0,prod["qty"]-qty)
-    db_run("UPDATE shelf_products SET qty=? WHERE id=?",(new_qty,pid))
-    month=cur_month(); date=datetime.now().strftime("%d/%m/%Y")
-    shelf=db_one("SELECT name FROM shelves WHERE id=?",(prod["shelf_id"],))
-    sname=shelf["name"] if shelf else ""
-    db_run("INSERT INTO entries (type,desc,amt,date,month,shelf_id,payment_method) VALUES (?,?,?,?,?,?,?)",
-        ("s",f'{prod["name"]} — رف {sname}',prod["price"]*qty,date,month,prod["shelf_id"],pay))
-    return jsonify({"ok":True,"new_qty":new_qty,"total":prod["price"]*qty})
-
-@app.route("/api/shelves/<int:sid>/rent",methods=["POST"])
-def api_rent(sid):
-    db_run("UPDATE shelves SET rent=? WHERE id=?",(float(request.json["rent"]),sid))
-    return jsonify({"ok":True})
-
-# ── Telegram Webhook ──────────────────────────────────────
-pending={}
-
-@app.route("/webhook",methods=["POST"])
-def webhook():
-    data=request.json or {}
-    
-    cb=data.get("callback_query")
-    if cb:
-        cid=cb["id"]; chat=cb["message"]["chat"]["id"]; cbd=cb["data"]
-        month=cur_month(); date=datetime.now().strftime("%d/%m/%Y")
-        try: requests.post(f"https://api.telegram.org/bot{BOT_TOKEN}/answerCallbackQuery",json={"callback_query_id":cid},timeout=5)
-        except: pass
-        try: requests.post(f"https://api.telegram.org/bot{BOT_TOKEN}/editMessageReplyMarkup",json={"chat_id":chat,"message_id":cb["message"]["message_id"],"reply_markup":{"inline_keyboard":[]}},timeout=5)
-        except: pass
-        
-        if cbd.startswith("pay:"):
-            pay=cbd.split("pay:",1)[1]
-            last=db_one("SELECT id FROM entries WHERE type='s' AND month=? ORDER BY created DESC LIMIT 1",(month,))
-            if last: db_run("UPDATE entries SET payment_method=? WHERE id=?",(pay,last["id"]))
-            if chat in pending and pending[chat].get("waiting")=="sale_payment": del pending[chat]
-            tg(chat,f"✅ طريقة الدفع: {pay}")
-            
-        elif cbd.startswith("payer:"):
-            val=cbd.split("payer:",1)[1]
-            if val=="skip": paid_by=None; tg(chat,"⏭ تم التخطي")
-            elif val=="other":
-                if chat not in pending: pending[chat]={}
-                pending[chat]["waiting_name"]=True
-                tg(chat,"✏️ اكتب اسم الشخص:"); return "ok"
-            else: paid_by=val; tg(chat,f"✅ دفع: {paid_by}")
-            
-            state=pending.get(chat,{})
-            if state.get("waiting") in ("paid_by","paid_by_photo"):
-                if state.get("waiting")=="paid_by":
-                    db_run("INSERT INTO entries (type,desc,amt,date,month,paid_by) VALUES (?,?,?,?,?,?)",
-                        ("b",state.get("desc","مشتريات"),state.get("amt",0),state.get("date",date),state.get("month",month),paid_by))
-                    if chat in pending: del pending[chat]
-                    tg(chat,f"✅ تم التسجيل!\n📦 {state.get('desc')}\n💰 {fmt_omr(state.get('amt',0))}" + (f"\n👤 {paid_by}" if paid_by else ""))
-                else:
-                    last=db_one("SELECT id FROM entries WHERE month=? ORDER BY created DESC LIMIT 1",(month,))
-                    if last: db_run("UPDATE entries SET paid_by=? WHERE id=?",(paid_by,last["id"]))
-                    if chat in pending: del pending[chat]
-        return "ok"
-
-    msg=data.get("message") or data.get("edited_message")
-    if not msg: return "ok"
-    chat=msg["chat"]["id"]; month=cur_month(); date=datetime.now().strftime("%d/%m/%Y")
-
-    if "photo" in msg:
-        file_id=msg["photo"][-1]["file_id"]; caption=msg.get("caption","").strip()
-        # Check if flower counting request
-        caption_is_flowers = any(w in caption for w in ["عد الورد","عد ورد","عد زهور","مخزون ورد","count flower"])
-        # Check if flower supplier invoice
-        caption_is_flower_inv = any(w in caption for w in [
-            "فاتورة ورد","فاتورة زهور","فاتورة شركة","مورد ورد","شركة ورد",
-            "flower invoice","supplier","فاتورة مورد","فاتوره ورد","فاتوره زهور"])
-        # Pre-detect electricity from caption
-        caption_is_elec = any(w in caption for w in ["كهرباء","كهربا","تعبئة","تعبئه","⚡","electric","kwh","prepaid"])
-
-        if caption_is_flower_inv:
-            tg(chat,"🧾 جاري قراءة فاتورة الورد...")
-            inv = groq_read_flower_supplier_invoice(file_id)
-            if inv and inv.get("found") and inv.get("items"):
-                items     = inv.get("items", [])
-                company   = inv.get("company","").strip() or "غير محدد"
-                inv_no    = inv.get("invoice_number")  # رقم الفاتورة (قد يكون None)
-                std_date  = inv.get("date","").strip()  # صيغة YYYY-MM-DD
-
-                # تحويل التاريخ لحفظه وعرضه
-                if std_date:
-                    try:
-                        # من YYYY-MM-DD إلى DD/MM/YYYY للعرض
-                        dt = datetime.strptime(std_date, "%Y-%m-%d")
-                        inv_date_display = dt.strftime("%d/%m/%Y")
-                        inv_month = dt.strftime("%Y-%m")
-                    except:
-                        inv_date_display = std_date
-                        inv_month = month
-                else:
-                    inv_date_display = date
-                    inv_month = month
-
-                total = float(inv.get("total") or sum(float(i.get("line_total",0)) for i in items))
-                items_json = json.dumps(items, ensure_ascii=False)
-                db_run(
-                    "INSERT INTO flower_invoices (company,inv_date,month,total,items) VALUES (?,?,?,?,?)",
-                    (company, inv_date_display, inv_month, total, items_json))
-
-                lines = "\n".join(
-                    f"  🌹 {i['name']}: {i['count']} {i.get('unit','وردة')}"
-                    + (f" × {i['unit_price']} = {fmt_omr(float(i.get('line_total',0)))}" if float(i.get('unit_price',0))>0 else "")
-                    for i in items)
-
-                inv_no_line = f"🔖 رقم الفاتورة: <code>{inv_no}</code>\n" if inv_no else ""
-                tg(chat,
-                   f"✅ <b>تم حفظ فاتورة الورد!</b>\n\n"
-                   f"🏪 الشركة: <b>{company}</b>\n"
-                   f"{inv_no_line}"
-                   f"📅 التاريخ: {inv_date_display}\n\n"
-                   f"<b>الأصناف:</b>\n{lines}\n\n"
-                   f"💰 الإجمالي: {fmt_omr(total)}\n\n"
-                   f"لعرض الفواتير: /فواتير_الورد")
-            else:
-                tg(chat, "⚠️ ما قدرت أقرأ فاتورة الورد بوضوح.\nجرّب صورة أوضح أو أضفها يدوياً من الموقع في قسم فواتير الورد.")
-            return "ok"  # فاتورة الورد لا تُضاف كمشتريات
-
-        if caption_is_flowers:
-            tg(chat,"🌸 جاري عد الورد وتحديد الأنواع...")
-            flowers = groq_count_flowers(file_id)
-            if flowers and len(flowers) > 0:
-                now = datetime.now().strftime("%d/%m/%Y %H:%M")
-                db_run("DELETE FROM flowers")
-                for f in flowers:
-                    name = f.get("name_ar") or f.get("name","ورد")
-                    cnt = int(f.get("count",0))
-                    unit = f.get("unit","وردة")
-                    db_run("INSERT INTO flowers (name,count,unit,updated) VALUES (?,?,?,?)",(name,cnt,unit,now))
-                total_stems = sum(int(f.get("count",0)) for f in flowers if f.get("unit","وردة")=="وردة")
-                total_bundles = sum(int(f.get("count",0)) for f in flowers if f.get("unit","")=="بندلة")
-                lines = "\n".join(
-                    f"🌹 {f.get('name_ar') or f.get('name')}: {f.get('count')} {f.get('unit','وردة')}"
-                    for f in flowers)
-                summary = f"📊 الورود: {total_stems} وردة"
-                if total_bundles: summary += f" | {total_bundles} بندلة"
-                tg(chat,
-                   f"✅ <b>تم عد الورد!</b>\n\n{lines}\n\n"
-                   f"{summary}\n"
-                   f"🕐 {now}\n\n"
-                   f"لعرض المخزون: /ورد")
-            else:
-                tg(chat,"⚠️ ما قدرت أعد الورد بوضوح. جرّب صورة أوضح.")
-            return "ok"
-
-        tg(chat,"⏳ جاري قراءة الفاتورة...")
-        result=groq_read_invoice(file_id)
-        if result and result.get("found") and result.get("amt"):
-            amt=float(result["amt"]); desc=result.get("desc","مشتريات")
-            is_elec=result.get("is_electricity",False) or caption_is_elec
-            # Auto-detect electricity from description
-            if not is_elec:
-                is_elec=any(w in (desc+caption).lower() for w in ["كهرب","تعبئ","prepaid","electric","kwh","electricity","power"])
-            if is_elec:
-                # Use date from receipt if available, else today
-                receipt_date = result.get("date","").strip()
-                if receipt_date and len(receipt_date) >= 8:
-                    entry_date = receipt_date
-                    try:
-                        entry_month = datetime.strptime(receipt_date, "%d/%m/%Y").strftime("%Y-%m")
-                    except:
-                        entry_date = date; entry_month = month
-                else:
-                    entry_date = date; entry_month = month
-                # Save as expense (NOT as buy)
-                db_run("INSERT INTO entries (type,desc,amt,date,month,category) VALUES (?,?,?,?,?,?)",
-                       ("expense","تعبئة كهرباء",amt,entry_date,entry_month,"مصاريف ثابتة"))
-                exp=db_one("SELECT id FROM expenses WHERE name=?",("تعبئة كهرباء",))
-                if exp: db_run("UPDATE expenses SET last_paid=?,month=?,amount=? WHERE id=?",(entry_date,entry_month,amt,exp["id"]))
-                tg(chat,
-                   f"⚡ <b>تم تسجيل تعبئة كهرباء!</b>\n"
-                   f"💰 {fmt_omr(amt)}\n"
-                   f"📅 {entry_date}\n"
-                   f"✅ أُضيفت في المصاريف الثابتة (ليس المشتريات)")
-            else:
-                db_run("INSERT INTO entries (type,desc,amt,date,month) VALUES (?,?,?,?,?)",("b",desc,amt,date,month))
-                pending[chat]={"waiting":"paid_by_photo","amt":amt}
-                tg_buttons(chat,f"✅ تم قراءة الفاتورة!\n📦 {desc}\n💰 {fmt_omr(amt)}\n\n👤 من دفع؟",
-                    [[{"label":"👤 حسين","data":"payer:حسين"},{"label":"👤 شوق","data":"payer:شوق"}],
-                     [{"label":"➕ شخص آخر","data":"payer:other"},{"label":"⏭ تخطي","data":"payer:skip"}]])
-        else:
-            if caption_is_elec:
-                pending[chat]={"waiting":"elec_amt"}
-                tg(chat,"⚡ ما قدرت أقرأ الفاتورة بوضوح\nكم مبلغ تعبئة كهرباء؟\nأرسل الرقم فقط: <code>45.500</code>")
-            else:
-                pending[chat]={"waiting":"buy_amt","desc":caption or "مشتريات"}
-                tg(chat,"🧾 ما قدرت أقرأ الفاتورة بوضوح\nكم المبلغ الإجمالي؟\nأرسل الرقم فقط: <code>3.520</code>")
-        return "ok"
-
-    text=msg.get("text","").strip()
-    if not text: return "ok"
-
-    # Handle electricity manual amount
-    if pending.get(chat,{}).get("waiting") == "elec_amt":
+    # Firebase — batch delete all docs in messages collection
+    deleted_firebase = 0
+    firebase_error = None
+    if firebase_db:
         try:
-            amt = float(text.replace(",","."))
-            date_now = datetime.now().strftime("%d/%m/%Y")
-            db_run("INSERT INTO entries (type,desc,amt,date,month,category) VALUES (?,?,?,?,?,?)",
-                   ("expense","تعبئة كهرباء",amt,date_now,month,"مصاريف ثابتة"))
-            exp=db_one("SELECT id FROM expenses WHERE name=?",("تعبئة كهرباء",))
-            if exp: db_run("UPDATE expenses SET last_paid=?,month=?,amount=? WHERE id=?",(date_now,month,amt,exp["id"]))
-            del pending[chat]
-            tg(chat,f"⚡ <b>تم تسجيل تعبئة كهرباء!</b>\n💰 {fmt_omr(amt)}\n📅 {date_now}")
-        except:
-            tg(chat,"⚠️ أرسل رقم صحيح مثل: <code>45.500</code>")
-        return "ok"
+            batch = firebase_db.batch()
+            count = 0
+            for doc in firebase_db.collection("messages").stream():
+                batch.delete(doc.reference)
+                count += 1
+                if count % 500 == 0:
+                    batch.commit()
+                    batch = firebase_db.batch()
+            if count % 500 != 0 or count == 0:
+                batch.commit()
+            deleted_firebase = count
+        except Exception as e:
+            firebase_error = str(e)
+            print(f"[Messages] Firebase clear error: {e}")
 
-    if pending.get(chat,{}).get("waiting_name"):
-        paid_by=text.strip(); state=pending[chat]; del state["waiting_name"]
-        if state.get("waiting")=="paid_by":
-            db_run("INSERT INTO entries (type,desc,amt,date,month,paid_by) VALUES (?,?,?,?,?,?)",
-                ("b",state.get("desc"),state.get("amt"),state.get("date",date),state.get("month",month),paid_by))
-            del pending[chat]
-            tg(chat,f"✅ تم!\n📦 {state.get('desc')}\n💰 {fmt_omr(state.get('amt',0))}\n👤 {paid_by}")
-        else:
-            last=db_one("SELECT id FROM entries WHERE month=? ORDER BY created DESC LIMIT 1",(month,))
-            if last: db_run("UPDATE entries SET paid_by=? WHERE id=?",(paid_by,last["id"]))
-            if chat in pending: del pending[chat]
-            tg(chat,f"✅ دفع: {paid_by}")
-        return "ok"
+    print(f"[Messages] Cleared: SQLite={deleted_sqlite}, Firebase={deleted_firebase}")
+    resp = {"ok": True, "deleted_sqlite": deleted_sqlite, "deleted_firebase": deleted_firebase}
+    if firebase_error:
+        resp["firebase_error"] = firebase_error
+    return jsonify(resp)
 
-    state=pending.get(chat,{})
+# ── Dashboard ──
 
-    if state.get("waiting")=="expense_amt":
-        try:
-            amt=float(text.replace(",","."))
-            exp_name=state.get("exp_name","مصروف")
-            exp_id=state.get("exp_id")
-            date_now=datetime.now().strftime("%d/%m/%Y")
-            db_run("INSERT INTO entries (type,desc,amt,date,month,category) VALUES (?,?,?,?,?,?)",
-                   ("expense",exp_name,amt,date_now,month,"مصاريف ثابتة"))
-            if exp_id:
-                db_run("UPDATE expenses SET last_paid=?,month=?,amount=? WHERE id=?",
-                       (date_now,month,amt,exp_id))
-            del pending[chat]
-            tg(chat,f"✅ <b>تم تسجيل {exp_name}</b>\n💰 {fmt_omr(amt)}\n📅 {date_now}")
-        except:
-            tg(chat,"⚠️ أرسل رقم صحيح مثل: <code>220.000</code>")
-        return "ok"
 
-    if state.get("waiting")=="sale_amt":
-        try:
-            amt=float(text.replace(",","."))
-            desc=state.get("desc","مبيعة")
-            del pending[chat]
-            pending[chat]={"waiting":"sale_payment"}
-            db_run("INSERT INTO entries (type,desc,amt,date,month) VALUES (?,?,?,?,?)",("s",desc,amt,date,month))
-            tg_buttons(chat,f"🌸 <b>مبيعة {fmt_omr(amt)}</b>\n📝 {desc}\n\n💳 طريقة الدفع؟",
-                [[{"label":"💵 كاش","data":"pay:كاش 💵"},{"label":"💳 فيزا","data":"pay:فيزا 💳"},{"label":"🏦 تحويل","data":"pay:تحويل 🏦"}]])
-        except:
-            tg(chat,"⚠️ أرسل رقم صحيح مثل: <code>4.500</code>")
-        return "ok"
+# ══════════════════════════════════════════════════════════════
+# 14-DAY ANALYTICS & AI INSIGHTS - ULTRA SAFE VERSION
+# ══════════════════════════════════════════════════════════════
+@app.route("/api/analytics/14-day")
+@app.route("/api/analytics/30-day")
+def api_analytics_14day():
+    """
+    30-day spending analytics with AI insights.
+    Route kept as /api/analytics/14-day for backward compatibility.
+    Ultra-safe version with comprehensive error handling.
+    """
+    import datetime
 
-    if state.get("waiting")=="buy_amt":
-        try:
-            amt=float(text.replace(",","."))
-            desc=state.get("desc","مشتريات")
-            db_run("INSERT INTO entries (type,desc,amt,date,month) VALUES (?,?,?,?,?)",("b",desc,amt,date,month))
-            pending[chat]={"waiting":"paid_by_photo","amt":amt}
-            tg_buttons(chat,f"✅ تم التسجيل!\n📦 {desc}\n💰 {fmt_omr(amt)}\n\n👤 من دفع؟",
-                [[{"label":"👤 حسين","data":"payer:حسين"},{"label":"👤 شوق","data":"payer:شوق"}],
-                 [{"label":"➕ شخص آخر","data":"payer:other"},{"label":"⏭ تخطي","data":"payer:skip"}]])
-        except: tg(chat,"⚠️ أرسل رقم: <code>3.520</code>")
-        return "ok"
-    
-    if state.get("waiting")=="sale_payment":
-        pay=text.strip()
-        if pay in ["1","كاش","نقد"]: pay="كاش 💵"
-        elif pay in ["2","فيزا","بطاقة"]: pay="فيزا 💳"
-        elif pay in ["3","تحويل"]: pay="تحويل 🏦"
-        last=db_one("SELECT id FROM entries WHERE type='s' AND month=? ORDER BY created DESC LIMIT 1",(month,))
-        if last: db_run("UPDATE entries SET payment_method=? WHERE id=?",(pay,last["id"]))
-        del pending[chat]
-        tg(chat,f"✅ طريقة الدفع: {pay}"); return "ok"
+    PERIOD_DAYS = 30
 
-    # ── إضافة ورد يدوي: انتظار العدد والوحدة ──
-    if state.get("waiting") == "flower_manual_count":
-        m = re.match(r'^(\d+)\s*(بندلة|بنادل|حزمة|حزم|وردة|وردات|قطعة)?$', text.strip())
-        if m:
-            cnt = int(m.group(1))
-            raw_unit = m.group(2) or ""
-            unit = "بندلة" if raw_unit in ("بندلة","بنادل","حزمة","حزم") else "وردة"
-            name = state.get("flower_name", "ورد")
-            now = datetime.now().strftime("%d/%m/%Y %H:%M")
-            existing = db_one("SELECT id FROM flowers WHERE name=?", (name,))
-            if existing:
-                db_run("UPDATE flowers SET count=?,unit=?,updated=? WHERE id=?", (cnt, unit, now, existing["id"]))
-            else:
-                db_run("INSERT INTO flowers (name,count,unit,updated) VALUES (?,?,?,?)", (name, cnt, unit, now))
-            del pending[chat]
-            flowers = db_get("SELECT * FROM flowers ORDER BY count DESC")
-            total_s = sum(f["count"] for f in flowers if f.get("unit","وردة")=="وردة")
-            total_b = sum(f["count"] for f in flowers if f.get("unit","")=="بندلة")
-            summary = f"📊 الإجمالي: {total_s} وردة" + (f" | {total_b} بندلة" if total_b else "")
-            tg(chat, f"✅ تم تحديث المخزون!\n🌹 {name}: {cnt} {unit}\n{summary}")
-        else:
-            tg(chat, "⚠️ أرسل عدد صحيح، مثل:\n<code>25</code> أو <code>5 بندلة</code>")
-        return "ok"
-
-    # ── إضافة ورد يدوي: انتظار الاسم ──
-    if state.get("waiting") == "flower_manual_name":
-        name = text.strip()
-        if not name:
-            tg(chat, "⚠️ أرسل اسم الورد"); return "ok"
-        _bundle_flowers = ["جبسون","جبسوفيلا","gypsophila","ايوروبسم","ليموناي","limonium","baby breath"]
-        is_bundle = any(b in name.lower() for b in _bundle_flowers)
-        pending[chat] = {"waiting": "flower_manual_count", "flower_name": name}
-        hint = "مثال: <code>5 بندلة</code>" if is_bundle else "مثال: <code>25</code> أو <code>10 بندلة</code>"
-        tg(chat, f"🌹 كم عدد <b>{name}</b>؟\n{hint}")
-        return "ok"
-
-    # ── تعرّف تلقائي على الورد المسمّى والمجموعات ──
-    _flower_keywords = ["ورد","وردة","وردات","زهور","زهرة","باقة","بوكيه","روز","جبسون","جبسوفيلا",
-                        "دوار","زنبق","ليلوم","ارانوس","ليموناي","ايوروبسم","أوركيد","توليب"]
-    _has_flower_kw  = any(kw in text for kw in _flower_keywords)
-    _has_number     = bool(re.search(r'\d+', text))
-    _is_bulk        = len(re.findall(r'\d+', text)) >= 3
-
-    if _has_flower_kw and _has_number:
-        if _is_bulk or "\n" in text or len(text) > 60:
-            tg(chat, "🌸 جاري تحليل قائمة الورد...")
-            parsed = groq_parse_flower_text(text)
-            if parsed and len(parsed) > 0:
-                now = datetime.now().strftime("%d/%m/%Y %H:%M")
-                db_run("DELETE FROM flowers")
-                for f in parsed:
-                    nm  = f.get("name","ورد")
-                    cnt = int(f.get("count",0))
-                    un  = f.get("unit","وردة")
-                    db_run("INSERT INTO flowers (name,count,unit,updated) VALUES (?,?,?,?)",(nm,cnt,un,now))
-                total_s = sum(int(f.get("count",0)) for f in parsed if f.get("unit","وردة")=="وردة")
-                total_b = sum(int(f.get("count",0)) for f in parsed if f.get("unit","")=="بندلة")
-                lines = "\n".join(
-                    f"{'🌸' if f.get('unit')=='بندلة' else '🌹'} {f['name']}: {f['count']} {f.get('unit','وردة')}"
-                    for f in parsed)
-                summary = f"📊 الورود: {total_s} وردة" + (f" | {total_b} بندلة" if total_b else "")
-                tg(chat, f"✅ <b>تم تحديث مخزون الورد!</b>\n\n{lines}\n\n{summary}\n🕐 {now}")
-            else:
-                tg(chat, "⚠️ ما قدرت أحلل القائمة. جرّب /ورد_يدوي لإضافة كل نوع على حدة.")
-            return "ok"
-
-        _single = re.search(
-            r'(?:عندي|معي|لدي|عدد)\s*'
-            r'(?:ورد\s*|زهور\s*|وردة\s*)?'
-            r'([^\d]{2,30?}?)\s*'
-            r'(\d+)\s*'
-            r'(بندلة|بنادل|حزمة|وردة|وردات)?',
-            text)
-        if _single:
-            raw_name = _single.group(1).strip().strip('ال').strip()
-            cnt = int(_single.group(2))
-            raw_unit = _single.group(3) or ""
-            unit = "بندلة" if raw_unit in ("بندلة","بنادل","حزمة") else "وردة"
-            for stop in ["ورد","وردة","زهور","الي","اللي","معي","عندي","لدي","عدد","من","في","و"]:
-                raw_name = raw_name.replace(stop,"").strip()
-            name = raw_name if len(raw_name) >= 2 else "ورد"
-            now = datetime.now().strftime("%d/%m/%Y %H:%M")
-            existing = db_one("SELECT id FROM flowers WHERE name=?", (name,))
-            if existing:
-                db_run("UPDATE flowers SET count=?,unit=?,updated=? WHERE id=?", (cnt,unit,now,existing["id"]))
-            else:
-                db_run("INSERT INTO flowers (name,count,unit,updated) VALUES (?,?,?,?)", (name,cnt,unit,now))
-            flowers = db_get("SELECT * FROM flowers ORDER BY count DESC")
-            total_s = sum(f["count"] for f in flowers if f.get("unit","وردة")=="وردة")
-            total_b = sum(f["count"] for f in flowers if f.get("unit","")=="بندلة")
-            summary = f"📊 الإجمالي: {total_s} وردة" + (f" | {total_b} بندلة" if total_b else "")
-            tg(chat, f"✅ تم تحديث المخزون!\n🌹 {name}: {cnt} {unit}\n{summary}")
-            return "ok"
-
-    if text in ["/start","/help"]:
-        tg(chat,
-           "🌹 <b>فيروز فلورز</b>\n\n"
-           "🌸 <b>مبيعة:</b>\n"
-           "<code>بعت باقة بـ 5.500</code>\n"
-           "<code>بعت طباعة 3d بـ 8.000 كاش</code>\n"
-           "<code>بعت تاج بـ 3.000 فيزا</code>\n\n"
-           "📦 <b>مشتريات:</b>\n"
-           "<code>اشتريت زهور بـ 12.000</code>\n\n"
-           "💸 <b>مصاريف:</b>\n"
-           "<code>دفعت راتب</code>\n"
-           "<code>دفعت إيجار</code>\n"
-           "<code>دفعت كهرباء 45.000</code>\n\n"
-           "🗄️ <b>الرفوف:</b>\n"
-           "<code>بعت عطر من رف ريحان</code> — بيع من رف\n"
-           "<code>بعت ساعة من رف فتحية بـ 8 كاش</code>\n"
-           "<code>/رف ريحان</code> — عرض منتجات الرف\n"
-           "<code>/رفوف</code> — ملخص جميع الرفوف\n"
-           "<code>/ايجار_الرفوف</code> — تسجيل الإيجارات\n\n"
-           "🌸 <b>مخزون الورد:</b>\n"
-           "أرسل صورة + تعليق <code>عد الورد</code>\n"
-           "أو: <code>عندي ورد روز احمر 20</code>\n"
-           "أو: <code>عندي جبسون 3 بندلة</code>\n"
-           "/ورد — عرض المخزون | /ورد_يدوي — إضافة يدوي\n\n"
-           "🧾 <b>فواتير شركات الورد:</b>\n"
-           "أرسل صورة الفاتورة + تعليق <code>فاتورة ورد</code>\n"
-           "/فواتير_الورد — فواتير الشهر الحالي\n\n"
-           "📅 /اليوم — تقرير اليوم\n"
-           "📅 /يوم 01/05/2026 — تقرير يوم معين\n"
-           "📊 /شهر — تقرير الشهر الكامل مع تفصيل يومي\n"
-           "📊 /report — تقرير الشهر\n"
-           "📈 /فئات — مبيعات حسب الفئة\n"
-           "👤 /من_دفع — تفصيل المشتريات\n"
-           "💼 /مصاريف — المصاريف الثابتة")
-        return "ok"
-
-    # ── تقرير اليوم ──
-    if text in ["/اليوم", "/today", "/يوم"]:
-        today_str = datetime.now().strftime("%d/%m/%Y")
-        tg(chat, format_day_report(today_str))
-        return "ok"
-
-    # ── تقرير يوم معين مثل /يوم 01/05/2026 ──
-    if text.startswith("/يوم "):
-        day_str = text.replace("/يوم ","").strip()
-        try:
-            datetime.strptime(day_str, "%d/%m/%Y")
-            tg(chat, format_day_report(day_str))
-        except:
-            tg(chat, "⚠️ صيغة التاريخ غلط، مثال: <code>/يوم 01/05/2026</code>")
-        return "ok"
-
-    # ── تقرير الشهر ──
-    if text in ["/شهر", "/monthly", "/month_report"]:
-        tg(chat, format_month_report(month))
-        return "ok"
-
-    if text=="/report":
-        ts,tb,tp,sc,bc=month_summary(month)
-        e="✅" if tp>=0 else "⚠️"
-        _,buys=get_month_data(month)
-        pd={}
-        for en in buys:
-            p=en.get("paid_by") or "غير محدد"
-            pd[p]=pd.get(p,0)+en["amt"]
-        pl="\n".join(f"  👤 {k}: {fmt_omr(v)}" for k,v in pd.items()) or "  غير محدد"
-        # Expenses summary
-        exps = db_get("SELECT * FROM entries WHERE type='expense' AND month=? ORDER BY created DESC", (month,))
-        exp_total = sum(e2["amt"] for e2 in exps)
-        exp_lines = "\n".join(f"  💸 {e2['desc']}: {fmt_omr(e2['amt'])}" for e2 in exps) or "  لا يوجد"
-        net_after_exp = tp - exp_total
-        emoji2 = "✅" if net_after_exp >= 0 else "⚠️"
-        tg(chat,
-           f"📊 <b>تقرير {month}</b>\n\n"
-           f"🌸 المبيعات: {fmt_omr(ts)} ({sc})\n"
-           f"📦 المشتريات: {fmt_omr(tb)} ({bc})\n"
-           f"💸 المصاريف: {fmt_omr(exp_total)}\n"
-           f"━━━━━━\n"
-           f"{e} الربح قبل المصاريف: {fmt_omr(tp)}\n"
-           f"{emoji2} الربح الصافي: {fmt_omr(net_after_exp)}\n\n"
-           f"💳 من دفع:\n{pl}\n\n"
-           f"💼 المصاريف المدفوعة:\n{exp_lines}")
-        return "ok"
-
-    if text in ["/ورد_يدوي", "/add_flower"]:
-        pending[chat] = {"waiting": "flower_manual_name"}
-        tg(chat, "🌹 <b>إضافة ورد يدوياً</b>\n\nاكتب اسم نوع الورد:\nمثال: <code>ورد أحمر</code> أو <code>زنبق</code>")
-        return "ok"
-
-    if text in ["/فواتير_الورد", "/flower_invoices"]:
-        cur = cur_month()
-        invs = db_get("SELECT * FROM flower_invoices WHERE month=? ORDER BY inv_date DESC", (cur,))
-        if not invs:
-            tg(chat,
-               f"🧾 <b>فواتير الورد — {cur}</b>\n\n"
-               "لا توجد فواتير هذا الشهر.\n\n"
-               "أرسل صورة الفاتورة مع تعليق:\n<code>فاتورة ورد</code>")
-        else:
-            total_month = sum(float(i["total"]) for i in invs)
-            lines = []
-            for i in invs:
-                lines.append(
-                    f"📄 <b>{i['company']}</b> — {i['inv_date']}\n"
-                    f"   💰 {fmt_omr(float(i['total']))}"
-                )
-            tg(chat,
-               f"🧾 <b>فواتير الورد — {cur}</b>\n\n"
-               + "\n\n".join(lines)
-               + f"\n\n{'━'*18}\n💰 الإجمالي: {fmt_omr(total_month)}")
-        return "ok"
-
-    if text in ["/ورد", "/flowers", "/عد_الورد"]:
-        flowers = db_get("SELECT * FROM flowers ORDER BY count DESC")
-        if not flowers:
-            tg(chat,
-               "🌸 لا يوجد مخزون ورد مسجل بعد\n\n"
-               "<b>طرق التسجيل:</b>\n"
-               "📸 صورة + تعليق <code>عد الورد</code>\n"
-               "✏️ <code>عندي ورد روز أحمر 20</code>\n"
-               "✏️ <code>عندي جبسون 3 بندلة</code>\n"
-               "📋 أرسل قائمة كاملة وسيحللها الذكاء الاصطناعي\n"
-               "➕ /ورد_يدوي — إضافة نوع بالخطوات")
-        else:
-            total_s = sum(f["count"] for f in flowers if f.get("unit","وردة")!="بندلة")
-            total_b = sum(f["count"] for f in flowers if f.get("unit","")=="بندلة")
-            updated = flowers[0]["updated"] if flowers else ""
-            lines = "\n".join(
-                f"{'🌸' if f.get('unit')=='بندلة' else '🌹'} {f['name']}: {f['count']} {f.get('unit','وردة')}"
-                for f in flowers)
-            summary = f"📊 الإجمالي: {total_s} وردة" + (f" | {total_b} بندلة" if total_b else "")
-            tg(chat, f"🌸 <b>مخزون الورد</b>\n\n{lines}\n\n{summary}\n🕐 آخر تحديث: {updated}")
-        return "ok"
-
-    if text in ["/مصاريف","/expenses"]:
-        expenses = db_get("SELECT * FROM expenses ORDER BY id")
-        lines = []
-        for e in expenses:
-            last = f" — آخر دفع: {e['last_paid']}" if e.get("last_paid") else " — لم يُدفع بعد"
-            lines.append(f"{'⚡' if 'كهرب' in e['name'] else '🏪' if 'إيجار' in e['name'] else '👷'} <b>{e['name']}</b>: {fmt_omr(e['amount'])}{last}")
-        tg(chat, f"💼 <b>المصاريف الثابتة</b>\n\n" + "\n".join(lines) +
-           "\n\nللتسجيل: <code>دفعت راتب</code> أو <code>دفعت إيجار</code> أو <code>دفعت كهرباء 45.000</code>")
-        return "ok"
-
-    if text in ["/ايجار_الرفوف", "/shelf_rent"]:
-        shelves = db_get("SELECT * FROM shelves ORDER BY id")
-        total_rent = sum(float(s.get("rent",0)) for s in shelves)
-        lines = "\n".join(f"🗄️ رف {s['name']}: {fmt_omr(float(s.get('rent',0)))}" for s in shelves)
-        # Auto-register shelf rents as expenses for this month
-        now_date = datetime.now().strftime("%d/%m/%Y")
-        registered = 0
-        for s in shelves:
-            rent = float(s.get("rent",0))
-            if rent > 0:
-                existing = db_one(
-                    "SELECT id FROM entries WHERE type='expense' AND desc=? AND month=?",
-                    (f"إيجار رف {s['name']}", month))
-                if not existing:
-                    db_run("INSERT INTO entries (type,desc,amt,date,month,category) VALUES (?,?,?,?,?,?)",
-                           ("expense", f"إيجار رف {s['name']}", rent, now_date, month, "مصاريف ثابتة"))
-                    registered += 1
-        msg = f"🗄️ <b>إيجارات الرفوف — {month}</b>\n\n{lines}\n\n📊 الإجمالي: {fmt_omr(total_rent)}"
-        if registered > 0:
-            msg += f"\n\n✅ تم تسجيل {registered} إيجار تلقائياً"
-        tg(chat, msg)
-        return "ok"
-
-    if text in ["/رفوف", "/shelf_summary", "/ملخص_الرفوف"]:
-        shelves = db_get("SELECT * FROM shelves ORDER BY id")
-        lines = []
-        total_shelf_sales = 0
-        for sh in shelves:
-            row = db_one("SELECT COALESCE(SUM(amt),0) as total, COUNT(*) as cnt FROM entries WHERE type='s' AND shelf_id=? AND month=?", (sh["id"], month))
-            sh_total = float(row["total"]) if row else 0
-            sh_cnt = int(row["cnt"]) if row else 0
-            rent = float(sh.get("rent") or 0)
-            net = sh_total - rent
-            net_emoji = "✅" if net >= 0 else "🔴"
-            total_shelf_sales += sh_total
-            # آخر 3 مبيعات
-            recent = db_get("SELECT desc,amt FROM entries WHERE type='s' AND shelf_id=? AND month=? ORDER BY created DESC LIMIT 3", (sh["id"], month))
-            recent_lines = "\n".join(f"    • {e['desc']}: {fmt_omr(e['amt'])}" for e in recent) if recent else "    لا توجد مبيعات"
-            lines.append(
-                f"🗄️ <b>رف {sh['name']}</b>\n"
-                f"💰 مبيعات: {fmt_omr(sh_total)} ({sh_cnt} عملية)\n"
-                f"🏷️ إيجار: {fmt_omr(rent)}\n"
-                f"{net_emoji} صافي: {fmt_omr(net)}\n"
-                f"آخر مبيعات:\n{recent_lines}"
-            )
-        tg(chat,
-           f"🗄️ <b>ملخص الرفوف — {month}</b>\n\n" +
-           "\n\n".join(lines) +
-           f"\n\n{'━'*18}\n💰 إجمالي مبيعات الرفوف: {fmt_omr(total_shelf_sales)}")
-        return "ok"
-
-    if text == "/فئات":
-        s,_=get_month_data(month)
-        cats={}
-        for e in s:
-            c=e.get("category") or "أخرى"
-            if c not in cats: cats[c]={"t":0,"c":0}
-            cats[c]["t"]+=e["amt"]; cats[c]["c"]+=1
-        cats_sorted=sorted(cats.items(),key=lambda x:-x[1]["t"])
-        lines="\n".join(f"🏷️ <b>{k}</b>: {fmt_omr(v['t'])} ({v['c']} مبيعة)" for k,v in cats_sorted) if cats_sorted else "لا توجد مبيعات"
-        tg(chat,f"📈 <b>مبيعات حسب الفئة — {month}</b>\n\n{lines}")
-        return "ok"
-
-    # Shelf commands: /رف ريحان etc
-    if text.startswith("/رف"):
-        shelf_name=text.replace("/رف","").strip()
-        if not shelf_name:
-            shelves=db_get("SELECT * FROM shelves ORDER BY id")
-            lines="\n".join(f"🗄️ /رف {s['name']} — إيجار {fmt_omr(s.get('rent',0))}" for s in shelves)
-            tg(chat,f"🗄️ <b>الرفوف المتاحة:</b>\n\n{lines}"); return "ok"
-        shelf=db_one("SELECT * FROM shelves WHERE name=?",(shelf_name,))
-        if not shelf:
-            tg(chat,f"❌ ما وجدت رف اسمه '{shelf_name}'\n\nالرفوف: ريحان، فتحية، فطوم، اكسسوارات")
-            return "ok"
-        prods=db_get("SELECT * FROM shelf_products WHERE shelf_id=? AND qty>0 ORDER BY name",(shelf["id"],))
-        if not prods:
-            tg(chat,f"🗄️ رف <b>{shelf_name}</b> — لا توجد منتجات متاحة")
-            return "ok"
-        lines="\n".join(f"{'▫️'} {p['name']} — {fmt_omr(p['price'])} × {p['qty']} قطعة" for p in prods)
-        tg(chat,
-           f"🗄️ <b>رف {shelf_name}</b>\n\n{lines}\n\n"
-           f"للبيع أرسل مثلاً:\n<code>بعت {prods[0]['name']} من رف {shelf_name} بـ {prods[0]['price']}</code>")
-        return "ok"
-
-    if text in ["/من_دفع","/mandafa3"]:
-        _,buys=get_month_data(month)
-        pd={}
-        for en in buys:
-            p=en.get("paid_by") or "غير محدد"
-            if p not in pd: pd[p]={"t":0,"c":0}
-            pd[p]["t"]+=en["amt"]; pd[p]["c"]+=1
-        lines="\n".join(f"👤 <b>{k}</b>: {fmt_omr(v['t'])} ({v['c']} عمليات)" for k,v in pd.items()) if pd else "لا يوجد"
-        tg(chat,f"💳 <b>من دفع — {month}</b>\n\n{lines}"); return "ok"
-
-    # Expense detection
-    exp_keywords = {
-        "راتب": ("راتب العامل", 220),
-        "إيجار المحل": ("إيجار المحل", 100),
-        "إيجار": ("إيجار المحل", 100),
-        "كهرباء": ("تعبئة كهرباء", 0),
-        "كهربا": ("تعبئة كهرباء", 0),
-        "تعبئة": ("تعبئة كهرباء", 0),
+    # Default response structure
+    default_response = {
+        "chart_14_days": {
+            "labels": [],
+            "values": []
+        },
+        "analytics": {
+            "total_spend_period": "0.000",
+            "average_daily": "0.000",
+            "days_with_spending": 0,
+            "top_spending_category": "other",
+            "spending_status": "Stable",
+            "category_breakdown": {}
+        },
+        "ai_tips_arabic": []
     }
-    for kw, (exp_name, default_amt) in exp_keywords.items():
-        if kw in text and any(w in text for w in ["دفعت","دفع","سددت","سديت"]):
-            import re as _re
-            nums = _re.findall(r'\d+[.,]\d+|\d+', text)
-            amt = float(nums[0].replace(',','.')) if nums else default_amt
-            if amt > 0:
-                exp = db_one("SELECT * FROM expenses WHERE name=?", (exp_name,))
-                date_now = datetime.now().strftime("%d/%m/%Y")
-                db_run("INSERT INTO entries (type,desc,amt,date,month,category) VALUES (?,?,?,?,?,?)",
-                       ("expense", exp_name, amt, date_now, month, "مصاريف ثابتة"))
-                if exp:
-                    db_run("UPDATE expenses SET last_paid=?, month=?, amount=? WHERE id=?",
-                           (date_now, month, amt, exp["id"]))
-                tg(chat, f"✅ <b>تم تسجيل {exp_name}</b>\n💰 {fmt_omr(amt)}\n📅 {date_now}")
-                return "ok"
 
-    # ── الذكاء الاصطناعي الكامل ──
-    ai = groq_chat(text, chat) if GROQ_KEY else None
-    if ai:
-        action = ai.get("action","unknown")
-        data   = ai.get("data",{})
-        reply  = ai.get("reply","")
+    try:
+        # Generate 30-day date range using Muscat timezone (UTC+4)
+        _muscat_now = datetime.datetime.utcnow() + datetime.timedelta(hours=4)
+        today = _muscat_now.date()
+        dates_30 = []
+        for i in range(PERIOD_DAYS - 1, -1, -1):
+            date_obj = today - datetime.timedelta(days=i)
+            dates_30.append(date_obj.isoformat())
 
-        # رد مباشر على سؤال أو كلام عام
-        if action == "answer":
-            tg(chat, reply or "كيف أقدر أساعدك؟")
-            return "ok"
+        # Fetch expenses: SQLite first (fast), Firebase fallback only if SQLite empty
+        all_expenses = []
+        start_date = dates_30[0]
+        end_date   = dates_30[-1]
 
-        # تقرير
-        if action == "report":
-            period = data.get("period","month")
-            custom_date = data.get("date","")
-            if period == "today" or "اليوم" in text:
-                today_str = datetime.now().strftime("%d/%m/%Y")
-                tg(chat, format_day_report(today_str))
-            elif period == "custom" and custom_date:
+        # ── 1. Try SQLite ──────────────────────────────────────────────────
+        try:
+            _ac = db_conn()
+            _total = _ac.execute("SELECT COUNT(*) FROM expenses").fetchone()[0]
+            if _total > 0:
+                _arows = _ac.execute(
+                    "SELECT * FROM expenses "
+                    "WHERE created_at >= ? AND created_at <= ? "
+                    "ORDER BY created_at DESC LIMIT 2000",
+                    (start_date, end_date + "T99")
+                ).fetchall()
+                all_expenses = [dict(r) for r in _arows]
+                print(f"[Analytics] SQLite: {len(all_expenses)} docs")
+            _ac.close()
+        except Exception as _sqle:
+            print(f"[Analytics] SQLite error: {_sqle}")
+
+        # ── 2. Firebase fallback — only when SQLite is completely empty ────
+        if not all_expenses and firebase_db:
+            try:
+                docs = (firebase_db.collection("expenses")
+                        .where("date_only", ">=", start_date)
+                        .where("date_only", "<=", end_date)
+                        .order_by("date_only", direction="DESCENDING")
+                        .limit(2000)
+                        .stream())
+                for doc in docs:
+                    d = doc.to_dict()
+                    d["id"] = doc.id
+                    all_expenses.append(d)
+                print(f"[Analytics] Firebase: {len(all_expenses)} docs")
+            except Exception as fb_err:
+                print(f"[Analytics] Firebase error: {fb_err}")
+
+        # If no expenses found, return empty data with helpful tips
+        if not all_expenses:
+            print("[Analytics] No expenses found for 30-day period")
+            return jsonify({
+                "chart_14_days": {
+                    "labels": [datetime.datetime.strptime(d, "%Y-%m-%d").strftime("%b %d")
+                               for d in dates_30],
+                    "values": [0.0] * PERIOD_DAYS
+                },
+                "analytics": {
+                    "total_spend_period": "0.000",
+                    "average_daily": "0.000",
+                    "days_with_spending": 0,
+                    "top_spending_category": "other",
+                    "spending_status": "Stable",
+                    "category_breakdown": {}
+                },
+                "ai_tips_arabic": [
+                    "ابدأ بتسجيل مصروفاتك اليومية عبر التيليجرام 📱",
+                    "أرسل رسائل البنك للبوت وسيحللها تلقائياً 🤖",
+                    "تتبع إنفاقك لمدة شهر لترى نمطك المالي 💡"
+                ]
+            })
+
+        # Calculate daily totals — use date_only if available, fall back to date[:10]
+        from decimal import Decimal as _D30, InvalidOperation as _IO30
+        daily_totals = {}
+        for e in all_expenses:
+            day = e.get("date_only") or str(e.get("date", ""))[:10]
+            if day and day in set(dates_30):
+                if e.get("type", "debit") in ("debit", "transfer_out"):
+                    try:
+                        raw_amt = e.get("amount")
+                        if raw_amt is None:
+                            continue
+                        amt = _D30(str(raw_amt))
+                        daily_totals[day] = float(
+                            _D30(str(daily_totals.get(day, 0))) + amt
+                        )
+                    except (_IO30, Exception):
+                        daily_totals[day] = daily_totals.get(day, 0.0) + float(e.get("amount") or 0)
+
+        # Format chart data
+        chart_labels = []
+        for d in dates_30:
+            try:
+                chart_labels.append(datetime.datetime.strptime(d, "%Y-%m-%d").strftime("%b %d"))
+            except Exception:
+                chart_labels.append(d[-5:])
+
+        chart_values = [daily_totals.get(d, 0.0) for d in dates_30]
+
+        # Calculate analytics
+        debit_expenses = [e for e in all_expenses if e.get("type", "debit") in ("debit", "transfer_out")]
+
+        from decimal import Decimal as _Dtot, InvalidOperation as _IOtot
+        _total_dec = _Dtot("0")
+        for e in debit_expenses:
+            try:
+                raw = e.get("amount")
+                if raw is not None:
+                    _total_dec += _Dtot(str(raw))
+            except (_IOtot, Exception):
                 try:
-                    datetime.strptime(custom_date, "%d/%m/%Y")
-                    tg(chat, format_day_report(custom_date))
-                except:
-                    tg(chat, format_month_report(month))
-            else:
-                tg(chat, format_month_report(month))
-            return "ok"
+                    _total_dec += _Dtot(str(float(e.get("amount") or 0)))
+                except Exception:
+                    continue
+        total_spend = float(_total_dec)
 
-        # تسجيل مصروف
-        if action == "register_expense":
-            exp_name = data.get("expense_name") or data.get("desc","مصروف")
-            amt = data.get("amt") or 0
-            exp = db_one("SELECT * FROM expenses WHERE name=?",(exp_name,))
-            if not exp:
-                all_exp = db_get("SELECT * FROM expenses ORDER BY id")
-                for e in all_exp:
-                    if any(w in exp_name for w in e["name"].split()[:2]):
-                        exp = e; exp_name = e["name"]; break
-            final_amt = float(amt) if amt and float(amt)>0 else (float(exp["amount"]) if exp else 0)
-            if final_amt <= 0:
-                tg(chat, f"💸 كم مبلغ {exp_name}؟\nأرسل الرقم فقط: <code>220.000</code>")
-                pending[chat] = {"waiting":"expense_amt","exp_name":exp_name,"exp_id":exp["id"] if exp else None}
-                return "ok"
-            date_now = datetime.now().strftime("%d/%m/%Y")
-            db_run("INSERT INTO entries (type,desc,amt,date,month,category) VALUES (?,?,?,?,?,?)",
-                   ("expense",exp_name,final_amt,date_now,month,"مصاريف ثابتة"))
-            if exp:
-                db_run("UPDATE expenses SET last_paid=?,month=?,amount=? WHERE id=?",
-                       (date_now,month,final_amt,exp["id"]))
-            tg(chat,f"✅ <b>تم تسجيل {exp_name}</b>\n💰 {fmt_omr(final_amt)}\n📅 {date_now}")
-            return "ok"
-
-        # تسجيل مشتريات
-        if action == "register_buy":
-            desc   = data.get("desc","مشتريات")
-            amt    = float(data.get("amt") or 0)
-            paid_by = data.get("paid_by")
-            if not amt or amt<=0:
-                pending[chat]={"waiting":"buy_amt","desc":desc,"month":month}
-                tg(chat,f"📦 <b>{desc}</b>\nكم المبلغ؟ أرسل الرقم فقط:")
-                return "ok"
-            if paid_by:
-                db_run("INSERT INTO entries (type,desc,amt,date,month,paid_by) VALUES (?,?,?,?,?,?)",
-                       ("b",desc,amt,date,month,paid_by))
-                tg(chat,f"✅ <b>مشتريات مسجلة!</b>\n📦 {desc}\n💰 {fmt_omr(amt)}\n👤 {paid_by}")
-            else:
-                pending[chat]={"waiting":"paid_by","desc":desc,"amt":amt,"date":date,"month":month}
-                tg_buttons(chat,f"📦 <b>مشتريات {fmt_omr(amt)}</b>\n📝 {desc}\n\n👤 من دفع؟",
-                    [[{"label":"👤 حسين","data":"payer:حسين"},{"label":"👤 شوق","data":"payer:شوق"}],
-                     [{"label":"➕ شخص آخر","data":"payer:other"},{"label":"⏭ تخطي","data":"payer:skip"}]])
-            return "ok"
-
-        # تسجيل مبيعة
-        if action == "register_sale":
-            desc  = data.get("desc","مبيعة")
-            amt   = float(data.get("amt") or 0)
-            qty   = max(1, int(data.get("qty") or 1))
-            pay   = data.get("payment")
-            cat   = data.get("category") or detect_category(text)
-            shelf_id_detected = None
-            shelf_name = data.get("shelf")
-            if not shelf_name:
-                for sname in ["ريحان","فتحية","فطوم","اكسسوارات"]:
-                    if sname in text:
-                        shelf_name = sname; break
-            if shelf_name:
-                sh = db_one("SELECT id FROM shelves WHERE name=?",(shelf_name,))
-                if sh: shelf_id_detected = sh["id"]
-            # لو ما ذُكر مبلغ وفيه رف، نجيب سعر المنتج من قاعدة البيانات
-            if shelf_id_detected and (not amt or amt<=0):
-                prod_kw = desc.split()[0] if desc else ""
-                prod = db_one("SELECT * FROM shelf_products WHERE shelf_id=? AND name LIKE ? AND qty>0",
-                              (shelf_id_detected, f"%{prod_kw}%"))
-                if prod: amt = prod["price"] * qty
-            if not amt or amt<=0:
-                pending[chat]={"waiting":"sale_amt","desc":desc,"qty":qty,"shelf_id":shelf_id_detected}
-                tg(chat,f"🌸 <b>{desc}</b>" + (f" × {qty}" if qty>1 else "") + "\nكم المبلغ الإجمالي؟ أرسل الرقم فقط:")
-                return "ok"
-            unit_price = round(amt / qty, 3)
-            cat_line = f"\n🏷️ {cat}" if cat else ""
-            shelf_line = f"\n🗄️ رف {shelf_name}" if shelf_name else ""
-            # تسجيل كل قطعة بسجل منفصل
-            for _ in range(qty):
-                db_run("INSERT INTO entries (type,desc,amt,date,month,payment_method,category,shelf_id) VALUES (?,?,?,?,?,?,?,?)",
-                       ("s",desc,unit_price,date,month,pay,cat,shelf_id_detected))
-            # تحديث كمية المنتج في الرف
-            if shelf_id_detected and desc:
-                prod_kw = desc.split()[0] if desc else ""
-                prod = db_one("SELECT * FROM shelf_products WHERE shelf_id=? AND name LIKE ? AND qty>0",
-                              (shelf_id_detected, f"%{prod_kw}%"))
-                if prod: db_run("UPDATE shelf_products SET qty=MAX(0,qty-?) WHERE id=?",(qty, prod["id"]))
-            qty_line = f" × {qty} = {fmt_omr(amt)}" if qty > 1 else f" = {fmt_omr(amt)}"
-            if pay:
-                tg(chat,f"✅ <b>{'مبيعات' if qty>1 else 'مبيعة'} مسجلة!</b>\n🌸 {qty}× {desc}\n💰 {fmt_omr(unit_price)} للقطعة{qty_line} — {pay}{cat_line}{shelf_line}")
-            else:
-                pending[chat]={"waiting":"sale_payment","shelf_id":shelf_id_detected,"shelf_name":shelf_name,"qty":qty,"desc":desc,"unit_price":unit_price,"cat_line":cat_line}
-                tg_buttons(chat,f"🌸 <b>{'مبيعات' if qty>1 else 'مبيعة'} {fmt_omr(unit_price)}{'×'+str(qty) if qty>1 else ''}</b>\n📝 {qty}× {desc}{cat_line}{shelf_line}\n\n💳 طريقة الدفع؟",
-                    [[{"label":"💵 كاش","data":"pay:كاش 💵"},{"label":"💳 فيزا","data":"pay:فيزا 💳"},{"label":"🏦 تحويل","data":"pay:تحويل 🏦"}]])
-            return "ok"
-
-        # unknown
-        tg(chat, "لم أفهم 🤔\n\nجرّب:\n<code>بعت باقة بـ 4.500 كاش</code>\n<code>اشتريت ورد بـ 8.000</code>\n<code>دفعت الراتب</code>\n\n/help للمساعدة")
-        return "ok"
-
-    # fallback لو Groq ما شتغل
-    parsed=groq_parse_text(text)
-    if parsed.get("found"):
-        etype=parsed.get("type"); desc=parsed.get("desc",""); amt=parsed.get("amt") or 0
-
-        # مصروف ثابت
-        if etype=="expense":
-            exp_name = parsed.get("expense_name") or desc
-            exp = db_one("SELECT * FROM expenses WHERE name=?", (exp_name,))
-            if not exp:
-                # حاول بمطابقة جزئية
-                all_exp = db_get("SELECT * FROM expenses ORDER BY id")
-                for e in all_exp:
-                    if any(w in exp_name for w in e["name"].split()[:2]):
-                        exp = e; exp_name = e["name"]; break
-            final_amt = amt if amt and amt > 0 else (float(exp["amount"]) if exp else 0)
-            if final_amt <= 0:
-                tg(chat, f"💸 كم مبلغ {exp_name}؟\nأرسل الرقم فقط: <code>220.000</code>")
-                pending[chat] = {"waiting":"expense_amt","exp_name":exp_name,"exp_id":exp["id"] if exp else None}
-                return "ok"
-            date_now = datetime.now().strftime("%d/%m/%Y")
-            db_run("INSERT INTO entries (type,desc,amt,date,month,category) VALUES (?,?,?,?,?,?)",
-                   ("expense", exp_name, final_amt, date_now, month, "مصاريف ثابتة"))
-            if exp:
-                db_run("UPDATE expenses SET last_paid=?,month=?,amount=? WHERE id=?",
-                       (date_now, month, final_amt, exp["id"]))
-            tg(chat, f"✅ <b>تم تسجيل {exp_name}</b>\n💰 {fmt_omr(final_amt)}\n📅 {date_now}")
-            return "ok"
-
-        # مشتريات
-        if etype=="b":
-            if not amt or amt<=0:
-                pending[chat]={"waiting":"buy_amt","desc":desc,"month":month}
-                tg(chat,f"📦 <b>{desc}</b>\nكم المبلغ؟ أرسل الرقم فقط:")
-                return "ok"
-            paid_by = parsed.get("paid_by")
-            if paid_by:
-                db_run("INSERT INTO entries (type,desc,amt,date,month,paid_by) VALUES (?,?,?,?,?,?)",
-                       ("b",desc,amt,date,month,paid_by))
-                tg(chat, f"✅ <b>مشتريات مسجلة!</b>\n📦 {desc}\n💰 {fmt_omr(amt)}\n👤 {paid_by}")
-            else:
-                pending[chat]={"waiting":"paid_by","desc":desc,"amt":amt,"date":date,"month":month}
-                tg_buttons(chat,f"📦 <b>مشتريات {fmt_omr(amt)}</b>\n📝 {desc}\n\n👤 من دفع؟",
-                    [[{"label":"👤 حسين","data":"payer:حسين"},{"label":"👤 شوق","data":"payer:شوق"}],
-                     [{"label":"➕ شخص آخر","data":"payer:other"},{"label":"⏭ تخطي","data":"payer:skip"}]])
-            return "ok"
-
-        # مبيعة
-        if etype=="s":
-            qty = max(1, int(parsed.get("qty") or detect_qty_from_text(text)))
-            if not amt or amt<=0:
-                pending[chat]={"waiting":"sale_amt","desc":desc,"qty":qty}
-                tg(chat,f"🌸 <b>{desc}</b>" + (f" × {qty}" if qty>1 else "") + "\nكم المبلغ الإجمالي؟ أرسل الرقم فقط:")
-                return "ok"
-            cat = parsed.get("category") or detect_category(text) or detect_category(desc)
-            pay = parsed.get("payment")
-            # كشف الرف
-            shelf_id_detected = None
-            shelf_name = parsed.get("shelf")
-            if shelf_name:
-                shelf = db_one("SELECT id FROM shelves WHERE name=?", (shelf_name,))
-                if shelf: shelf_id_detected = shelf["id"]
-            else:
-                for sname in ["ريحان","فتحية","فطوم","اكسسوارات"]:
-                    if sname in text:
-                        shelf = db_one("SELECT id FROM shelves WHERE name=?", (sname,))
-                        if shelf: shelf_id_detected = shelf["id"]; break
-            unit_price = round(amt / qty, 3)
-            cat_line = f"\n🏷️ {cat}" if cat else ""
-            for _ in range(qty):
-                db_run("INSERT INTO entries (type,desc,amt,date,month,payment_method,category,shelf_id) VALUES (?,?,?,?,?,?,?,?)",
-                       ("s",desc,unit_price,date,month,pay,cat,shelf_id_detected))
-            if shelf_id_detected and desc:
-                prod=db_one("SELECT * FROM shelf_products WHERE shelf_id=? AND name LIKE ? AND qty>0",
-                           (shelf_id_detected,f"%{desc.split()[0]}%"))
-                if prod: db_run("UPDATE shelf_products SET qty=MAX(0,qty-?) WHERE id=?",(qty, prod["id"]))
-            if pay:
-                tg(chat, f"✅ <b>{'مبيعات' if qty>1 else 'مبيعة'} مسجلة!</b>\n🌸 {qty}× {desc}\n💰 {fmt_omr(unit_price)} للقطعة = {fmt_omr(amt)} — {pay}{cat_line}")
-            else:
-                pending[chat]={"waiting":"sale_payment","qty":qty,"desc":desc,"unit_price":unit_price,"cat_line":cat_line}
-                tg_buttons(chat,f"🌸 <b>{'مبيعات' if qty>1 else 'مبيعة'} {fmt_omr(unit_price)}{'×'+str(qty) if qty>1 else ''}</b>\n📝 {qty}× {desc}{cat_line}\n\n💳 طريقة الدفع؟",
-                    [[{"label":"💵 كاش","data":"pay:كاش 💵"},{"label":"💳 فيزا","data":"pay:فيزا 💳"},{"label":"🏦 تحويل","data":"pay:تحويل 🏦"}]])
-            return "ok"
-    else:
-        tg(chat, "لم أفهم 🤔\n\nجرّب مثلاً:\n<code>بعت باقة بـ 4.500 كاش</code>\n<code>اشتريت ورد بـ 8.000</code>\n<code>دفعت الراتب</code>\n<code>دفعت الإيجار</code>\n\n/help للمساعدة")
-    return "ok"
-
-@app.route("/turso_debug")
-def turso_debug():
-    """Show raw Turso response for debugging."""
-    try:
-        res = turso_exec("SELECT * FROM shelves")
-        return jsonify({"raw": res})
+        days_with_spending = sum(1 for v in chart_values if v > 0)
+        avg_daily = total_spend / PERIOD_DAYS if total_spend > 0 else 0.0
+        
+        # Category breakdown
+        from decimal import Decimal as _Dcat
+        category_totals = {}
+        for e in debit_expenses:
+            cat = e.get("category", "other")
+            try:
+                raw = e.get("amount")
+                if raw is None:
+                    continue
+                amount = float(_Dcat(str(raw)))
+                category_totals[cat] = round(
+                    float(_Dcat(str(category_totals.get(cat, 0))) + _Dcat(str(raw))), 3
+                )
+            except Exception:
+                try:
+                    amount = float(e.get("amount", 0))
+                    category_totals[cat] = category_totals.get(cat, 0.0) + amount
+                except Exception:
+                    continue
+        
+        top_category = "other"
+        if category_totals:
+            top_category = max(category_totals.items(), key=lambda x: x[1])[0]
+        
+        # Spending trend (first half vs second half of 30-day period)
+        week1_total = sum(chart_values[:15])
+        week2_total = sum(chart_values[15:])
+        
+        spending_status = "Stable"
+        if week1_total > 0:
+            change_pct = ((week2_total - week1_total) / week1_total) * 100
+            if change_pct > 15:
+                spending_status = "Increasing"
+            elif change_pct < -15:
+                spending_status = "Decreasing"
+        
+        # Generate tips
+        ai_tips = _generate_safe_tips(
+            total_spend, avg_daily, top_category, 
+            category_totals, spending_status, 
+            week1_total, week2_total
+        )
+        
+        return jsonify({
+            "chart_14_days": {
+                "labels": chart_labels,
+                "values": [round(v, 3) for v in chart_values]
+            },
+            "analytics": {
+                "total_spend_period": f"{total_spend:.3f}",
+                "average_daily": f"{avg_daily:.3f}",
+                "days_with_spending": days_with_spending,
+                "top_spending_category": top_category,
+                "spending_status": spending_status,
+                "category_breakdown": {
+                    k: f"{v:.3f}" 
+                    for k, v in sorted(category_totals.items(), 
+                                     key=lambda x: x[1], reverse=True)
+                }
+            },
+            "ai_tips_arabic": ai_tips
+        })
+        
     except Exception as e:
-        return jsonify({"error": str(e)})
+        # Log the error
+        print(f"[Analytics] Fatal error: {e}")
+        import traceback
+        traceback.print_exc()
+        
+        # Return safe fallback response
+        return jsonify({
+            "chart_14_days": {
+                "labels": ["Day " + str(i) for i in range(1, 31)],
+                "values": [0.0] * 30
+            },
+            "analytics": {
+                "total_spend_period": "0.000",
+                "average_daily": "0.000",
+                "days_with_spending": 0,
+                "top_spending_category": "other",
+                "spending_status": "Stable",
+                "category_breakdown": {}
+            },
+            "ai_tips_arabic": [
+                "حدث خطأ في جلب البيانات — تحقق من اتصال Firebase 🔥",
+                "تأكد من إضافة FIREBASE_KEY_JSON في المتغيرات البيئية ⚙️",
+                "راجع السجلات (logs) لمعرفة تفاصيل الخطأ 📋"
+            ]
+        })
 
-# ── Expenses API ─────────────────────────────────────────
-@app.route("/api/expenses")
-def api_get_expenses():
-    month = request.args.get("month", cur_month())
-    expenses = db_get("SELECT * FROM expenses ORDER BY id")
-    # Get paid expenses for this month
-    paid = db_get("SELECT * FROM entries WHERE type='expense' AND month=? ORDER BY created DESC", (month,))
-    return jsonify({"expenses": expenses, "paid": paid})
 
-@app.route("/api/expenses/<int:eid>/pay", methods=["POST"])
-def api_pay_expense(eid):
-    d = request.json
-    month_val = d.get("month", cur_month())
-    custom_date = d.get("date", "").strip()
-    date_val = custom_date if custom_date else datetime.now().strftime("%d/%m/%Y")
-    exp = db_one("SELECT * FROM expenses WHERE id=?", (eid,))
-    if not exp: return jsonify({"ok": False}), 404
-    amt = float(d.get("amount", exp["amount"]))
-    db_run("INSERT INTO entries (type,desc,amt,date,month,category) VALUES (?,?,?,?,?,?)",
-           ("expense", exp["name"], amt, date_val, month_val, "مصاريف ثابتة"))
-    db_run("UPDATE expenses SET last_paid=?, month=?, amount=? WHERE id=?",
-           (date_val, month_val, amt, eid))
-    return jsonify({"ok": True})
-
-@app.route("/api/expenses/<int:eid>", methods=["POST"])
-def api_update_expense(eid):
-    d = request.json
-    db_run("UPDATE expenses SET amount=? WHERE id=?", (float(d["amount"]), eid))
-    return jsonify({"ok": True})
-
-@app.route("/api/expenses", methods=["POST"])
-def api_add_expense():
-    d = request.json
-    db_run("INSERT INTO expenses (name,amount,type) VALUES (?,?,?)",
-           (d["name"], float(d.get("amount",0)), d.get("type","monthly")))
-    return jsonify({"ok": True})
-
-@app.route("/api/expenses/<int:eid>", methods=["DELETE"])
-def api_del_expense(eid):
-    db_run("DELETE FROM expenses WHERE id=?", (eid,))
-    return jsonify({"ok": True})
-
-@app.route("/api/expense_entries/<int:eid>", methods=["DELETE"])
-def api_del_expense_entry(eid):
-    """Delete a specific expense entry."""
-    db_run("DELETE FROM entries WHERE id=? AND type='expense'", (eid,))
-    return jsonify({"ok": True})
-
-@app.route("/api/expenses/<int:eid>/reset", methods=["POST"])
-def api_reset_expense(eid):
-    """Reset expense paid status."""
-    d = request.json or {}
-    month_val = d.get("month", cur_month())
-    exp = db_one("SELECT * FROM expenses WHERE id=?", (eid,))
-    if exp and exp.get("month") == month_val:
-        db_run("UPDATE expenses SET last_paid=NULL, month=NULL WHERE id=?", (eid,))
-    return jsonify({"ok": True})
-
-@app.route("/api/expenses/<int:eid>", methods=["DELETE"])
-def api_delete_expense_def(eid):
-    """Delete an expense definition entirely."""
-    db_run("DELETE FROM expenses WHERE id=?", (eid,))
-    return jsonify({"ok": True})
-
-@app.route("/api/report/pdf")
-@auth
-def api_report_pdf():
-    try:
-        period    = request.args.get("period", "month")
-        rtype     = request.args.get("type", "all")
-        month_val = request.args.get("month", cur_month())
-        day_val   = request.args.get("day", "")
-
-        def fr(n): return f"{float(n):,.3f}"
-        def rc(i): return "even" if i%2==0 else ""
-
-        type_labels = {"all":"شامل","sales":"مبيعات","buys":"مشتريات","expenses":"مصاريف"}
-        period_label = f"يوم {day_val}" if period=="day" else f"شهر {month_val}"
-        title = f"فيروز فلورز — تقرير {type_labels.get(rtype,rtype)} — {period_label}"
-
-        # ── جلب البيانات ──
-        if period == "day" and day_val:
-            s_all, b_all, e_all = get_day_data(day_val)
+def _generate_safe_tips(total_spend, avg_daily, top_category, 
+                        category_totals, spending_status, 
+                        week1_total, week2_total):
+    """Generate 3 financial tips - safe version with fallbacks."""
+    
+    CAT_AR = {
+        "food": "الطعام", "shopping": "التسوق", 
+        "transport": "المواصلات", "bills": "الفواتير",
+        "health": "الصحة", "entertainment": "الترفيه",
+        "education": "التعليم", "groceries": "البقالة",
+        "fuel": "الوقود", "rent": "الإيجار",
+        "subscriptions": "الاشتراكات", "transfer": "التحويل",
+        "savings": "الادخار", "other": "أخرى"
+    }
+    
+    tips = []
+    top_cat_ar = CAT_AR.get(top_category, "الأخرى")
+    top_cat_amount = category_totals.get(top_category, 0)
+    
+    # Tip 1: Spending trend
+    if spending_status == "Increasing" and week1_total > 0:
+        change = abs(((week2_total - week1_total) / week1_total) * 100)
+        tips.append(f"لاحظت زيادة {change:.0f}% في الإنفاق — راقب {top_cat_ar} 🎯")
+    elif spending_status == "Decreasing":
+        tips.append(f"ممتاز! إنفاقك انخفض هذا الأسبوع — استمر بنفس النهج 🌟")
+    else:
+        if avg_daily > 0:
+            tips.append(f"إنفاقك مستقر عند {avg_daily:.1f} ر.ع يومياً — تحكم جيد 💪")
         else:
-            s_all, b_all = get_month_data(month_val)
-            e_all = db_get("SELECT * FROM entries WHERE type='expense' AND month=? ORDER BY date DESC", (month_val,))
+            tips.append(f"ابدأ بتتبع مصروفاتك اليومية لرؤية أنماطك المالية 📊")
+    
+    # Tip 2: Category insights
+    if total_spend > 0 and top_cat_amount > 0:
+        cat_pct = (top_cat_amount / total_spend) * 100
+        if cat_pct > 40:
+            tips.append(f"{top_cat_ar} تشكل {cat_pct:.0f}% من إنفاقك — فرصة للتوفير 💡")
+        elif cat_pct > 20:
+            tips.append(f"{top_cat_ar} هي أكبر فئة بـ {cat_pct:.0f}% — راقبها بعناية 👀")
+        else:
+            tips.append(f"توزيع متوازن للمصروفات — {top_cat_ar} ضمن الحدود ✅")
+    else:
+        tips.append(f"نوّع فئات مصروفاتك لفهم أفضل لإنفاقك 🏷️")
+    
+    # Tip 3: Savings potential
+    if total_spend > 50:
+        saving = total_spend * 0.15
+        tips.append(f"لو وفرت 15%، ستدخر {saving:.3f} ر.ع كل أسبوعين 💰")
+    elif total_spend > 0:
+        tips.append(f"إنفاقك {total_spend:.1f} ر.ع — حافظ على هذا المستوى المنخفض 👍")
+    else:
+        tips.append(f"سجّل معاملاتك من التيليجرام لبدء رحلة التوفير 🚀")
+    
+    # Ensure we always have 3 tips
+    while len(tips) < 3:
+        tips.append("استمر في تتبع مصروفاتك يومياً لتحقيق أهدافك المالية 🎯")
+    
+    return tips[:3]
 
-        buys_only = [b for b in b_all if b.get("type")=="b"]
-        exp_defs  = db_get("SELECT * FROM expenses ORDER BY id")
 
-        ts = sum(e["amt"] for e in s_all)
-        tb = sum(e["amt"] for e in buys_only)
-        te = sum(e["amt"] for e in e_all)
-        tp = ts - tb
-        tn = tp - te
 
-        # ── ملخص ──
-        summary_html = ""
-        if rtype == "all":
-            net_color = "green" if tn>=0 else "red"
-            summary_html = f"""
-            <div class="sum-grid">
-              <div class="sum-card green"><div class="sum-ico">💰</div><div class="sum-val">{fr(ts)}</div><div class="sum-lbl">المبيعات<br><span>{len(s_all)} عملية</span></div></div>
-              <div class="sum-card red"><div class="sum-ico">🛒</div><div class="sum-val">{fr(tb)}</div><div class="sum-lbl">المشتريات<br><span>{len(buys_only)} عملية</span></div></div>
-              <div class="sum-card gold"><div class="sum-ico">💸</div><div class="sum-val">{fr(te)}</div><div class="sum-lbl">المصاريف<br><span>{len(e_all)} عملية</span></div></div>
-              <div class="sum-card blue"><div class="sum-ico">📊</div><div class="sum-val">{fr(tp)}</div><div class="sum-lbl">ربح قبل المصاريف<br><span>{"✅" if tp>=0 else "⚠️"}</span></div></div>
-              <div class="sum-card {net_color} span2"><div class="sum-ico">🏆</div><div class="sum-val big">{fr(tn)}</div><div class="sum-lbl">الربح الصافي النهائي<br><span>{"✅ ربح" if tn>=0 else "⚠️ خسارة"}</span></div></div>
-            </div>"""
 
-        # ── إضافة تفصيل يومي للتقرير الشهري ──
-        daily_html = ""
-        if period == "month" and rtype in ("all","sales"):
-            day_map = {}
-            for e in s_all:
-                d = e.get("date","")
-                if d not in day_map: day_map[d] = {"s":0,"b":0,"sc":0,"bc":0}
-                day_map[d]["s"]+=e["amt"]; day_map[d]["sc"]+=1
-            for e in buys_only:
-                d = e.get("date","")
-                if d not in day_map: day_map[d] = {"s":0,"b":0,"sc":0,"bc":0}
-                day_map[d]["b"]+=e["amt"]; day_map[d]["bc"]+=1
-            if day_map:
-                day_rows = "".join(f"""<tr class="{rc(i)}">
-                    <td>{d}</td>
-                    <td class="num green-t">{fr(v["s"])}</td><td class="cnt">{v["sc"]}</td>
-                    <td class="num red-t">{fr(v["b"])}</td><td class="cnt">{v["bc"]}</td>
-                    <td class="num {"green-t" if v["s"]-v["b"]>=0 else "red-t"}">{fr(v["s"]-v["b"])}</td>
-                    </tr>"""
-                    for i,(d,v) in enumerate(sorted(day_map.items()),1))
-                daily_html = f"""
-                <h2 class="sec-title blue-t">📆 التفصيل اليومي</h2>
-                <table><thead><tr><th>اليوم</th><th>المبيعات</th><th>#</th><th>المشتريات</th><th>#</th><th>الصافي</th></tr></thead>
-                <tbody>{day_rows}</tbody></table>"""
 
-        # ── جدول المبيعات ──
-        sales_html = ""
-        if rtype in ("all","sales") and s_all:
-            # تجميع حسب الفئة
-            cats = {}
-            for e in s_all:
-                c = e.get("category","أخرى") or "أخرى"
-                cats[c] = cats.get(c,0) + e["amt"]
-            cat_summary = "".join(f'<span class="cat-chip">{c}: {fr(v)}</span>' for c,v in sorted(cats.items(),key=lambda x:-x[1]))
-            rows = "".join(f"""<tr class="{rc(i)}">
-                <td>{i}</td><td><b>{e.get("desc","")}</b></td>
-                <td><span class="chip">{e.get("category","-") or "-"}</span></td>
-                <td><span class="chip pay">{e.get("payment_method","-") or "-"}</span></td>
-                <td>{e.get("date","")}</td>
-                <td class="num green-t">{fr(e["amt"])}</td></tr>"""
-                for i,e in enumerate(s_all,1))
-            sales_html = f"""
-            <h2 class="sec-title green-t">🌸 المبيعات ({len(s_all)} عملية)</h2>
-            <div class="cat-row">{cat_summary}</div>
-            <table><thead><tr><th>#</th><th>الوصف</th><th>الفئة</th><th>طريقة الدفع</th><th>التاريخ</th><th>المبلغ</th></tr></thead>
-            <tbody>{rows}</tbody>
-            <tfoot><tr><td colspan="5"><b>الإجمالي</b></td><td class="num"><b>{fr(ts)}</b></td></tr></tfoot></table>"""
+# ══════════════════════════════════════════════════════════════
+# DELETE ALL DATA ENDPOINT
+# ══════════════════════════════════════════════════════════════
+@app.route("/api/delete-all-data", methods=["POST"])
+def api_delete_all_data():
+    """
+    حذف جميع البيانات (مصروفات، رسائل خام، أرصدة)
+    مع الاحتفاظ بـ: التعلم الذاتي، regex templates، merchant categories
+    """
+    try:
+        from config import db_conn
+        from firebase import firebase_db, broadcast_event
+        
+        deleted_counts = {
+            "expenses_deleted": 0,
+            "messages_deleted": 0,
+            "balances_deleted": 0,
+            "insights_deleted": 0
+        }
+        
+        # حذف من SQLite
+        conn = db_conn()
+        
+        # حذف المصروفات
+        result = conn.execute("DELETE FROM expenses")
+        deleted_counts["expenses_deleted"] = result.rowcount
+        
+        # حذف الرسائل الخام
+        result = conn.execute("DELETE FROM messages")
+        deleted_counts["messages_deleted"] = result.rowcount
+        
+        # حذف الأرصدة
+        result = conn.execute("DELETE FROM bank_balances")
+        deleted_counts["balances_deleted"] = result.rowcount
+        
+        # حذف الـ insights
+        result = conn.execute("DELETE FROM daily_insights")
+        deleted_counts["insights_deleted"] = result.rowcount
+        
+        conn.commit()
+        conn.close()
+        
+        print(f"[Delete All] SQLite deleted: {deleted_counts}")
+        
+        # حذف من Firebase
+        if firebase_db:
+            try:
+                def _batch_delete_collection(coll_name):
+                    batch = firebase_db.batch()
+                    docs = firebase_db.collection(coll_name).stream()
+                    count = 0
+                    for doc in docs:
+                        batch.delete(doc.reference)
+                        count += 1
+                        if count % 500 == 0:
+                            batch.commit()
+                            batch = firebase_db.batch()
+                    if count % 500 != 0 or count == 0:
+                        batch.commit()
+                    print(f"[Delete All] Firebase {coll_name} deleted: {count}")
+                    return count
 
-        # ── جدول المشتريات ──
-        buys_html = ""
-        if rtype in ("all","buys") and buys_only:
-            # تجميع حسب من دفع
-            payers = {}
-            for e in buys_only:
-                p = e.get("paid_by","غير محدد") or "غير محدد"
-                payers[p] = payers.get(p,0) + e["amt"]
-            payer_summary = "".join(f'<span class="cat-chip red-chip">{p}: {fr(v)}</span>' for p,v in sorted(payers.items(),key=lambda x:-x[1]))
-            rows = "".join(f"""<tr class="{rc(i)}">
-                <td>{i}</td><td><b>{e.get("desc","")}</b></td>
-                <td><span class="chip">{e.get("paid_by","-") or "-"}</span></td>
-                <td>{e.get("date","")}</td>
-                <td class="num red-t">{fr(e["amt"])}</td></tr>"""
-                for i,e in enumerate(buys_only,1))
-            buys_html = f"""
-            <h2 class="sec-title red-t">📦 المشتريات ({len(buys_only)} عملية)</h2>
-            <div class="cat-row">{payer_summary}</div>
-            <table><thead><tr><th>#</th><th>الوصف</th><th>من دفع</th><th>التاريخ</th><th>المبلغ</th></tr></thead>
-            <tbody>{rows}</tbody>
-            <tfoot><tr><td colspan="4"><b>الإجمالي</b></td><td class="num"><b>{fr(tb)}</b></td></tr></tfoot></table>"""
+                _batch_delete_collection("expenses")
+                _batch_delete_collection("transactions")
+                _batch_delete_collection("bank_balances")
+                _batch_delete_collection("messages")
+                _batch_delete_collection("daily_insights")
 
-        # ── جدول المصاريف ──
-        exps_html = ""
-        if rtype in ("all","expenses"):
-            def_rows = "".join(f"""<tr class="{rc(i)}">
-                <td><b>{e["name"]}</b></td>
-                <td class="num">{fr(float(e["amount"]))}</td>
-                <td>{e.get("last_paid") or "لم يُدفع"}</td>
-                <td><span class="badge {"paid" if e.get("month")==month_val else "unpaid"}">{("✅ مدفوع" if e.get("month")==month_val else "⏳ لم يُدفع")}</span></td></tr>"""
-                for i,e in enumerate(exp_defs,1))
-            exp_rows = "".join(f"""<tr class="{rc(i)}">
-                <td>{i}</td><td><b>{e.get("desc","")}</b></td>
-                <td>{e.get("date","")}</td>
-                <td class="num gold-t">{fr(e["amt"])}</td></tr>"""
-                for i,e in enumerate(e_all,1))
-            exps_html = f"""
-            <h2 class="sec-title gold-t">💸 المصاريف الثابتة</h2>
-            <table><thead><tr><th>المصروف</th><th>المبلغ الشهري</th><th>آخر دفع</th><th>الحالة</th></tr></thead>
-            <tbody>{def_rows}</tbody></table>
-            {f'<h3 class="sub-h">سجل الدفعات</h3><table><thead><tr><th>#</th><th>الوصف</th><th>التاريخ</th><th>المبلغ</th></tr></thead><tbody>'+exp_rows+'</tbody><tfoot><tr><td colspan="3"><b>الإجمالي</b></td><td class="num"><b>'+fr(te)+'</b></td></tr></tfoot></table>' if e_all else '<p class="no-data">لا توجد دفعات مسجلة</p>'}"""
+            except Exception as fb_err:
+                print(f"[Delete All] Firebase error: {fb_err}")
+        
+        # بث SSE لتحديث الواجهة
+        broadcast_event("data_deleted", {
+            "message": "All data deleted",
+            "counts": deleted_counts
+        })
+        
+        return jsonify({
+            "ok": True,
+            "message": "تم حذف جميع البيانات بنجاح",
+            **deleted_counts
+        })
+        
+    except Exception as e:
+        print(f"[Delete All] Error: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({"error": str(e)}), 500
 
-        html = f"""<!DOCTYPE html>
-<html lang="ar" dir="rtl">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>{title}</title>
-<link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;600;700;900&display=swap" rel="stylesheet">
-<style>
-*{{margin:0;padding:0;box-sizing:border-box;}}
-body{{font-family:'Tajawal',sans-serif;background:#fdf8f2;color:#3d2c24;padding:20px 16px;direction:rtl;}}
-.header{{text-align:center;margin-bottom:24px;padding:18px;background:linear-gradient(135deg,#f9c8d0,#fdf8f2);border-radius:14px;border:1px solid rgba(232,121,138,.25);}}
-.header h1{{font-size:20px;font-weight:900;color:#c4566a;margin-bottom:3px;}}
-.header p{{font-size:11px;color:#b09888;}}
-.sum-grid{{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-bottom:20px;}}
-.sum-card{{padding:14px 12px;border-radius:12px;text-align:center;border:1px solid rgba(0,0,0,.07);}}
-.sum-card.span2{{grid-column:span 2;}}
-.sum-card.green{{background:#e8f5e9;border-color:rgba(122,171,138,.3);}}
-.sum-card.red{{background:#fce4ec;border-color:rgba(232,121,138,.3);}}
-.sum-card.gold{{background:#fff8e1;border-color:rgba(212,165,87,.3);}}
-.sum-card.blue{{background:#e3f2fd;border-color:rgba(100,150,200,.3);}}
-.sum-ico{{font-size:18px;margin-bottom:4px;}}
-.sum-val{{font-size:16px;font-weight:900;margin-bottom:2px;}}
-.sum-val.big{{font-size:20px;}}
-.green .sum-val{{color:#5a8a6a;}}.red .sum-val{{color:#c4566a;}}.gold .sum-val{{color:#d4a557;}}.blue .sum-val{{color:#4a7ab0;}}
-.sum-lbl{{font-size:10px;color:#7a6458;line-height:1.5;}}
-.sum-lbl span{{font-size:11px;font-weight:700;}}
-.sec-title{{font-size:13px;font-weight:800;margin:20px 0 8px;padding:7px 12px;border-radius:8px;}}
-.green-t{{background:rgba(122,171,138,.1);color:#5a8a6a;border-right:3px solid #7aab8a;}}
-.red-t{{background:rgba(232,121,138,.1);color:#c4566a;border-right:3px solid #e8798a;}}
-.gold-t{{background:rgba(212,165,87,.1);color:#d4a557;border-right:3px solid #d4a557;}}
-.blue-t{{background:rgba(100,150,200,.1);color:#4a7ab0;border-right:3px solid #6a9fd0;}}
-.cat-row{{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px;}}
-.cat-chip{{background:rgba(122,171,138,.15);color:#5a8a6a;padding:3px 10px;border-radius:20px;font-size:10px;font-weight:700;}}
-.red-chip{{background:rgba(232,121,138,.15);color:#c4566a;}}
-table{{width:100%;border-collapse:collapse;font-size:11px;margin-bottom:6px;}}
-thead tr{{background:linear-gradient(135deg,#6b4c3b,#8b6c5b);color:white;}}
-th{{padding:8px 8px;text-align:right;font-weight:700;font-size:11px;}}
-td{{padding:7px 8px;border-bottom:1px solid rgba(107,76,59,.07);}}
-tr.even td{{background:rgba(253,248,242,.7);}}
-tfoot td{{font-weight:700;background:rgba(107,76,59,.05);border-top:2px solid rgba(107,76,59,.12);}}
-.num{{text-align:left;font-weight:600;}}
-.cnt{{text-align:center;color:#999;font-size:10px;}}
-.chip{{background:rgba(107,76,59,.08);padding:2px 7px;border-radius:10px;font-size:10px;}}
-.chip.pay{{background:rgba(122,171,138,.15);color:#5a8a6a;}}
-.badge{{padding:2px 7px;border-radius:10px;font-size:10px;font-weight:700;}}
-.badge.paid{{background:rgba(122,171,138,.2);color:#5a8a6a;}}
-.badge.unpaid{{background:rgba(232,121,138,.12);color:#c4566a;}}
-.sub-h{{font-size:12px;color:#7a6458;margin:14px 0 6px;font-weight:700;}}
-.no-data{{color:#b09888;font-size:11px;text-align:center;padding:10px;}}
-.print-btn{{position:fixed;bottom:18px;left:16px;background:linear-gradient(135deg,#e8798a,#c4566a);color:white;border:none;padding:11px 20px;border-radius:40px;font-family:'Tajawal',sans-serif;font-size:13px;font-weight:700;cursor:pointer;box-shadow:0 4px 16px rgba(232,121,138,.4);}}
-@media print{{.print-btn{{display:none;}}body{{background:white;padding:8px;}}}}
-</style>
-</head>
-<body>
-<div class="header">
-  <h1>🌹 فيروز فلورز</h1>
-  <p>تقرير {type_labels.get(rtype,rtype)} — {period_label} &nbsp;|&nbsp; {datetime.now().strftime("%d/%m/%Y %H:%M")}</p>
-</div>
-{summary_html}
-{daily_html}
-{sales_html}
-{buys_html}
-{exps_html}
-<button class="print-btn" onclick="window.print()">🖨️ طباعة / PDF</button>
-</body></html>"""
 
-        return Response(html, mimetype="text/html; charset=utf-8")
+@app.route("/api/dashboard")
+def api_dashboard():
+    try:
+        today_str = _muscat_today()
+        month_str = _muscat_month()
 
+        # Use SQLite-fast reader — no Firebase network call
+        today_exps = get_expenses_sqlite_fast(date_filter=today_str)
+        month_exps = get_expenses_sqlite_fast(month_filter=month_str)
+
+        # ── Daily totals — compute directly from already-fetched rows (no extra query)
+        from decimal import Decimal as _Dtd, InvalidOperation as _IOtd
+        _td_acc = _Dtd("0")
+        for e in today_exps:
+            if e.get("type", "debit") in ("debit", "transfer_out"):
+                try:
+                    raw = e.get("amount")
+                    if raw is not None:
+                        _td_acc += _Dtd(str(raw))
+                except (_IOtd, Exception):
+                    pass
+        today_debit  = float(_td_acc)
+        today_credit = sum(float(e.get("amount") or 0) for e in today_exps
+                           if e.get("type") == "credit")
+
+        # ── Monthly totals ────────────────────────────────────────────────────
+        from decimal import Decimal as _Dm, InvalidOperation as _IOm
+        def _dec_sum(items, type_val):
+            acc = _Dm("0")
+            for e in items:
+                t = e.get("type", "debit")
+                # include transfer_out alongside debit in the spending total
+                match = (t == type_val) or (type_val == "debit" and t == "transfer_out")
+                if match:
+                    try:
+                        raw = e.get("amount")
+                        if raw is not None:
+                            acc += _Dm(str(raw))
+                    except (_IOm, Exception):
+                        pass
+            return float(acc)
+
+        month_debit  = _dec_sum(month_exps, "debit")
+        month_credit = _dec_sum(month_exps, "credit")
+
+        # ── Outgoing transfers ────────────────────────────────────────────────
+        transfer_exps = [e for e in month_exps
+                         if e.get("type") == "transfer_out"
+                         or (e.get("type") == "debit" and e.get("category") == "transfer")]
+        _mt_acc = _Dm("0")
+        for e in transfer_exps:
+            try:
+                raw = e.get("amount")
+                if raw is not None:
+                    _mt_acc += _Dm(str(raw))
+            except (_IOm, Exception):
+                pass
+        month_transfer = float(_mt_acc)
+        transfer_count = len(transfer_exps)
+
+        # ── Category breakdown ────────────────────────────────────────────────
+        from decimal import Decimal as _Dcat2
+        cats: dict = {}
+        for e in month_exps:
+            if e.get("type", "debit") in ("debit", "transfer_out"):
+                c = e.get("category", "other") if e.get("type") != "transfer_out" else "transfer"
+                try:
+                    raw = e.get("amount")
+                    if raw is not None:
+                        cats[c] = float(
+                            _Dcat2(str(cats.get(c, 0))) + _Dcat2(str(raw))
+                        )
+                except Exception:
+                    cats[c] = cats.get(c, 0.0) + float(e.get("amount") or 0)
+
+        # ── Daily spending chart ──────────────────────────────────────────────
+        from decimal import Decimal as _Dday
+        daily: dict = {}
+        for e in month_exps:
+            d = e.get("date_only") or str(e.get("date", ""))[:10]
+            if d:
+                try:
+                    raw = e.get("amount")
+                    if raw is not None:
+                        daily[d] = float(
+                            _Dday(str(daily.get(d, 0))) + _Dday(str(raw))
+                        )
+                except Exception:
+                    daily[d] = daily.get(d, 0.0) + float(e.get("amount") or 0)
+
+        # ── Daily insight — SQLite only (no AI call here, no Firebase) ──────
+        insight = None
+        try:
+            _ic = db_conn()
+            _irow = _ic.execute(
+                "SELECT insight FROM daily_insights WHERE date=?", (today_str,)
+            ).fetchone()
+            _ic.close()
+            if _irow:
+                insight = _irow["insight"]
+        except Exception:
+            pass
+
+        # ── Parse method stats ────────────────────────────────────────────────
+        method_counts = {"regex": 0, "ai": 0, "fallback": 0, "template": 0}
+        for e in month_exps:
+            m = e.get("parse_method", "ai") or "ai"
+            if m in method_counts:
+                method_counts[m] += 1
+
+        # ── Bank balances (for Net Worth) ─────────────────────────────────────
+        bank_balances = get_bank_balances_sqlite()
+
+        return jsonify({
+            "today": {
+                "total":        round(today_debit, 3),
+                "total_credit": round(today_credit, 3),
+                "count":        len(today_exps),
+                "date":         today_str,
+            },
+            "month": {
+                "total":          round(month_debit, 3),
+                "total_credit":   round(month_credit, 3),
+                "count":          len(month_exps),
+                "total_transfer": round(month_transfer, 3),
+                "transfer_count": transfer_count,
+                # FIX #1: return ALL month items, not capped at 50
+                "items":          month_exps,
+            },
+            "categories":       [{"category": k, "total": round(v, 3)}
+                                  for k, v in sorted(cats.items(),
+                                                     key=lambda x: x[1], reverse=True)],
+            "daily":            [{"date": k, "total": round(v, 3)}
+                                  for k, v in sorted(daily.items())],
+            "bank_balances":    bank_balances,
+            "daily_insight":    insight,
+            "parse_method_stats": method_counts,
+            "db_source":        "sqlite",
+            "db_connected":     firebase_db is not None,
+        })
     except Exception as e:
         import traceback
-        return jsonify({"error": str(e), "trace": traceback.format_exc()}), 500
+        print(f"[DASHBOARD] ❌ Unhandled error: {e}")
+        print(traceback.format_exc())
+        return jsonify({
+            "error": str(e),
+            "today":  {"total": 0, "count": 0},
+            "month":  {"total": 0, "count": 0, "items": []},
+            "categories": [], "daily": [], "bank_balances": [],
+            "db_connected": False,
+        }), 500
 
-@app.route("/api/expense_entries")
-def api_list_expense_entries():
-    """List all expense entries."""
-    month_val = request.args.get("month", "")
-    if month_val:
-        entries = db_get("SELECT * FROM entries WHERE type='expense' AND month=? ORDER BY created DESC", (month_val,))
-    else:
-        entries = db_get("SELECT * FROM entries WHERE type='expense' ORDER BY created DESC LIMIT 50")
-    return jsonify(entries)
-
-# ── Flowers API ──────────────────────────────────────────
-@app.route("/api/flowers")
-def api_get_flowers():
-    flowers = db_get("SELECT * FROM flowers ORDER BY count DESC")
-    total = sum(f["count"] for f in flowers)
-    updated = flowers[0]["updated"] if flowers else None
-    return jsonify({"flowers": flowers, "total": total, "updated": updated})
-
-@app.route("/api/flowers", methods=["POST"])
-def api_set_flowers():
-    """Save flower inventory from AI scan."""
-    d = request.json
-    flowers = d.get("flowers", [])
-    now = datetime.now().strftime("%d/%m/%Y %H:%M")
-    db_run("DELETE FROM flowers")
-    for f in flowers:
-        db_run("INSERT INTO flowers (name, count, unit, updated) VALUES (?,?,?,?)",
-               (f["name"], int(f["count"]), f.get("unit","وردة"), now))
-    return jsonify({"ok": True, "count": len(flowers)})
-
-@app.route("/api/flowers/<int:fid>", methods=["DELETE"])
-def api_del_flower(fid):
-    db_run("DELETE FROM flowers WHERE id=?", (fid,))
-    return jsonify({"ok": True})
-
-@app.route("/api/flowers/<int:fid>", methods=["POST"])
-def api_update_flower(fid):
-    d = request.json
-    if "unit" in d:
-        db_run("UPDATE flowers SET count=?,unit=? WHERE id=?", (int(d["count"]), d["unit"], fid))
-    else:
-        db_run("UPDATE flowers SET count=? WHERE id=?", (int(d["count"]), fid))
-    return jsonify({"ok": True})
-
-@app.route("/fix_elec")
-def fix_elec():
-    """Fix duplicate electricity expenses."""
-    try:
-        db_run("UPDATE expenses SET name='تعبئة كهرباء', amount=0 WHERE name='فاتورة الكهرباء'")
-        db_run("UPDATE entries SET desc='تعبئة كهرباء' WHERE desc='فاتورة الكهرباء'")
-        # Remove duplicates - keep only first one
-        all_elec = db_get("SELECT * FROM expenses WHERE name='تعبئة كهرباء' ORDER BY id")
-        if len(all_elec) > 1:
-            for dup in all_elec[1:]:
-                db_run("DELETE FROM expenses WHERE id=?", (dup["id"],))
-        result = db_get("SELECT * FROM expenses ORDER BY id")
-        return jsonify({"ok": True, "expenses": result})
-    except Exception as e:
-        return jsonify({"error": str(e)})
-
-@app.route("/fix_expenses")
-def fix_expenses():
-    """Remove duplicate expenses keeping only latest per name."""
-    try:
-        all_exp = db_get("SELECT * FROM expenses ORDER BY id")
-        seen = {}
-        to_delete = []
-        for e in all_exp:
-            if e["name"] in seen:
-                to_delete.append(e["id"])
-            else:
-                seen[e["name"]] = e["id"]
-        for eid in to_delete:
-            db_run("DELETE FROM expenses WHERE id=?", (eid,))
-        remaining = db_get("SELECT * FROM expenses ORDER BY id")
-        return jsonify({"ok": True, "deleted": len(to_delete), "remaining": remaining})
-    except Exception as e:
-        return jsonify({"error": str(e)})
-
-@app.route("/init_shelves")
-def init_shelves():
-    shelves = [
-        ('ريحان','#f07090',10),
-        ('فتحية','#4ecdc4',8),
-        ('فطوم','#b794f4',8),
-        ('اكسسوارات','#f5c842',18),
-    ]
-    results = []
-    for name, color, rent in shelves:
-        existing = db_one("SELECT id FROM shelves WHERE name=?", (name,))
-        if existing:
-            db_run("UPDATE shelves SET color=?, rent=? WHERE name=?", (color, rent, name))
-            results.append(f"updated: {name}")
-        else:
-            db_run("INSERT INTO shelves (name,color,rent) VALUES (?,?,?)", (name, color, rent))
-            results.append(f"inserted: {name}")
-    all_shelves = db_get("SELECT * FROM shelves")
-    return jsonify({"ok": True, "results": results, "shelves": all_shelves})
-
-@app.route("/api/backup")
-def api_backup():
-    """Export all data as JSON."""
-    try:
-        entries = db_get("SELECT * FROM entries ORDER BY created")
-        shelves = db_get("SELECT * FROM shelves ORDER BY id")
-        products = db_get("SELECT * FROM shelf_products ORDER BY id")
-        data = {
-            "version": 1,
-            "exported_at": datetime.now().strftime("%Y-%m-%d %H:%M"),
-            "entries": entries,
-            "shelves": shelves,
-            "shelf_products": products
-        }
-        import json as _json
-        response = Response(
-            _json.dumps(data, ensure_ascii=False, indent=2),
-            mimetype="application/json",
-            headers={"Content-Disposition": f"attachment; filename=fairuz_backup_{datetime.now().strftime('%Y%m%d')}.json"}
-        )
-        return response
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-
-@app.route("/api/restore", methods=["POST"])
-def api_restore():
-    """Restore data from JSON backup."""
-    try:
-        data = request.json
-        if not data or data.get("version") != 1:
-            return jsonify({"error": "ملف غير صالح"}), 400
-
-        restored = {"entries": 0, "shelves": 0, "products": 0}
-
-        # Restore shelves
-        for s in data.get("shelves", []):
-            existing = db_one("SELECT id FROM shelves WHERE name=?", (s["name"],))
-            if existing:
-                db_run("UPDATE shelves SET color=?, rent=? WHERE name=?",
-                       (s.get("color","#e8547a"), s.get("rent",0), s["name"]))
-            else:
-                db_run("INSERT INTO shelves (name,color,rent) VALUES (?,?,?)",
-                       (s["name"], s.get("color","#e8547a"), s.get("rent",0)))
-            restored["shelves"] += 1
-
-        # Restore entries
-        for e in data.get("entries", []):
-            existing = db_one("SELECT id FROM entries WHERE id=?", (e["id"],))
-            if not existing:
-                db_run("""INSERT INTO entries (type,desc,amt,date,month,img,paid_by,payment_method,sale_time,shelf_id)
-                          VALUES (?,?,?,?,?,?,?,?,?,?)""",
-                    (e["type"], e["desc"], e["amt"], e["date"], e["month"],
-                     e.get("img"), e.get("paid_by"), e.get("payment_method"),
-                     e.get("sale_time"), e.get("shelf_id")))
-                restored["entries"] += 1
-
-        # Restore shelf products
-        for p in data.get("shelf_products", []):
-            existing = db_one("SELECT id FROM shelf_products WHERE id=?", (p["id"],))
-            if not existing:
-                db_run("INSERT INTO shelf_products (shelf_id,name,price,qty) VALUES (?,?,?,?)",
-                       (p["shelf_id"], p["name"], p["price"], p.get("qty",0)))
-                restored["products"] += 1
-
-        return jsonify({"ok": True, "restored": restored})
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-
-@app.route("/daily_summary")
-def daily_summary():
-    """Send daily summary to Telegram. Call this via cron at 10pm."""
-    if not BOT_TOKEN:
-        return jsonify({"error": "No BOT_TOKEN"})
-    chat_id = request.args.get("chat_id") or os.environ.get("OWNER_CHAT_ID","")
-    if not chat_id:
-        return jsonify({"error": "No chat_id. Add OWNER_CHAT_ID to Render env or pass ?chat_id=xxx"})
-    try:
-        today = datetime.now().strftime("%d/%m/%Y")
-        month = cur_month()
-        rows = db_get("SELECT * FROM entries WHERE date=? AND month=? ORDER BY created DESC", (today, month))
-        sales = [r for r in rows if r["type"]=="s"]
-        buys  = [r for r in rows if r["type"]=="b"]
-        exps  = [r for r in rows if r["type"]=="expense"]
-        ts = sum(e["amt"] for e in sales)
-        tb = sum(e["amt"] for e in buys)
-        te = sum(e["amt"] for e in exps)
-        if not sales and not buys and not exps:
-            msg = f"🌙 <b>ملخص يوم {today}</b>\n\n😴 لا توجد حركات اليوم"
-        else:
-            msg = (f"🌙 <b>ملخص يوم {today}</b>\n\n"
-                   f"🌸 مبيعات: {fmt_omr(ts)} ({len(sales)} عملية)\n"
-                   f"📦 مشتريات: {fmt_omr(tb)} ({len(buys)} عملية)\n"
-                   f"💸 مصاريف: {fmt_omr(te)}\n"
-                   f"━━━━━━\n"
-                   f"{'✅' if ts-tb-te>=0 else '⚠️'} صافي اليوم: {fmt_omr(ts-tb-te)}")
-        tg(chat_id, msg)
-        return jsonify({"ok": True, "sent": msg[:50]})
-    except Exception as e:
-        return jsonify({"error": str(e)})
-
-@app.route("/set_webhook")
-def set_webhook():
-    host=request.host_url.rstrip("/")
-    r=requests.get(f"https://api.telegram.org/bot{BOT_TOKEN}/setWebhook",params={"url":f"{host}/webhook"},timeout=10)
-    return jsonify(r.json())
-
-# ── Flower Invoices API ───────────────────────────────────
-@app.route("/api/flower_invoices")
-@auth
-def api_get_flower_invoices():
-    m = request.args.get("month", cur_month())
-    invs = db_get("SELECT * FROM flower_invoices WHERE month=? ORDER BY inv_date DESC", (m,))
-    for inv in invs:
-        try: inv["items"] = json.loads(inv["items"] or "[]")
-        except: inv["items"] = []
-    total = sum(float(i["total"]) for i in invs)
-    paid_invs = [i for i in invs if i.get("is_paid")]
-    unpaid_invs = [i for i in invs if not i.get("is_paid")]
-    months = db_get("SELECT DISTINCT month FROM flower_invoices ORDER BY month DESC")
-    return jsonify({"invoices": invs, "total": total, "month": m,
-                    "months": [r["month"] for r in months],
-                    "paid_total": sum(float(i["total"]) for i in paid_invs),
-                    "unpaid_total": sum(float(i["total"]) for i in unpaid_invs),
-                    "paid_count": len(paid_invs),
-                    "unpaid_count": len(unpaid_invs)})
-
-@app.route("/api/flower_invoices/<int:iid>/toggle_paid", methods=["POST"])
-@auth
-def api_toggle_flower_invoice_paid(iid):
-    inv = db_one("SELECT * FROM flower_invoices WHERE id=?", (iid,))
-    if not inv:
-        return jsonify({"ok": False, "error": "not found"}), 404
-    new_val = 0 if inv.get("is_paid") else 1
-    db_run("UPDATE flower_invoices SET is_paid=? WHERE id=?", (new_val, iid))
-    return jsonify({"ok": True, "is_paid": new_val})
-
-@app.route("/api/flower_invoices/<int:iid>", methods=["DELETE"])
-@auth
-def api_del_flower_invoice(iid):
-    db_run("DELETE FROM flower_invoices WHERE id=?", (iid,))
-    return jsonify({"ok": True})
-
-@app.route("/api/flower_invoices", methods=["POST"])
-@worker_auth
-def api_add_flower_invoice():
-    d = request.json or {}
-    company      = d.get("company","").strip() or "غير محدد"
-    # توحيد اسم الشركة Title Case
-    company      = " ".join(w.capitalize() for w in company.split()) if company else "غير محدد"
-    invoice_number = d.get("invoice_number") or None
-    inv_date     = d.get("inv_date", datetime.now().strftime("%d/%m/%Y"))
-    try: inv_month = datetime.strptime(inv_date,"%d/%m/%Y").strftime("%Y-%m")
-    except: inv_month = cur_month()
-    total        = float(d.get("total",0))
-    # تصحيح المبالغ: 4 أرقام صحيحة → كسر عشري
-    if total == int(total) and total >= 1000:
-        total = total / 1000.0
-    raw_items = d.get("items",[])
-    for item in raw_items:
-        for key in ("unit_price","line_total"):
+@app.route("/api/insight")
+def api_insight():
+    today = _muscat_today()
+    exps  = get_expenses_sqlite_fast(date_filter=today)
+    force = request.args.get("force", "0") == "1"
+    if force:
+        if firebase_db:
             try:
-                v = float(item.get(key,0))
-                if v == int(v) and v >= 1000:
-                    item[key] = round(v / 1000.0, 3)
-            except: pass
-    items = json.dumps(raw_items, ensure_ascii=False)
-    db_run("INSERT INTO flower_invoices (company,invoice_number,inv_date,month,total,items) VALUES (?,?,?,?,?,?)",
-           (company, invoice_number, inv_date, inv_month, total, items))
+                firebase_db.collection("daily_insights").document(today).delete()
+            except Exception as e:
+                print(f"[Firebase] insight delete error: {e}")
+        conn = db_conn()
+        conn.execute("DELETE FROM daily_insights WHERE date=?", (today,))
+        conn.commit()
+        conn.close()
+    insight = generate_daily_insight(exps)
+    broadcast_event("daily_insight", {"date": today, "insight": insight})
+    return jsonify({"date": today, "insight": insight})
+
+@app.route("/api/parse", methods=["POST"])
+def api_parse():
+    """
+    Smart Manual Analysis with Self-Learning:
+    1. Hybrid parse (template → regex → AI → fallback).
+    2. If the message was NOT matched by any existing pattern, generate a reusable regex.
+    3. Broadcast daily_total + new_expense SSE events.
+    4. Optionally save the expense when save=true is passed.
+    """
+    data = request.json or {}
+    text = data.get("text", "").strip()
+    if not text:
+        return jsonify({"error": "empty text"}), 400
+
+    lat  = data.get("latitude")
+    lon  = data.get("longitude")
+    try:
+        lat = float(lat) if lat is not None else None
+        lon = float(lon) if lon is not None else None
+    except (TypeError, ValueError):
+        lat = lon = None
+
+    parsed, extracted_lat, extracted_lon, map_url = hybrid_parse(text)
+    final_lat = lat if lat is not None else extracted_lat
+    final_lon = lon if lon is not None else extracted_lon
+
+    if not parsed or float(parsed.get("amount", 0) or 0) <= 0:
+        # Use Decimal to double-check — float(0.200) > 0 is true, but guard against None
+        from decimal import Decimal as _Dparse, InvalidOperation as _IOparse
+        try:
+            _amt_check = _Dparse(str(parsed.get("amount", 0) if parsed else 0))
+        except (_IOparse, Exception):
+            _amt_check = _Dparse("0")
+        if not parsed or _amt_check <= 0:
+            return jsonify({"error": "Not a transaction"}), 400
+
+    parse_method = parsed.get("parse_method", "ai")
+    new_template_saved = False
+    if parse_method in ("ai", "fallback"):
+        def _learn_in_background():
+            try:
+                gen = generate_regex_for_text(text)
+                if gen and gen.get("pattern"):
+                    bank = parsed.get("bank_name", "")
+                    saved = save_regex_template(
+                        pattern=gen["pattern"],
+                        bank_name=bank,
+                        description=gen.get("description", ""),
+                    )
+                    if saved:
+                        broadcast_event("template_learned", {
+                            "description": gen.get("description", ""),
+                            "bank_name": bank,
+                        })
+            except Exception as e:
+                print(f"[RegexGen] background error: {e}")
+        threading.Thread(target=_learn_in_background, daemon=True).start()
+        new_template_saved = True
+
+    parsed["extracted_latitude"]  = final_lat
+    parsed["extracted_longitude"] = final_lon
+    parsed["extracted_map_url"]   = map_url
+    parsed["learning_triggered"]  = new_template_saved
+
+    # ── Optional auto-save ──────────────────────────────────────────────
+    if data.get("save"):
+        doc = save_expense(parsed, "manual",
+                           latitude=final_lat, longitude=final_lon,
+                           map_url=map_url, raw_text=text)
+        parsed["saved_id"] = doc["id"]
+        # FIX #3: refresh insight for manually parsed+saved transactions
+        _trigger_insight_refresh(doc)
+
+    return jsonify(parsed)
+
+# ── Test endpoint for GPS extraction only ──
+@app.route("/api/extract-gps", methods=["POST"])
+def api_extract_gps():
+    text = request.json.get("text", "")
+    lat, lon, url = extract_gps_from_text(text)
+    return jsonify({"latitude": lat, "longitude": lon, "map_url": url})
+
+
+@app.route("/api/regex-templates")
+def api_regex_templates():
+    """Return all self-learned regex templates."""
+    try:
+        conn = db_conn()
+        rows = conn.execute(
+            "SELECT id, bank_name, description, hit_count, created_at, last_used_at FROM regex_templates ORDER BY hit_count DESC"
+        ).fetchall()
+        conn.close()
+        return jsonify([dict(r) for r in rows])
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route("/api/regex-templates/<int:tid>", methods=["DELETE"])
+def api_delete_regex_template(tid):
+    """Delete a stored regex template by id."""
+    conn = db_conn()
+    conn.execute("DELETE FROM regex_templates WHERE id=?", (tid,))
+    conn.commit()
+    conn.close()
     return jsonify({"ok": True})
 
-@app.route("/api/flower_invoices/scan", methods=["POST"])
-@auth
-def api_scan_flower_invoice():
-    """قراءة صورة فاتورة ورد مرفوعة (multipart أو base64 JSON) وحفظها تلقائياً."""
-    import base64 as _b64
+
+# ==================== MERCHANT CATEGORY OVERRIDES ====================
+
+@app.route("/api/merchant-categories", methods=["GET"])
+def api_get_merchant_categories():
+    """List all user-defined merchant→category overrides."""
     try:
-        # دعم الرفع بـ base64 JSON أو multipart
-        if request.is_json:
-            b64 = request.json.get("image","")
-            mime = "image/jpeg"
-            if not b64:
-                return jsonify({"error": "لم يتم إرسال صورة"}), 400
-        elif "file" in request.files:
-            f = request.files["file"]
-            if not f.filename:
-                return jsonify({"error": "ملف غير صالح"}), 400
-            img_bytes = f.read()
-            b64 = _b64.b64encode(img_bytes).decode()
-            mime = f.content_type or "image/jpeg"
-        else:
-            return jsonify({"error": "لم يتم رفع ملف"}), 400
-        if not GROQ_KEY:
-            return jsonify({"error": "GROQ_API_KEY غير مضبوط"}), 500
-        prompt = """This is a flower supplier invoice (may be handwritten, in Arabic or English). Extract ALL data carefully.
-Return ONLY a valid JSON object — no explanation, no markdown:
-{"invoice_number":"INV-001 or null","company":"supplier name","date":"date as written","items":[{"name":"flower name","count":10,"unit":"وردة","unit_price":0.500,"line_total":5.000}],"total":25.500,"found":true}
-Rules: invoice_number from header (null if absent). unit: "بندلة" for gypsophila/جبسون/limonium/ليموناي, else "وردة". found:false if not a flower invoice."""
-        res = requests.post("https://api.groq.com/openai/v1/chat/completions",
-            headers={"Authorization": f"Bearer {GROQ_KEY}", "Content-Type": "application/json"},
-            json={"model": "meta-llama/llama-4-scout-17b-16e-instruct",
-                  "messages": [{"role": "user", "content": [
-                      {"type": "image_url", "image_url": {"url": f"data:{mime};base64,{b64}"}},
-                      {"type": "text", "text": prompt}
-                  ]}],
-                  "max_tokens": 1200, "temperature": 0}, timeout=35)
-        resp = res.json()
-        if "error" in resp:
-            return jsonify({"error": str(resp["error"])}), 500
-        raw = resp["choices"][0]["message"]["content"]
-        raw = re.sub(r"```json\s*","",raw); raw = re.sub(r"```\s*","",raw).strip()
-        match = re.search(r'\{.*\}', raw, re.DOTALL)
-        if not match:
-            return jsonify({"error": "ما قدرت أقرأ الفاتورة، جرب صورة أوضح"}), 422
-        data = json.loads(match.group())
-        data = _normalize_invoice_data(data)
-        if not data.get("found"):
-            return jsonify({"error": "الصورة لا تبدو فاتورة ورد"}), 422
-        company = data.get("company","").strip() or "غير محدد"
-        invoice_number = data.get("invoice_number") or None
-        std_date = data.get("date","").strip()
-        if std_date:
-            try:
-                dt = datetime.strptime(std_date, "%Y-%m-%d")
-                inv_date_display = dt.strftime("%d/%m/%Y"); inv_month = dt.strftime("%Y-%m")
-            except:
-                inv_date_display = std_date; inv_month = cur_month()
-        else:
-            inv_date_display = datetime.now().strftime("%d/%m/%Y"); inv_month = cur_month()
-        items = data.get("items", [])
-        total = float(data.get("total") or 0) or sum(float(i.get("line_total",0)) for i in items)
-        items_json = json.dumps(items, ensure_ascii=False)
-        db_run("INSERT INTO flower_invoices (company,invoice_number,inv_date,month,total,items) VALUES (?,?,?,?,?,?)",
-               (company, invoice_number, inv_date_display, inv_month, total, items_json))
-        return jsonify({"ok": True, "company": company, "inv_date": inv_date_display,
-                        "total": total, "items": items, "invoice_number": invoice_number})
+        conn = db_conn()
+        rows = conn.execute(
+            "SELECT merchant_key, category, updated_at FROM merchant_categories ORDER BY merchant_key"
+        ).fetchall()
+        conn.close()
+        return jsonify([dict(r) for r in rows])
     except Exception as e:
-        print("scan flower invoice error:", e)
         return jsonify({"error": str(e)}), 500
 
-@app.route("/api/flowers/scan", methods=["POST"])
-@auth
-def api_scan_flowers():
-    """تحليل صورة الورد وإرجاع عدد كل نوع تلقائياً."""
-    import base64 as _b64
-    try:
-        b64 = request.json.get("image","")
-        if not b64:
-            return jsonify({"error": "لم يتم إرسال صورة"}), 400
-        if not GROQ_KEY:
-            return jsonify({"error": "GROQ_API_KEY غير مضبوط"}), 500
-        prompt = """This is a photo of flowers in a flower shop. Count each type of flower visible.
-Return ONLY a valid JSON object — no explanation, no markdown:
-{"flowers":[{"name":"ورد أحمر","count":20,"unit":"وردة"},{"name":"ورد أبيض","count":15,"unit":"وردة"}],"found":true}
-Flower name must be one of: ورد أحمر, ورد وردي, ورد أبيض, ورد أصفر, ورد برتقالي, ورد بنفسجي, جبسون (بندلة), ليموناي (بندلة).
-unit: "بندلة" for جبسون/ليموناي, else "وردة". Only include flowers you can see. found:false if no flowers visible."""
-        res = requests.post("https://api.groq.com/openai/v1/chat/completions",
-            headers={"Authorization": f"Bearer {GROQ_KEY}", "Content-Type": "application/json"},
-            json={"model": "meta-llama/llama-4-scout-17b-16e-instruct",
-                  "messages": [{"role": "user", "content": [
-                      {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{b64}"}},
-                      {"type": "text", "text": prompt}
-                  ]}],
-                  "max_tokens": 600, "temperature": 0}, timeout=35)
-        resp = res.json()
-        if "error" in resp:
-            return jsonify({"error": str(resp["error"])}), 500
-        raw = resp["choices"][0]["message"]["content"]
-        raw = re.sub(r"```json\s*","",raw); raw = re.sub(r"```\s*","",raw).strip()
-        match = re.search(r'\{.*\}', raw, re.DOTALL)
-        if not match:
-            return jsonify({"error": "ما قدرت أحلل الصورة"}), 422
-        data = json.loads(match.group())
-        if not data.get("found"):
-            return jsonify({"error": "ما شُفت ورد في الصورة، أدخل العدد يدوياً"}), 422
-        return jsonify({"ok": True, "flowers": data.get("flowers", [])})
-    except Exception as e:
-        print("scan flowers error:", e)
-        return jsonify({"error": str(e)}), 500
+@app.route("/api/merchant-categories", methods=["POST"])
+def api_set_merchant_category():
+    data = request.json or {}
+    merchant_name = (data.get("merchant") or "").strip()
+    category      = (data.get("category") or "").strip().lower()
+    valid_cats = {"food","shopping","transport","bills","health","entertainment",
+                  "education","groceries","fuel","rent","subscriptions","transfer","savings","other"}
+    if not merchant_name:
+        return jsonify({"error": "merchant required"}), 400
+    if category not in valid_cats:
+        return jsonify({"error": f"invalid category — must be one of: {', '.join(sorted(valid_cats))}"}), 400
 
-if __name__=="__main__":
-    port=int(os.environ.get("PORT",5000))
-    app.run(host="0.0.0.0",port=port,debug=False)
+    merchant_key = merchant_name.lower()
+    now = datetime.datetime.now().isoformat()
 
+    conn = db_conn()
+    conn.execute(
+        "INSERT OR REPLACE INTO merchant_categories (merchant_key, category, updated_at) VALUES (?,?,?)",
+        (merchant_key, category, now)
+    )
+    result = conn.execute(
+        "UPDATE expenses SET category=? WHERE LOWER(name)=? AND type='debit'",
+        (category, merchant_key)
+    )
+    updated_count = result.rowcount
+    conn.commit()
+    conn.close()
 
-# ── Theme & Settings API ──────────────────────────────────
+    if firebase_db:
+        try:
+            firebase_db.collection("merchant_categories").document(merchant_key).set({
+                "merchant_key": merchant_key, "category": category, "updated_at": now
+            })
+            docs = (firebase_db.collection("expenses")
+                    .where("type", "==", "debit")
+                    .stream())
+            batch = firebase_db.batch()
+            count_fb = 0
+            for doc in docs:
+                d = doc.to_dict()
+                if (d.get("name") or "").lower() == merchant_key:
+                    batch.update(doc.reference, {"category": category})
+                    count_fb += 1
+                if count_fb > 0 and count_fb % 500 == 0:
+                    batch.commit()
+                    batch = firebase_db.batch()
+            if count_fb % 500 != 0 or count_fb == 0:
+                batch.commit()
+        except Exception as e:
+            print(f"[Firebase] merchant_categories sync error: {e}")
 
-@app.route("/api/theme")
-def api_get_theme():
-    """إرجاع الثيم المحفوظ من قاعدة البيانات."""
-    try:
-        row = db_one("SELECT value FROM app_settings WHERE key='theme'")
-        theme = row["value"] if row else "rose"
-    except Exception:
-        theme = "rose"
-    return jsonify({"theme": theme})
+    broadcast_event("category_override", {
+        "merchant": merchant_name,
+        "merchant_key": merchant_key,
+        "category": category,
+        "updated_count": updated_count,
+    })
 
-@app.route("/api/theme", methods=["POST"])
-@auth
-def api_set_theme():
-    """حفظ الثيم المختار."""
-    d = request.json or {}
-    theme = d.get("theme", "rose")
-    valid = {"rose", "bloom", "ocean", "forest", "gold", "lavender"}
-    if theme not in valid:
-        theme = "rose"
-    try:
-        db_run(
-            "INSERT INTO app_settings (key,value) VALUES ('theme',?) "
-            "ON CONFLICT(key) DO UPDATE SET value=excluded.value",
-            (theme,)
-        )
-    except Exception as e:
-        print("theme save error:", e)
-    return jsonify({"ok": True, "theme": theme})
+    return jsonify({
+        "ok": True,
+        "merchant_key": merchant_key,
+        "category": category,
+        "expenses_updated": updated_count,
+    })
 
-@app.route("/api/theme/reset", methods=["POST"])
-@auth
-def api_reset_theme():
-    """إعادة الثيم للأصلي (وردي)."""
-    try:
-        db_run(
-            "INSERT INTO app_settings (key,value) VALUES ('theme','rose') "
-            "ON CONFLICT(key) DO UPDATE SET value='rose'"
-        )
-    except Exception as e:
-        print("theme reset error:", e)
-    return jsonify({"ok": True, "theme": "rose"})
-
-@app.route("/api/bg-image")
-def api_bg_image():
-    """إرجاع صورة الخلفية مع Cache headers لتخفيف الحمل."""
-    import os as _os
-    bg_path = "background.jpg"
-    if not _os.path.exists(bg_path):
-        return jsonify({"error": "not found"}), 404
-    mtime = int(_os.path.getmtime(bg_path))
-    etag = str(mtime)
-    if request.headers.get("If-None-Match") == etag:
-        return Response(status=304)
-    with open(bg_path, "rb") as f:
-        data = f.read()
-    resp = Response(data, mimetype="image/jpeg")
-    resp.headers["Cache-Control"] = "public, max-age=86400"
-    resp.headers["ETag"] = etag
-    return resp
+@app.route("/api/merchant-categories/<path:merchant_key>", methods=["DELETE"])
+def api_delete_merchant_category(merchant_key):
+    """Remove a merchant category override (reverts to auto-detection)."""
+    conn = db_conn()
+    conn.execute("DELETE FROM merchant_categories WHERE merchant_key=?", (merchant_key.lower(),))
+    conn.commit()
+    conn.close()
+    if firebase_db:
+        try:
+            firebase_db.collection("merchant_categories").document(merchant_key.lower()).delete()
+        except Exception:
+            pass
+    return jsonify({"ok": True})

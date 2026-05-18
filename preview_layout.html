@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>معاينة الترتيب الجديد</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Segoe UI', Arial, sans-serif; background: #0d1117; color: #e6edf3; padding: 16px; direction: rtl; }
+
+  h1 { text-align: center; color: #0ec9b0; margin-bottom: 6px; font-size: 1.1rem; }
+  .subtitle { text-align: center; color: #7d8590; font-size: .8rem; margin-bottom: 20px; }
+
+  .compare { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; max-width: 900px; margin: 0 auto; }
+
+  .col-label { text-align: center; font-weight: 700; font-size: .85rem; padding: 8px; border-radius: 8px; margin-bottom: 12px; }
+  .old-label { background: rgba(255,80,80,.15); color: #ff6b6b; }
+  .new-label { background: rgba(14,201,176,.15); color: #0ec9b0; }
+
+  .section { border-radius: 12px; margin-bottom: 10px; padding: 12px 14px; border: 1px solid; position: relative; }
+
+  /* OLD */
+  .old .stat-cards { background: rgba(99,102,241,.08); border-color: rgba(99,102,241,.3); }
+  .old .banks      { background: rgba(14,201,176,.06); border-color: rgba(14,201,176,.25); }
+  .old .chart      { background: rgba(245,158,11,.06); border-color: rgba(245,158,11,.2); }
+  .old .transfers  { background: rgba(239,68,68,.06); border-color: rgba(239,68,68,.2); }
+  .old .map-cats   { background: rgba(16,185,129,.06); border-color: rgba(16,185,129,.2); }
+  .old .recent-ai  { background: rgba(139,92,246,.06); border-color: rgba(139,92,246,.2); }
+
+  /* NEW */
+  .new .banks      { background: rgba(14,201,176,.1); border-color: rgba(14,201,176,.4); border-width: 2px; }
+  .new .stat-cards { background: rgba(99,102,241,.08); border-color: rgba(99,102,241,.3); }
+  .new .recent     { background: rgba(245,158,11,.1); border-color: rgba(245,158,11,.35); border-width: 2px; }
+  .new .chart      { background: rgba(245,158,11,.06); border-color: rgba(245,158,11,.2); }
+  .new .transfers  { background: rgba(239,68,68,.06); border-color: rgba(239,68,68,.2); }
+  .new .map-cats   { background: rgba(16,185,129,.06); border-color: rgba(16,185,129,.2); }
+  .new .ai         { background: rgba(139,92,246,.06); border-color: rgba(139,92,246,.2); }
+
+  .sec-title { font-size: .78rem; font-weight: 700; margin-bottom: 8px; display: flex; align-items: center; gap: 6px; }
+  .badge-new { background: #0ec9b0; color: #000; font-size: .6rem; padding: 1px 6px; border-radius: 20px; font-weight: 900; }
+
+  .mock-cards { display: grid; grid-template-columns: repeat(3,1fr); gap: 6px; }
+  .mock-card { height: 52px; border-radius: 8px; background: rgba(255,255,255,.06); display: flex; align-items: center; justify-content: center; font-size: .65rem; color: #7d8590; }
+  .mock-card.teal { background: rgba(14,201,176,.12); color: #0ec9b0; }
+  .mock-card.highlighted { background: rgba(245,158,11,.12); color: #f5c060; border: 1px solid rgba(245,158,11,.3); }
+
+  .mock-stat { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+  .mock-stat-box { height: 44px; border-radius: 8px; background: rgba(255,255,255,.05); display: flex; align-items: center; justify-content: center; font-size: .62rem; color: #7d8590; }
+
+  .mock-chart { height: 60px; border-radius: 8px; background: rgba(255,255,255,.04); display: flex; align-items: flex-end; gap: 3px; padding: 8px; }
+  .bar { border-radius: 3px 3px 0 0; flex: 1; background: rgba(14,201,176,.3); }
+
+  .mock-list { display: flex; flex-direction: column; gap: 5px; }
+  .mock-row { height: 30px; border-radius: 6px; background: rgba(255,255,255,.05); display: flex; align-items: center; padding: 0 10px; gap: 8px; }
+  .mock-dot { width: 22px; height: 22px; border-radius: 50%; background: rgba(14,201,176,.2); flex-shrink: 0; }
+  .mock-line { height: 6px; border-radius: 3px; background: rgba(255,255,255,.1); flex: 1; }
+  .mock-amt { width: 35px; height: 6px; border-radius: 3px; background: rgba(14,201,176,.3); }
+
+  .mock-map { height: 55px; border-radius: 8px; background: rgba(16,185,129,.08); display: flex; align-items: center; justify-content: center; font-size: .7rem; color: rgba(16,185,129,.7); }
+
+  .num-badge { position: absolute; top: 8px; left: 12px; width: 18px; height: 18px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: .65rem; font-weight: 900; background: rgba(255,255,255,.1); color: #7d8590; }
+  .new .num-badge { background: rgba(14,201,176,.2); color: #0ec9b0; }
+
+  .arrow { text-align: center; font-size: 1.5rem; margin: 6px 0; color: #7d8590; }
+
+  @media (max-width: 600px) { .compare { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+
+<h1>معاينة ترتيب الصفحة الرئيسية</h1>
+<p class="subtitle">اضغط "موافق" في المحادثة لتطبيق الترتيب الجديد</p>
+
+<div class="compare">
+
+  <!-- OLD LAYOUT -->
+  <div class="old">
+    <div class="col-label old-label">❌ الترتيب الحالي</div>
+
+    <div class="section stat-cards">
+      <div class="num-badge">1</div>
+      <div class="sec-title">📊 بطاقات الإحصاء</div>
+      <div class="mock-stat">
+        <div class="mock-stat-box">اليوم</div>
+        <div class="mock-stat-box">الشهر</div>
+        <div class="mock-stat-box">الرصيد</div>
+        <div class="mock-stat-box">العمليات</div>
+      </div>
+    </div>
+
+    <div class="section banks">
+      <div class="num-badge">2</div>
+      <div class="sec-title">🏦 أرصدة البنوك</div>
+      <div class="mock-cards">
+        <div class="mock-card">بنك</div>
+        <div class="mock-card">بنك</div>
+        <div class="mock-card">بنك</div>
+      </div>
+    </div>
+
+    <div class="section chart">
+      <div class="num-badge">3</div>
+      <div class="sec-title">📈 الرسم البياني 30 يوم + 🧠 نصائح AI</div>
+      <div class="mock-chart">
+        <div class="bar" style="height:70%"></div><div class="bar" style="height:40%"></div>
+        <div class="bar" style="height:85%"></div><div class="bar" style="height:55%"></div>
+        <div class="bar" style="height:30%"></div><div class="bar" style="height:60%"></div>
+      </div>
+    </div>
+
+    <div class="section transfers">
+      <div class="num-badge">4</div>
+      <div class="sec-title">🔁 التحويلات الصادرة</div>
+      <div class="mock-stat">
+        <div class="mock-stat-box">الإجمالي</div>
+        <div class="mock-stat-box">العدد</div>
+      </div>
+    </div>
+
+    <div class="section map-cats">
+      <div class="num-badge">5</div>
+      <div class="sec-title">📍 الخريطة + 🏷️ الفئات + 🕐 الأخيرة</div>
+      <div class="mock-map">📍 خريطة المشتريات</div>
+    </div>
+  </div>
+
+  <!-- NEW LAYOUT -->
+  <div class="new">
+    <div class="col-label new-label">✅ الترتيب الجديد المقترح</div>
+
+    <div class="section banks">
+      <div class="num-badge">1</div>
+      <div class="sec-title">🏦 أرصدة البنوك <span class="badge-new">أول</span></div>
+      <div class="mock-cards">
+        <div class="mock-card teal">بنك مسقط<br><small>1,250 ر.ع</small></div>
+        <div class="mock-card teal">NBO<br><small>830 ر.ع</small></div>
+        <div class="mock-card teal">بنك ظفار<br><small>410 ر.ع</small></div>
+      </div>
+    </div>
+
+    <div class="section stat-cards">
+      <div class="num-badge">2</div>
+      <div class="sec-title">📊 بطاقات الإحصاء</div>
+      <div class="mock-stat">
+        <div class="mock-stat-box">اليوم</div>
+        <div class="mock-stat-box">الشهر</div>
+        <div class="mock-stat-box">الرصيد</div>
+        <div class="mock-stat-box">العمليات</div>
+      </div>
+    </div>
+
+    <div class="section recent">
+      <div class="num-badge">3</div>
+      <div class="sec-title">🕐 آخر المعاملات <span class="badge-new">رُقِّي</span></div>
+      <div class="mock-list">
+        <div class="mock-row"><div class="mock-dot"></div><div class="mock-line"></div><div class="mock-amt"></div></div>
+        <div class="mock-row"><div class="mock-dot"></div><div class="mock-line"></div><div class="mock-amt"></div></div>
+        <div class="mock-row"><div class="mock-dot"></div><div class="mock-line"></div><div class="mock-amt"></div></div>
+      </div>
+    </div>
+
+    <div class="section chart">
+      <div class="num-badge">4</div>
+      <div class="sec-title">📈 الرسم البياني 30 يوم</div>
+      <div class="mock-chart">
+        <div class="bar" style="height:70%"></div><div class="bar" style="height:40%"></div>
+        <div class="bar" style="height:85%"></div><div class="bar" style="height:55%"></div>
+        <div class="bar" style="height:30%"></div><div class="bar" style="height:60%"></div>
+      </div>
+    </div>
+
+    <div class="section transfers">
+      <div class="num-badge">5</div>
+      <div class="sec-title">🔁 التحويلات الصادرة</div>
+      <div class="mock-stat">
+        <div class="mock-stat-box">الإجمالي</div>
+        <div class="mock-stat-box">العدد</div>
+      </div>
+    </div>
+
+    <div class="section map-cats">
+      <div class="num-badge">6</div>
+      <div class="sec-title">📍 الخريطة + 🏷️ الفئات</div>
+      <div class="mock-map">📍 خريطة المشتريات</div>
+    </div>
+
+    <div class="section ai">
+      <div class="num-badge">7</div>
+      <div class="sec-title">🧠 نصائح الذكاء الاصطناعي</div>
+      <div class="mock-list">
+        <div class="mock-row"><div class="mock-dot" style="background:rgba(139,92,246,.3)"></div><div class="mock-line"></div></div>
+        <div class="mock-row"><div class="mock-dot" style="background:rgba(139,92,246,.3)"></div><div class="mock-line"></div></div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+</body>
+</html>
