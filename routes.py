@@ -1802,8 +1802,9 @@ def daily_summary():
 
 @app.route("/set_webhook")
 def set_webhook():
-    host=request.host_url.rstrip("/")
-    r=requests.get(f"https://api.telegram.org/bot{BOT_TOKEN}/setWebhook",params={"url":f"{host}/webhook"},timeout=10)
+    host = request.host_url.rstrip("/").replace("http://", "https://")
+    r = requests.get(f"https://api.telegram.org/bot{BOT_TOKEN}/setWebhook",
+                     params={"url": f"{host}/webhook"}, timeout=10)
     return jsonify(r.json())
 
 # ── Flower Invoices API ───────────────────────────────────
