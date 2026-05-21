@@ -685,6 +685,25 @@ input[type="date"]{width:100%;padding:10px 12px;border:1px solid var(--border);b
 .cat-toggle{padding:5px 10px;border:1px solid var(--border);border-radius:6px;font-size:11px;cursor:pointer;background:transparent;color:var(--text3);font-family:'Tajawal',sans-serif;}
 .cat-del{padding:5px 10px;border:1px solid rgba(232,121,138,.3);border-radius:6px;font-size:11px;cursor:pointer;background:transparent;color:var(--accent);font-family:'Tajawal',sans-serif;}
 .cat-unavail{opacity:0.4;}
+/* Orders */
+.order-card{background:var(--card);border:1px solid var(--border);border-radius:14px;overflow:hidden;}
+.order-card.done{opacity:0.6;border-style:dashed;}
+.order-img{width:100%;max-height:200px;object-fit:cover;cursor:pointer;display:block;}
+.order-body{padding:12px;}
+.order-id{font-size:10px;font-weight:800;color:var(--text3);letter-spacing:1px;}
+.order-name{font-size:15px;font-weight:800;color:var(--text);margin-top:2px;}
+.order-desc{font-size:13px;color:var(--text2);margin-top:4px;line-height:1.5;}
+.order-meta{font-size:11px;color:var(--text3);margin-top:6px;display:flex;gap:10px;flex-wrap:wrap;}
+.order-price{font-size:14px;font-weight:700;color:var(--green2);margin-top:4px;}
+.order-actions{display:flex;gap:6px;padding:10px 12px;border-top:1px solid var(--border);background:var(--bg2);}
+.ord-btn{flex:1;padding:7px;border:none;border-radius:8px;font-family:'Tajawal',sans-serif;font-size:12px;font-weight:700;cursor:pointer;}
+.ord-btn.done{background:var(--green);color:#fff;}
+.ord-btn.edit{background:rgba(212,168,67,.15);color:var(--gold);border:1px solid rgba(212,168,67,.3);}
+.ord-btn.del{background:rgba(232,121,138,.1);color:var(--accent);border:1px solid rgba(232,121,138,.25);}
+.ord-status-badge{display:inline-block;padding:2px 8px;border-radius:10px;font-size:10px;font-weight:700;}
+.ord-status-pending{background:rgba(245,200,66,.2);color:#b8880a;}
+.ord-status-done{background:rgba(122,171,138,.2);color:var(--green2);}
+.ord-status-cancelled{background:rgba(232,121,138,.2);color:var(--accent);}
 </style>
 </head>
 <body>
@@ -1035,6 +1054,39 @@ input[type="date"]{width:100%;padding:10px 12px;border:1px solid var(--border);b
 
   <!-- Customers list -->
   <div id="custList" style="display:flex;flex-direction:column;gap:10px;"></div>
+
+  <!-- Orders section -->
+  <div class="slbl" style="margin-top:16px;">📋 الطلبات قيد الانتظار</div>
+  <div class="gc" style="padding:14px;margin-bottom:12px;">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+      <span id="pendingOrdersLabel" style="font-size:13px;color:var(--text3);">لا توجد طلبات</span>
+      <button onclick="showAddOrder()" style="font-size:12px;padding:6px 12px;background:var(--accent);color:#fff;border:none;border-radius:8px;cursor:pointer;">+ طلب جديد</button>
+    </div>
+    <!-- Add order form -->
+    <div id="addOrderForm" style="display:none;border-top:1px solid var(--border);padding-top:12px;margin-bottom:12px;">
+      <div class="fgrid fg2">
+        <div class="fld"><label>اسم العميل *</label><input id="orderCustName" type="text" placeholder="أم خالد..."/></div>
+        <div class="fld"><label>الهاتف</label><input id="orderCustPhone" type="tel" placeholder="اختياري"/></div>
+      </div>
+      <div class="fld"><label>وصف الطلب *</label>
+        <input id="orderDesc" type="text" placeholder="باقة ورد أحمر كبيرة، تاج عروس..."/></div>
+      <div class="fgrid fg2">
+        <div class="fld"><label>السعر (ر.ع)</label><input id="orderPrice" type="number" placeholder="0.000" step="0.001" inputmode="decimal"/></div>
+        <div class="fld"><label>ملاحظات</label><input id="orderNotes" type="text" placeholder="اختياري..."/></div>
+      </div>
+      <div style="display:flex;gap:8px;margin-top:10px;">
+        <button onclick="addOrder()" class="sbtn sb-s" style="flex:1;padding:10px;">💾 حفظ الطلب</button>
+        <button onclick="document.getElementById('addOrderForm').style.display='none'" style="padding:10px 16px;border:1px solid var(--border);border-radius:10px;background:transparent;color:var(--text2);cursor:pointer;">إلغاء</button>
+      </div>
+    </div>
+    <!-- Filter tabs -->
+    <div style="display:flex;gap:6px;margin-bottom:10px;">
+      <button onclick="loadOrders('pending')" id="ord-f-pending" style="padding:5px 12px;border-radius:20px;border:1px solid var(--accent);background:var(--accent);color:#fff;font-family:'Tajawal',sans-serif;font-size:12px;cursor:pointer;">⏳ قيد الانتظار</button>
+      <button onclick="loadOrders('done')"    id="ord-f-done"    style="padding:5px 12px;border-radius:20px;border:1px solid var(--border);background:transparent;color:var(--text3);font-family:'Tajawal',sans-serif;font-size:12px;cursor:pointer;">✅ منجزة</button>
+      <button onclick="loadOrders('')"        id="ord-f-all"     style="padding:5px 12px;border-radius:20px;border:1px solid var(--border);background:transparent;color:var(--text3);font-family:'Tajawal',sans-serif;font-size:12px;cursor:pointer;">📋 الكل</button>
+    </div>
+    <div id="ordersList" style="display:flex;flex-direction:column;gap:10px;"></div>
+  </div>
 
   <!-- Debts section -->
   <div class="slbl" style="margin-top:16px;">💳 الديون غير المسددة</div>
@@ -1512,7 +1564,7 @@ function switchTab(t){
   });
   if(t==='shelves') loadShelves();
   if(t==='flowerinv') loadFlowerInvPage();
-  if(t==='customers') { loadCustomers(); loadDebts(); }
+  if(t==='customers') { loadCustomers(); loadOrders('pending'); loadDebts(); }
   if(t==='catalog') loadCatalog();
 }
 
@@ -2525,6 +2577,120 @@ async function editGoal(){
   await api('/api/settings/goal', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({goal:val})});
   showToast('✅ تم تحديث الهدف');
   loadGoal();
+}
+
+/* ══════════════════════════════════════════
+   ORDERS
+══════════════════════════════════════════ */
+let _currentOrderFilter = 'pending';
+async function loadOrders(status){
+  if(status !== undefined) _currentOrderFilter = status;
+  // Update filter button styles
+  ['pending','done','all'].forEach(f => {
+    const btn = document.getElementById('ord-f-'+f);
+    if(!btn) return;
+    const active = (f === _currentOrderFilter) || (f === 'all' && _currentOrderFilter === '');
+    btn.style.background = active ? 'var(--accent)' : 'transparent';
+    btn.style.color = active ? '#fff' : 'var(--text3)';
+    btn.style.borderColor = active ? 'var(--accent)' : 'var(--border)';
+  });
+  const url = _currentOrderFilter ? `/api/orders?status=${_currentOrderFilter}` : '/api/orders';
+  const d = await api(url);
+  const list = d.orders || [];
+  const lbl = document.getElementById('pendingOrdersLabel');
+  if(lbl){
+    const pc = d.pending_count || 0;
+    lbl.textContent = pc > 0 ? `${pc} طلب قيد الانتظار` : 'لا توجد طلبات معلقة';
+    lbl.style.color = pc > 0 ? 'var(--accent)' : 'var(--text3)';
+  }
+  const el = document.getElementById('ordersList');
+  if(!el) return;
+  if(!list.length){
+    el.innerHTML = '<div style="text-align:center;color:var(--text3);padding:20px;">لا توجد طلبات 📋</div>';
+    return;
+  }
+  el.innerHTML = list.map(o => {
+    const statusMap = {pending:'⏳ قيد الانتظار', done:'✅ منجز', cancelled:'❌ ملغي'};
+    const statusClass = {pending:'ord-status-pending', done:'ord-status-done', cancelled:'ord-status-cancelled'};
+    const imgHtml = o.img_file_id
+      ? `<img class="order-img" src="/api/orders/${o.id}/image" onclick="openOrderImg(this)" loading="lazy"/>`
+      : '';
+    const priceHtml = o.price && parseFloat(o.price) > 0
+      ? `<div class="order-price">💰 ${fmt(o.price)} ر.ع</div>` : '';
+    const phoneHtml = o.customer_phone
+      ? `<a href="tel:${o.customer_phone}" style="color:var(--accent);text-decoration:none;">📞 ${o.customer_phone}</a>` : '';
+    const notesHtml = o.notes ? `<span>📝 ${o.notes}</span>` : '';
+    const doneBtn = o.status === 'pending'
+      ? `<button class="ord-btn done" onclick="doneOrder(${o.id})">✅ إنجاز</button>` : '';
+    const editBtn = `<button class="ord-btn edit" onclick="editOrderPrice(${o.id},${o.price||0})">✏️ سعر</button>`;
+    const delBtn  = `<button class="ord-btn del"  onclick="delOrder(${o.id})">🗑️</button>`;
+    return `<div class="order-card ${o.status==='done'?'done':''}">
+      ${imgHtml}
+      <div class="order-body">
+        <div style="display:flex;align-items:center;gap:8px;">
+          <span class="order-id">طلب #${o.id}</span>
+          <span class="ord-status-badge ${statusClass[o.status]||'ord-status-pending'}">${statusMap[o.status]||o.status}</span>
+          ${o.source==='bot'?'<span style="font-size:10px;color:var(--text3);">📱 بوت</span>':''}
+        </div>
+        <div class="order-name">👤 ${o.customer_name}</div>
+        <div class="order-desc">${o.description}</div>
+        ${priceHtml}
+        <div class="order-meta">${phoneHtml}${notesHtml}<span>📅 ${o.date}</span></div>
+      </div>
+      <div class="order-actions">${doneBtn}${editBtn}${delBtn}</div>
+    </div>`;
+  }).join('');
+}
+function openOrderImg(img){
+  const overlay = document.createElement('div');
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:9999;display:flex;align-items:center;justify-content:center;';
+  overlay.onclick = () => overlay.remove();
+  const i = document.createElement('img');
+  i.src = img.src;
+  i.style.cssText = 'max-width:95vw;max-height:90vh;border-radius:12px;object-fit:contain;';
+  overlay.appendChild(i);
+  document.body.appendChild(overlay);
+}
+function showAddOrder(){ document.getElementById('addOrderForm').style.display='block'; }
+async function addOrder(){
+  const name  = document.getElementById('orderCustName').value.trim();
+  const phone = document.getElementById('orderCustPhone').value.trim();
+  const desc  = document.getElementById('orderDesc').value.trim();
+  const price = parseFloat(document.getElementById('orderPrice').value) || 0;
+  const notes = document.getElementById('orderNotes').value.trim();
+  if(!name){ showToast('⚠️ اسم العميل مطلوب'); return; }
+  if(!desc){ showToast('⚠️ وصف الطلب مطلوب'); return; }
+  await api('/api/orders',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({customer_name:name,customer_phone:phone,description:desc,price,notes})});
+  ['orderCustName','orderCustPhone','orderDesc','orderPrice','orderNotes'].forEach(id=>{
+    const el=document.getElementById(id); if(el) el.value='';
+  });
+  document.getElementById('addOrderForm').style.display='none';
+  showToast('✅ تم حفظ الطلب');
+  loadOrders();
+}
+async function doneOrder(id){
+  if(!confirm('تأكيد إنجاز هذا الطلب؟')) return;
+  await api(`/api/orders/${id}`,{method:'PATCH',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({status:'done'})});
+  showToast('✅ تم تسجيل الطلب كمنجز');
+  loadOrders();
+}
+async function editOrderPrice(id, currentPrice){
+  const newPrice = prompt('السعر الجديد (ر.ع):', currentPrice || '');
+  if(newPrice === null) return;
+  const p = parseFloat(newPrice);
+  if(isNaN(p) || p < 0){ showToast('⚠️ سعر غير صحيح'); return; }
+  await api(`/api/orders/${id}`,{method:'PATCH',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({price:p})});
+  showToast('✅ تم تعديل السعر');
+  loadOrders();
+}
+async function delOrder(id){
+  if(!confirm('حذف هذا الطلب؟')) return;
+  await api(`/api/orders/${id}`,{method:'DELETE'});
+  showToast('🗑️ تم الحذف');
+  loadOrders();
 }
 
 /* ══════════════════════════════════════════

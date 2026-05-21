@@ -211,6 +211,20 @@ def init_db():
             paid_date TEXT,
             notified INTEGER DEFAULT 0,
             created TEXT DEFAULT (datetime('now')))""",
+        """CREATE TABLE IF NOT EXISTS orders (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            customer_name TEXT NOT NULL,
+            customer_phone TEXT,
+            description TEXT NOT NULL,
+            price REAL DEFAULT 0,
+            status TEXT DEFAULT 'pending',
+            img_file_id TEXT,
+            img_url TEXT,
+            notes TEXT,
+            date TEXT NOT NULL,
+            done_date TEXT,
+            source TEXT DEFAULT 'web',
+            created TEXT DEFAULT (datetime('now')))""",
     ]
     for sql in new_tables:
         if USE_TURSO: turso_run(sql)

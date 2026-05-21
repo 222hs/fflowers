@@ -573,6 +573,44 @@ def webhook():
 
     if "photo" in msg:
         file_id=msg["photo"][-1]["file_id"]; caption=msg.get("caption","").strip()
+        # ── طلب عميل جديد ──
+        caption_is_order = any(w in caption for w in ["طلب","order","طلبية","اوردر","زبون","عميل"])
+        if caption_is_order:
+            # استخرج اسم العميل والوصف من الكابشن بالذكاء الاصطناعي
+            tg(chat, "📋 جاري حفظ الطلب...")
+            order_desc = caption
+            cust_name = "غير محدد"
+            cust_phone = ""
+            # حاول استخراج الاسم والرقم من الكابشن
+            if GROQ_KEY or GEMINI_KEY or OPENROUTER_KEY or OPENAI_KEY:
+                parse_prompt = f"""من النص التالي استخرج بالعربي:
+النص: "{caption}"
+أعطني JSON فقط بهذا الشكل:
+{{"name":"اسم العميل أو غير محدد","phone":"رقم الهاتف أو فارغ","desc":"وصف الطلب بشكل مختصر"}}
+لا تكتب شيء غير JSON."""
+                ai_txt, _ = call_ai(parse_prompt, max_tokens=150, temperature=0.1)
+                if ai_txt:
+                    try:
+                        import json as _json
+                        parsed_order = _json.loads(ai_txt.strip())
+                        cust_name  = parsed_order.get("name","غير محدد") or "غير محدد"
+                        cust_phone = parsed_order.get("phone","") or ""
+                        order_desc = parsed_order.get("desc", caption) or caption
+                    except: pass
+            date_val = datetime.now().strftime("%d/%m/%Y")
+            db_run("INSERT INTO orders (customer_name,customer_phone,description,date,img_file_id,source) VALUES (?,?,?,?,?,?)",
+                   (cust_name, cust_phone, order_desc, date_val, file_id, "bot"))
+            order_row = db_one("SELECT id FROM orders ORDER BY id DESC LIMIT 1")
+            oid = order_row["id"] if order_row else "?"
+            tg(chat,
+               f"✅ <b>تم حفظ الطلب #{oid}!</b>\n\n"
+               f"👤 العميل: {cust_name}\n"
+               f"📝 الطلب: {order_desc}\n"
+               f"📅 التاريخ: {date_val}\n\n"
+               f"لعرض جميع الطلبات: /طلبات\n"
+               f"للتعديل على الطلب افتح الموقع → العملاء")
+            return "ok"
+
         # Check if flower counting request
         caption_is_flowers = any(w in caption for w in ["عد الورد","عد ورد","عد زهور","مخزون ورد","count flower"])
         # Check if flower supplier invoice
@@ -918,7 +956,11 @@ def webhook():
            "👤 /من_دفع — تفصيل المشتريات\n"
            "💼 /مصاريف — المصاريف الثابتة\n\n"
            "👥 /عملائي — عرض العملاء الدائمين\n"
-           "💳 /ديوني — الديون غير المسددة")
+           "💳 /ديوني — الديون غير المسددة\n\n"
+           "📋 <b>الطلبات:</b>\n"
+           "أرسل صورة + تعليق <code>طلب اسم العميل - وصف الطلب</code>\n"
+           "مثال: <code>طلب أم خالد - باقة ورد أحمر كبيرة</code>\n"
+           "/طلبات — عرض الطلبات قيد الانتظار")
         return "ok"
 
     # ── تقرير اليوم ──
@@ -1121,6 +1163,28 @@ def webhook():
         tg(chat,
            f"🗄️ <b>رف {shelf_name}</b>\n\n{lines}\n\n"
            f"للبيع أرسل مثلاً:\n<code>بعت {prods[0]['name']} من رف {shelf_name} بـ {prods[0]['price']}</code>")
+        return "ok"
+
+    if text in ["/طلبات", "/orders", "/pending"]:
+        orders = db_get("SELECT * FROM orders WHERE status='pending' ORDER BY created DESC")
+        if not orders:
+            tg(chat, "✅ لا توجد طلبات قيد الانتظار حالياً 🎉")
+        else:
+            lines = []
+            for o in orders:
+                ph = f" — {o['customer_phone']}" if o.get("customer_phone") else ""
+                price_line = f"\n💰 السعر: {fmt_omr(float(o['price']))}" if o.get("price") and float(o['price']) > 0 else ""
+                img_note = " 📸" if o.get("img_file_id") else ""
+                lines.append(
+                    f"📋 <b>طلب #{o['id']}</b>{img_note}\n"
+                    f"👤 {o['customer_name']}{ph}\n"
+                    f"📝 {o['description']}{price_line}\n"
+                    f"📅 {o['date']}"
+                )
+            tg(chat,
+               f"📋 <b>الطلبات قيد الانتظار ({len(orders)})</b>\n\n" +
+               "\n\n".join(lines) +
+               "\n\nلإنجاز طلب: افتح الموقع → العملاء → الطلبات")
         return "ok"
 
     if text in ["/عملائي", "/customers"]:
@@ -1541,6 +1605,85 @@ def api_pay_debt(did):
 def api_del_debt(did):
     db_run("DELETE FROM debts WHERE id=?", (did,))
     return jsonify({"ok": True})
+
+# ══════════════════════════════════════════════════════════════
+# ── Orders API ───────────────────────────────────────────────
+# ══════════════════════════════════════════════════════════════
+@app.route("/api/orders", methods=["GET"])
+@auth
+def api_get_orders():
+    status = request.args.get("status", "")
+    if status:
+        rows = db_get("SELECT * FROM orders WHERE status=? ORDER BY created DESC", (status,))
+    else:
+        rows = db_get("SELECT * FROM orders ORDER BY created DESC")
+    pending_count = db_one("SELECT COUNT(*) as c FROM orders WHERE status='pending'")
+    return jsonify({"orders": rows, "pending_count": int(pending_count["c"]) if pending_count else 0})
+
+@app.route("/api/orders", methods=["POST"])
+@auth
+def api_add_order():
+    d = request.json or {}
+    if not d.get("customer_name") or not d.get("description"):
+        return jsonify({"ok": False, "error": "name and description required"}), 400
+    date_val = datetime.now().strftime("%d/%m/%Y")
+    db_run("INSERT INTO orders (customer_name,customer_phone,description,price,notes,date,source) VALUES (?,?,?,?,?,?,?)",
+           (d["customer_name"].strip(), d.get("customer_phone","").strip(),
+            d["description"].strip(), float(d.get("price",0)),
+            d.get("notes","").strip(), date_val, "web"))
+    return jsonify({"ok": True})
+
+@app.route("/api/orders/<int:oid>", methods=["PATCH"])
+@auth
+def api_edit_order(oid):
+    d = request.json or {}
+    fields, vals = [], []
+    for col in ["customer_name","customer_phone","description","price","notes","status"]:
+        if col in d:
+            fields.append(f"{col}=?")
+            vals.append(float(d[col]) if col == "price" else d[col])
+    if "status" in d and d["status"] == "done":
+        fields.append("done_date=?")
+        vals.append(datetime.now().strftime("%d/%m/%Y"))
+    if not fields: return jsonify({"ok": False})
+    vals.append(oid)
+    db_run(f"UPDATE orders SET {','.join(fields)} WHERE id=?", vals)
+    # إذا تم الطلب → أرسل إشعار للبوت
+    if d.get("status") == "done":
+        order = db_one("SELECT * FROM orders WHERE id=?", (oid,))
+        if order:
+            token = BOT_TOKEN
+            chat_id = os.environ.get("OWNER_CHAT_ID","")
+            if token and chat_id:
+                try:
+                    price_line = f"\n💰 السعر: {fmt_omr(float(order['price']))}" if order.get('price') and float(order['price']) > 0 else ""
+                    requests.post(f"https://api.telegram.org/bot{token}/sendMessage",
+                        json={"chat_id": int(chat_id),
+                              "text": f"✅ <b>تم إنجاز طلب!</b>\n\n👤 {order['customer_name']}\n📝 {order['description']}{price_line}",
+                              "parse_mode": "HTML"}, timeout=10)
+                except: pass
+    return jsonify({"ok": True})
+
+@app.route("/api/orders/<int:oid>", methods=["DELETE"])
+@auth
+def api_del_order(oid):
+    db_run("DELETE FROM orders WHERE id=?", (oid,))
+    return jsonify({"ok": True})
+
+@app.route("/api/orders/<int:oid>/image")
+def api_order_image(oid):
+    """إعادة توجيه صورة الطلب من تيليغرام"""
+    order = db_one("SELECT img_file_id FROM orders WHERE id=?", (oid,))
+    if not order or not order.get("img_file_id"):
+        return "", 404
+    try:
+        r = requests.get(f"https://api.telegram.org/bot{BOT_TOKEN}/getFile",
+                         params={"file_id": order["img_file_id"]}, timeout=10)
+        file_path = r.json()["result"]["file_path"]
+        img_r = requests.get(f"https://api.telegram.org/file/bot{BOT_TOKEN}/{file_path}", timeout=15)
+        return Response(img_r.content, mimetype="image/jpeg")
+    except:
+        return "", 404
 
 @app.route("/turso_debug")
 def turso_debug():
