@@ -1722,6 +1722,20 @@ async function addExpensePrompt(){
 }
 
 /* ── SHELVES ── */
+async function delShelfSale(eid){
+  if(!confirm('حذف هذه المبيعة؟')) return;
+  await api(`/api/entries/${eid}`,{method:'DELETE'});
+  showToast('🗑️ تم الحذف'); loadShelves(); load();
+}
+async function editShelfSale(eid, desc, amt){
+  const newAmt = prompt(`تعديل سعر "${desc}"\nالسعر الحالي: ${amt} ر.ع\nأدخل السعر الجديد:`, amt);
+  if(newAmt === null) return;
+  const parsed = parseFloat(newAmt);
+  if(isNaN(parsed) || parsed <= 0){ showToast('⚠️ سعر غير صحيح'); return; }
+  await api(`/api/entries/${eid}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({amt:parsed})});
+  showToast('✅ تم تعديل السعر'); loadShelves(); load();
+}
+
 async function loadShelves(){
   const shelves=await api(`/api/shelves?month=${month}`);
   document.getElementById('shelfSummary').innerHTML=shelves.map(s=>{
@@ -1731,13 +1745,19 @@ async function loadShelves(){
       <div style="margin-top:10px;border-top:1px solid var(--border);padding-top:8px;">
         <div style="font-size:11px;font-weight:700;color:var(--text3);letter-spacing:1px;margin-bottom:6px;">📋 المبيعات:</div>
         ${entries.map(e=>{
-          const pay=e.payment_method?`<span style="font-size:10px;background:rgba(255,255,255,0.5);border-radius:6px;padding:1px 5px;margin-right:3px;">${e.payment_method}</span>`:'';
-          return `<div style="display:flex;align-items:center;justify-content:space-between;padding:5px 0;border-bottom:1px solid rgba(255,255,255,0.3);">
-            <div style="display:flex;align-items:center;gap:5px;flex:1;min-width:0;">
-              ${pay}
-              <span style="font-size:13px;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${e.desc}</span>
+          const pay=e.payment_method?`<span style="font-size:10px;background:rgba(255,255,255,0.5);border-radius:6px;padding:1px 5px;">${e.payment_method}</span>`:'';
+          return `<div style="display:flex;align-items:center;gap:6px;padding:6px 0;border-bottom:1px solid rgba(255,255,255,0.3);">
+            <div style="flex:1;min-width:0;">
+              <div style="display:flex;align-items:center;gap:4px;flex-wrap:wrap;">
+                ${pay}
+                <span style="font-size:13px;color:var(--text);">${e.desc}</span>
+              </div>
+              <span style="font-family:'Playfair Display',serif;font-size:13px;font-weight:700;color:var(--green2);">${fmt(e.amt)} ر.ع</span>
             </div>
-            <span style="font-family:'Playfair Display',serif;font-size:13px;font-weight:700;color:var(--green2);white-space:nowrap;margin-right:6px;">${fmt(e.amt)} ر.ع</span>
+            <button onclick="editShelfSale(${e.id},'${e.desc.replace(/'/g,"\\'")}',${e.amt})"
+              style="width:28px;height:28px;border:none;border-radius:8px;background:rgba(212,168,67,0.15);color:var(--gold);font-size:13px;cursor:pointer;flex-shrink:0;">✏️</button>
+            <button onclick="delShelfSale(${e.id})"
+              style="width:28px;height:28px;border:none;border-radius:8px;background:rgba(232,121,138,0.15);color:var(--accent);font-size:13px;cursor:pointer;flex-shrink:0;">🗑</button>
           </div>`;
         }).join('')}
       </div>`:'';

@@ -441,8 +441,21 @@ def api_add():
     return jsonify({"ok":True})
 
 @app.route("/api/entries/<int:eid>",methods=["DELETE"])
+@worker_auth
 def api_del(eid):
     db_run("DELETE FROM entries WHERE id=?",(eid,))
+    return jsonify({"ok":True})
+
+@app.route("/api/entries/<int:eid>", methods=["PATCH"])
+@worker_auth
+def api_edit_entry(eid):
+    d = request.json or {}
+    fields, vals = [], []
+    if "amt"  in d: fields.append("amt=?");  vals.append(float(d["amt"]))
+    if "desc" in d: fields.append("desc=?"); vals.append(d["desc"])
+    if not fields: return jsonify({"ok":False,"error":"nothing to update"})
+    vals.append(eid)
+    db_run(f"UPDATE entries SET {','.join(fields)} WHERE id=?", vals)
     return jsonify({"ok":True})
 
 @app.route("/api/shelves")
@@ -505,7 +518,27 @@ def webhook():
         try: requests.post(f"https://api.telegram.org/bot{BOT_TOKEN}/editMessageReplyMarkup",json={"chat_id":chat,"message_id":cb["message"]["message_id"],"reply_markup":{"inline_keyboard":[]}},timeout=5)
         except: pass
         
-        if cbd.startswith("pay:"):
+        if cbd == "cancel_del":
+            tg(chat, "✅ تم الإلغاء، المبيعة محفوظة")
+            return "ok"
+
+        elif cbd.startswith("del_entry:"):
+            eid = int(cbd.split(":",1)[1])
+            entry = db_one("SELECT * FROM entries WHERE id=?", (eid,))
+            if entry:
+                db_run("DELETE FROM entries WHERE id=?", (eid,))
+                # أعد الكمية للمنتج إذا كانت مبيعة رف
+                if entry.get("shelf_id"):
+                    prod = db_one("SELECT id FROM shelf_products WHERE shelf_id=? AND name=?",
+                                  (entry["shelf_id"], entry.get("desc","")))
+                    if prod:
+                        db_run("UPDATE shelf_products SET qty=qty+1 WHERE id=?", (prod["id"],))
+                tg(chat, f"🗑️ تم حذف المبيعة: {entry.get('desc','')} — {fmt_omr(entry.get('amt',0))}")
+            else:
+                tg(chat, "⚠️ لم يُعثر على المبيعة، ربما حُذفت مسبقاً")
+            return "ok"
+
+        elif cbd.startswith("pay:"):
             pay=cbd.split("pay:",1)[1]
             last=db_one("SELECT id FROM entries WHERE type='s' AND month=? ORDER BY created DESC LIMIT 1",(month,))
             if last: db_run("UPDATE entries SET payment_method=? WHERE id=?",(pay,last["id"]))
@@ -866,6 +899,9 @@ def webhook():
            "<code>/رف ريحان</code> — عرض منتجات الرف\n"
            "<code>/رفوف</code> — ملخص جميع الرفوف\n"
            "<code>/ايجار_الرفوف</code> — تسجيل الإيجارات\n\n"
+           "🗑️ <b>حذف مبيعة:</b>\n"
+           "<code>/حذف</code> — حذف آخر مبيعة مسجلة\n"
+           "أو اضغط زر الحذف أسفل رسالة التأكيد مباشرة\n\n"
            "🌸 <b>مخزون الورد:</b>\n"
            "أرسل صورة + تعليق <code>عد الورد</code>\n"
            "أو: <code>عندي ورد روز احمر 20</code>\n"
@@ -988,6 +1024,17 @@ def webhook():
             lines.append(f"{'⚡' if 'كهرب' in e['name'] else '🏪' if 'إيجار' in e['name'] else '👷'} <b>{e['name']}</b>: {fmt_omr(e['amount'])}{last}")
         tg(chat, f"💼 <b>المصاريف الثابتة</b>\n\n" + "\n".join(lines) +
            "\n\nللتسجيل: <code>دفعت راتب</code> أو <code>دفعت إيجار</code> أو <code>دفعت كهرباء 45.000</code>")
+        return "ok"
+
+    if text in ["/حذف", "/undo", "/del"]:
+        last = db_one("SELECT * FROM entries WHERE type='s' ORDER BY id DESC LIMIT 1")
+        if not last:
+            tg(chat, "⚠️ لا توجد مبيعات مسجلة لحذفها")
+        else:
+            tg_buttons(chat,
+                f"🗑️ <b>حذف آخر مبيعة؟</b>\n\n📝 {last['desc']}\n💰 {fmt_omr(last['amt'])}\n📅 {last.get('date','')}",
+                [[{"label":"✅ نعم، احذفها","data":f"del_entry:{last['id']}"},
+                  {"label":"❌ لا، إلغاء","data":"cancel_del"}]])
         return "ok"
 
     if text in ["/ايجار_الرفوف", "/shelf_rent"]:
@@ -1212,9 +1259,13 @@ def webhook():
             cat_line = f"\n🏷️ {cat}" if cat else ""
             shelf_line = f"\n🗄️ رف {shelf_name}" if shelf_name else ""
             # تسجيل كل قطعة بسجل منفصل
+            last_id = None
             for _ in range(qty):
                 db_run("INSERT INTO entries (type,desc,amt,date,month,payment_method,category,shelf_id) VALUES (?,?,?,?,?,?,?,?)",
                        ("s",desc,unit_price,date,month,pay,cat,shelf_id_detected))
+                if last_id is None:
+                    row = db_one("SELECT id FROM entries ORDER BY id DESC LIMIT 1")
+                    if row: last_id = row["id"]
             # تحديث كمية المنتج في الرف
             if shelf_id_detected and desc:
                 prod_kw = desc.split()[0] if desc else ""
@@ -1222,8 +1273,9 @@ def webhook():
                               (shelf_id_detected, f"%{prod_kw}%"))
                 if prod: db_run("UPDATE shelf_products SET qty=MAX(0,qty-?) WHERE id=?",(qty, prod["id"]))
             qty_line = f" × {qty} = {fmt_omr(amt)}" if qty > 1 else f" = {fmt_omr(amt)}"
+            confirm_text = f"✅ <b>{'مبيعات' if qty>1 else 'مبيعة'} مسجلة!</b>\n🌸 {qty}× {desc}\n💰 {fmt_omr(unit_price)} للقطعة{qty_line}{' — '+pay if pay else ''}{cat_line}{shelf_line}"
             if pay:
-                tg(chat,f"✅ <b>{'مبيعات' if qty>1 else 'مبيعة'} مسجلة!</b>\n🌸 {qty}× {desc}\n💰 {fmt_omr(unit_price)} للقطعة{qty_line} — {pay}{cat_line}{shelf_line}")
+                tg_sale_confirm(chat, confirm_text, last_id)
             else:
                 pending[chat]={"waiting":"sale_payment","shelf_id":shelf_id_detected,"shelf_name":shelf_name,"qty":qty,"desc":desc,"unit_price":unit_price,"cat_line":cat_line}
                 tg_buttons(chat,f"🌸 <b>{'مبيعات' if qty>1 else 'مبيعة'} {fmt_omr(unit_price)}{'×'+str(qty) if qty>1 else ''}</b>\n📝 {qty}× {desc}{cat_line}{shelf_line}\n\n💳 طريقة الدفع؟",

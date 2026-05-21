@@ -18,6 +18,15 @@ def tg_buttons(chat_id, text, buttons):
             json={"chat_id":chat_id,"text":text,"parse_mode":"HTML","reply_markup":kb}, timeout=10)
     except: pass
 
+def tg_sale_confirm(chat_id, text, entry_id):
+    """رسالة تأكيد مبيعة مع زر حذف"""
+    if not BOT_TOKEN: return
+    kb = {"inline_keyboard":[[{"text":"🗑️ حذف هذه المبيعة","callback_data":f"del_entry:{entry_id}"}]]}
+    try:
+        requests.post(f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage",
+            json={"chat_id":chat_id,"text":text,"parse_mode":"HTML","reply_markup":kb}, timeout=10)
+    except: pass
+
 SALE_WORDS=["بعت","مبيعة","بيع","بعثت","باعت"]
 BUY_WORDS=["اشتريت","شريت","مشتريات","شراء","دفعت","فاتورة","طلبية"]
 
