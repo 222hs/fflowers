@@ -187,6 +187,15 @@ header{
   background:var(--glass);transition:.2s;flex-shrink:0;
 }
 .theme-btn:hover{transform:scale(1.1);}
+.header-badge-btn{
+  height:28px;padding:0 9px;border-radius:14px;border:none;
+  background:rgba(245,200,66,0.18);color:#a07010;
+  font-family:'Tajawal',sans-serif;font-size:12px;font-weight:800;
+  cursor:pointer;display:flex;align-items:center;gap:4px;
+  transition:.2s;flex-shrink:0;
+}
+.header-badge-btn.debt{background:rgba(232,121,138,0.15);color:var(--accent2);}
+.header-badge-btn:hover{transform:scale(1.05);}
 
 /* ── بطاقة التحليل الذكي ── */
 .insights-card{
@@ -768,8 +777,12 @@ input[type="date"]{width:100%;padding:10px 12px;border:1px solid var(--border);b
         </div>
         <button class="theme-btn" id="refreshBtn" onclick="refreshData()" title="تحديث البيانات">🔄</button>
         <button class="theme-btn" onclick="toggleThemePanel()" title="تغيير الثيم">🎨</button>
-        <button class="theme-btn" onclick="toggleBgPanel()" title="تغيير الخلفية">🖼️</button>
-        <button class="theme-btn" id="langBtn" onclick="toggleLang()" title="تغيير اللغة" style="font-size:12px;font-weight:700;font-family:'Tajawal',sans-serif;">EN</button>
+        <button class="header-badge-btn" id="hdrOrders" onclick="switchTab('customers')" title="الطلبات قيد الانتظار" style="display:none;">
+          📋 <span id="hdrOrdersCount">0</span>
+        </button>
+        <button class="header-badge-btn debt" id="hdrDebts" onclick="switchTab('customers')" title="الديون غير المسددة" style="display:none;">
+          💳 <span id="hdrDebtsCount">0</span>
+        </button>
       </div>
 
     </div><!-- /header-inner -->
@@ -1633,7 +1646,7 @@ async function load(){
 }
 
 // تحديث تلقائي كل 60 ثانية
-setInterval(()=>{load();if(document.getElementById('tab-shelves').classList.contains('active'))loadShelves();},60000);
+setInterval(()=>{load();if(document.getElementById('tab-shelves').classList.contains('active'))loadShelves();try{loadHeaderBadges();}catch(e){}},60000);
 
 async function refreshData(){
   const btn = document.getElementById('refreshBtn');
@@ -2537,6 +2550,34 @@ async function loadAiStatus(){
 
 // تحميل البيانات فور اكتمال الصفحة
 /* ══════════════════════════════════════════
+   HEADER BADGES (orders + debts)
+══════════════════════════════════════════ */
+async function loadHeaderBadges(){
+  try{
+    const [ordRes, debtRes] = await Promise.all([
+      api('/api/orders?status=pending'),
+      api('/api/debts')
+    ]);
+    const ordCount  = (ordRes.orders || []).length;
+    const debtCount = (debtRes.debts || []).length;
+
+    const hdrOrd  = document.getElementById('hdrOrders');
+    const hdrDebt = document.getElementById('hdrDebts');
+    const ordSpan  = document.getElementById('hdrOrdersCount');
+    const debtSpan = document.getElementById('hdrDebtsCount');
+
+    if(hdrOrd && ordSpan){
+      ordSpan.textContent = ordCount;
+      hdrOrd.style.display = ordCount > 0 ? 'flex' : 'none';
+    }
+    if(hdrDebt && debtSpan){
+      debtSpan.textContent = debtCount;
+      hdrDebt.style.display = debtCount > 0 ? 'flex' : 'none';
+    }
+  }catch(e){}
+}
+
+/* ══════════════════════════════════════════
    DAILY GOAL
 ══════════════════════════════════════════ */
 async function loadGoal(){
@@ -2884,6 +2925,7 @@ function initApp(){
   try{ loadInsights(); }catch(e){ console.error('loadInsights failed', e); }
   try{ loadAiStatus(); }catch(e){ console.error('loadAiStatus failed', e); }
   try{ loadGoal(); }catch(e){ console.error('loadGoal failed', e); }
+  try{ loadHeaderBadges(); }catch(e){}
 }
 if(document.readyState === 'loading'){
   document.addEventListener('DOMContentLoaded', initApp);
