@@ -466,7 +466,7 @@ def api_shelves():
     for s in shelves:
         prods=db_get("SELECT * FROM shelf_products WHERE shelf_id=? ORDER BY created DESC",(s["id"],))
         row=db_one("SELECT COALESCE(SUM(amt),0) as total,COUNT(*) as cnt FROM entries WHERE type='s' AND shelf_id=? AND month=?",(s["id"],month))
-        sales_entries=db_get("SELECT desc,amt,date,payment_method FROM entries WHERE type='s' AND shelf_id=? AND month=? ORDER BY created DESC",(s["id"],month))
+        sales_entries=db_get("SELECT id,desc,amt,date,payment_method FROM entries WHERE type='s' AND shelf_id=? AND month=? ORDER BY created DESC",(s["id"],month))
         ms=float(row["total"]) if row else 0
         rent=float(s.get("rent") or 0)
         result.append({**s,"products":prods,"monthly_sales":ms,"sales_count":int(row["cnt"]) if row else 0,"rent":rent,"net":ms-rent,"sales_entries":sales_entries})
