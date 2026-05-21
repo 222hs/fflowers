@@ -665,6 +665,26 @@ input[type="date"]{width:100%;padding:10px 12px;border:1px solid var(--border);b
   .exp-amt{font-size:18px;}
   .chart-card h3{font-size:16px;}
 }
+/* ── Customer & Catalog cards ── */
+.cust-card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:14px;position:relative;}
+.cust-card-name{font-size:15px;font-weight:800;color:var(--text);}
+.cust-card-sub{font-size:12px;color:var(--text3);margin-top:3px;}
+.cust-card-actions{display:flex;gap:6px;margin-top:10px;}
+.cust-btn{padding:6px 12px;border-radius:8px;border:1px solid var(--border);background:transparent;color:var(--text2);font-family:'Tajawal',sans-serif;font-size:12px;cursor:pointer;}
+.cust-btn.red{color:var(--accent);border-color:rgba(232,121,138,.3);}
+.debt-card{background:linear-gradient(135deg,rgba(232,121,138,.08),rgba(255,255,255,.4));border:1px solid rgba(232,121,138,.25);border-radius:12px;padding:12px;}
+.debt-amt{font-size:18px;font-weight:900;color:var(--accent);}
+.cat-prod-card{background:var(--card);border:1px solid var(--border);border-radius:14px;overflow:hidden;display:flex;flex-direction:column;}
+.cat-prod-img{width:100%;height:120px;object-fit:cover;background:var(--bg2);}
+.cat-prod-img-placeholder{width:100%;height:120px;background:linear-gradient(135deg,var(--bg2),var(--border));display:flex;align-items:center;justify-content:center;font-size:36px;}
+.cat-prod-info{padding:10px;}
+.cat-prod-name{font-size:13px;font-weight:800;color:var(--text);}
+.cat-prod-price{font-size:15px;font-weight:900;color:var(--green2);margin-top:3px;}
+.cat-prod-desc{font-size:11px;color:var(--text3);margin-top:3px;}
+.cat-prod-actions{display:flex;gap:4px;padding:8px;border-top:1px solid var(--border);}
+.cat-toggle{padding:5px 10px;border:1px solid var(--border);border-radius:6px;font-size:11px;cursor:pointer;background:transparent;color:var(--text3);font-family:'Tajawal',sans-serif;}
+.cat-del{padding:5px 10px;border:1px solid rgba(232,121,138,.3);border-radius:6px;font-size:11px;cursor:pointer;background:transparent;color:var(--accent);font-family:'Tajawal',sans-serif;}
+.cat-unavail{opacity:0.4;}
 </style>
 </head>
 <body>
@@ -782,6 +802,8 @@ input[type="date"]{width:100%;padding:10px 12px;border:1px solid var(--border);b
   <div class="mobile-tabs" style="margin-top:8px;padding-bottom:6px;">
     <button class="mtab on" onclick="switchTab('home')">📊 الرئيسية</button>
     <button class="mtab" onclick="switchTab('shelves')">🗄️ الرفوف</button>
+    <button class="mtab" onclick="switchTab('customers')">👥 العملاء</button>
+    <button class="mtab" onclick="switchTab('catalog')">📷 الكتالوج</button>
     <button class="mtab" onclick="switchTab('flowerinv')">🧾 فواتير الورد</button>
     <button class="mtab" onclick="switchTab('reports')">📄 التقارير</button>
   </div>
@@ -809,6 +831,26 @@ input[type="date"]{width:100%;padding:10px 12px;border:1px solid var(--border);b
     </div>
 
   </div>
+
+  <!-- ── الهدف اليومي ── -->
+  <div class="gc" id="goalCard" style="padding:14px 16px;margin-bottom:12px;display:none;">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+      <span style="font-size:13px;font-weight:800;color:var(--text2);">🎯 الهدف اليومي</span>
+      <button onclick="editGoal()" style="font-size:11px;padding:4px 10px;border:1px solid var(--border);border-radius:8px;background:transparent;color:var(--text3);cursor:pointer;">تعديل</button>
+    </div>
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
+      <span id="goalCurrentVal" style="font-size:20px;font-weight:900;color:var(--green2);">0</span>
+      <span style="font-size:13px;color:var(--text3);">من</span>
+      <span id="goalTargetVal" style="font-size:16px;font-weight:700;color:var(--text2);">50</span>
+      <span style="font-size:11px;color:var(--text3);">ر.ع</span>
+      <span id="goalStatusEmoji" style="font-size:16px;margin-right:auto;">⏳</span>
+    </div>
+    <div style="background:var(--border);border-radius:20px;height:10px;overflow:hidden;">
+      <div id="goalProgressBar" style="height:100%;border-radius:20px;background:linear-gradient(90deg,var(--green),var(--gold));width:0%;transition:width 0.6s ease;"></div>
+    </div>
+    <div id="goalCaption" style="font-size:11px;color:var(--text3);margin-top:5px;text-align:center;"></div>
+  </div>
+
   <div style="height:1px;background:var(--border);margin-bottom:16px;"></div>
 
   <!-- ── ملخص الشهر ── -->
@@ -963,6 +1005,88 @@ input[type="date"]{width:100%;padding:10px 12px;border:1px solid var(--border);b
   <div class="shelf-summary" id="shelfSummary"></div>
   <div class="slbl">منتجات الرفوف</div>
   <div class="shelf-prods-section" id="shelfProds"></div>
+</div>
+
+<!-- CUSTOMERS -->
+<div id="tab-customers" class="page">
+  <div class="slbl">العملاء الدائمون</div>
+
+  <!-- Search + Add -->
+  <div class="gc" style="padding:14px;margin-bottom:14px;">
+    <div style="display:flex;gap:8px;margin-bottom:12px;">
+      <input id="custSearch" type="text" placeholder="🔍 ابحث باسم أو رقم..." oninput="searchCustomers()"
+        style="flex:1;padding:10px 12px;border:1px solid var(--border);border-radius:10px;background:var(--bg2);color:var(--text);font-family:'Tajawal',sans-serif;font-size:14px;"/>
+      <button onclick="showAddCustomer()" style="padding:10px 14px;background:var(--accent);color:#fff;border:none;border-radius:10px;cursor:pointer;font-size:16px;">➕</button>
+    </div>
+    <!-- Add form (hidden by default) -->
+    <div id="addCustForm" style="display:none;border-top:1px solid var(--border);padding-top:12px;">
+      <div class="fgrid fg2">
+        <div class="fld"><label>الاسم *</label><input id="custName" type="text" placeholder="اسم العميل"/></div>
+        <div class="fld"><label>الهاتف</label><input id="custPhone" type="tel" placeholder="9XXXXXXXX"/></div>
+      </div>
+      <div class="fld"><label>ملاحظات / ماذا يشتري عادةً</label>
+        <input id="custNotes" type="text" placeholder="مثال: يحب الورد الأحمر، يطلب باقات أسبوعياً"/></div>
+      <div style="display:flex;gap:8px;margin-top:10px;">
+        <button onclick="addCustomer()" class="sbtn sb-s" style="flex:1;padding:10px;">💾 حفظ</button>
+        <button onclick="hideAddCustomer()" style="padding:10px 16px;border:1px solid var(--border);border-radius:10px;background:transparent;color:var(--text2);cursor:pointer;">إلغاء</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Customers list -->
+  <div id="custList" style="display:flex;flex-direction:column;gap:10px;"></div>
+
+  <!-- Debts section -->
+  <div class="slbl" style="margin-top:16px;">💳 الديون غير المسددة</div>
+  <div class="gc" style="padding:14px;margin-bottom:12px;">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+      <span id="totalDebtLabel" style="font-size:13px;color:var(--text3);">إجمالي: 0.000 ر.ع</span>
+      <button onclick="showAddDebt()" style="font-size:12px;padding:6px 12px;background:var(--accent);color:#fff;border:none;border-radius:8px;cursor:pointer;">+ دين جديد</button>
+    </div>
+    <!-- Add debt form -->
+    <div id="addDebtForm" style="display:none;border-top:1px solid var(--border);padding-top:12px;margin-bottom:12px;">
+      <div class="fgrid fg2">
+        <div class="fld"><label>اسم العميل *</label><input id="debtName" type="text" placeholder="اسم من يدين"/></div>
+        <div class="fld"><label>المبلغ (ر.ع) *</label><input id="debtAmt" type="number" placeholder="0.000" step="0.001" inputmode="decimal"/></div>
+      </div>
+      <div class="fgrid fg2">
+        <div class="fld"><label>الهاتف</label><input id="debtPhone" type="tel" placeholder="اختياري"/></div>
+        <div class="fld"><label>الوصف</label><input id="debtDesc" type="text" placeholder="ما اشتراه..."/></div>
+      </div>
+      <div style="display:flex;gap:8px;margin-top:10px;">
+        <button onclick="addDebt()" class="sbtn sb-s" style="flex:1;padding:10px;">💾 حفظ</button>
+        <button onclick="document.getElementById('addDebtForm').style.display='none'" style="padding:10px 16px;border:1px solid var(--border);border-radius:10px;background:transparent;color:var(--text2);cursor:pointer;">إلغاء</button>
+      </div>
+    </div>
+    <div id="debtList" style="display:flex;flex-direction:column;gap:10px;"></div>
+  </div>
+</div>
+
+<!-- CATALOG -->
+<div id="tab-catalog" class="page">
+  <div class="slbl">كتالوج المنتجات</div>
+
+  <!-- Add product form -->
+  <div class="gc" style="padding:14px;margin-bottom:14px;">
+    <div style="font-size:13px;font-weight:800;color:var(--text2);margin-bottom:10px;">➕ إضافة منتج للكتالوج</div>
+    <div class="fgrid fg2">
+      <div class="fld"><label>اسم المنتج *</label><input id="catName" type="text" placeholder="مثال: باقة ورد رومانسية"/></div>
+      <div class="fld"><label>السعر (ر.ع) *</label><input id="catPrice" type="number" placeholder="0.000" step="0.001" inputmode="decimal"/></div>
+    </div>
+    <div class="fld"><label>وصف المنتج</label>
+      <input id="catDesc" type="text" placeholder="مواصفات المنتج، الألوان، المناسبة..."/></div>
+    <div class="fld"><label>🔗 رابط الصورة (اختياري)</label>
+      <input id="catImg" type="url" placeholder="https://..."/></div>
+    <button onclick="addCatalogProduct()" class="sbtn sb-s" style="width:100%;">🌸 إضافة للكتالوج</button>
+  </div>
+
+  <!-- Share button -->
+  <div style="display:flex;gap:8px;margin-bottom:14px;">
+    <button onclick="shareCatalog()" style="flex:1;padding:12px;background:linear-gradient(135deg,#25d366,#128c7e);color:#fff;border:none;border-radius:12px;font-family:'Tajawal',sans-serif;font-size:14px;font-weight:700;cursor:pointer;">📲 مشاركة الكتالوج عبر واتساب</button>
+  </div>
+
+  <!-- Products grid -->
+  <div id="catalogGrid" style="display:grid;grid-template-columns:1fr 1fr;gap:12px;"></div>
 </div>
 
 <!-- FLOWER INVOICES -->
@@ -1388,6 +1512,8 @@ function switchTab(t){
   });
   if(t==='shelves') loadShelves();
   if(t==='flowerinv') loadFlowerInvPage();
+  if(t==='customers') { loadCustomers(); loadDebts(); }
+  if(t==='catalog') loadCatalog();
 }
 
 function setFT(t){
@@ -1449,6 +1575,7 @@ async function load(){
     if(cur){ renderPayChart(cur.sales); renderPayerChart(cur.buys.filter(e=>e.type!=='expense')); }
     if(dash.flowers) document.getElementById('flowerCount').textContent = dash.flowers.total || 0;
     if(dash.shelves_summary) renderShelfSummaryCard(dash.shelves_summary, dash.shelf_sales||[]);
+    try{ loadGoal(); }catch(e2){}
   } catch(e){ hideSkeleton(); console.error('load error', e); }
   finally { _loading=false; }
 }
@@ -2357,12 +2484,239 @@ async function loadAiStatus(){
 }
 
 // تحميل البيانات فور اكتمال الصفحة
+/* ══════════════════════════════════════════
+   DAILY GOAL
+══════════════════════════════════════════ */
+async function loadGoal(){
+  try{
+    const d = await api('/api/settings/goal');
+    const goal = d.goal || 50;
+    const today = d.today || 0;
+    const pct = Math.min(100, (today/goal)*100);
+    const card = document.getElementById('goalCard');
+    if(card) card.style.display='block';
+    const curEl = document.getElementById('goalCurrentVal');
+    const tgtEl = document.getElementById('goalTargetVal');
+    const bar   = document.getElementById('goalProgressBar');
+    const cap   = document.getElementById('goalCaption');
+    const emoji = document.getElementById('goalStatusEmoji');
+    if(curEl) curEl.textContent = fmt(today) + ' ر.ع';
+    if(tgtEl) tgtEl.textContent = fmt(goal) + ' ر.ع';
+    if(bar)   bar.style.width = pct + '%';
+    if(pct >= 100){
+      if(bar) bar.style.background = 'linear-gradient(90deg,var(--green),#44cc44)';
+      if(emoji) emoji.textContent = '🎉';
+      if(cap) cap.textContent = 'تجاوزت الهدف! عمل رائع 🏆';
+    } else if(pct >= 70){
+      if(emoji) emoji.textContent = '💪';
+      if(cap) cap.textContent = `باقي ${fmt(goal-today)} ر.ع للوصول للهدف`;
+    } else {
+      if(emoji) emoji.textContent = '⏳';
+      if(cap) cap.textContent = `باقي ${fmt(goal-today)} ر.ع للوصول للهدف`;
+    }
+  }catch(e){}
+}
+async function editGoal(){
+  const cur = await api('/api/settings/goal');
+  const newGoal = prompt('🎯 الهدف اليومي (ر.ع):', cur.goal || 50);
+  if(newGoal === null) return;
+  const val = parseFloat(newGoal);
+  if(isNaN(val) || val <= 0){ showToast('⚠️ أدخل قيمة صحيحة'); return; }
+  await api('/api/settings/goal', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({goal:val})});
+  showToast('✅ تم تحديث الهدف');
+  loadGoal();
+}
+
+/* ══════════════════════════════════════════
+   CUSTOMERS
+══════════════════════════════════════════ */
+let _customers = [];
+async function loadCustomers(){
+  const q = document.getElementById('custSearch') ? document.getElementById('custSearch').value : '';
+  const url = q ? `/api/customers?q=${encodeURIComponent(q)}` : '/api/customers';
+  _customers = await api(url);
+  renderCustomers(_customers);
+}
+function renderCustomers(list){
+  const el = document.getElementById('custList');
+  if(!el) return;
+  if(!list || !list.length){ el.innerHTML='<div style="text-align:center;color:var(--text3);padding:20px;">لا يوجد عملاء مسجلون بعد 👥</div>'; return; }
+  el.innerHTML = list.map(c => `
+    <div class="cust-card">
+      <div class="cust-card-name">👤 ${c.name}</div>
+      ${c.phone ? `<div class="cust-card-sub">📞 <a href="tel:${c.phone}" style="color:var(--accent);text-decoration:none;">${c.phone}</a></div>` : ''}
+      ${c.notes ? `<div class="cust-card-sub" style="margin-top:4px;">📝 ${c.notes}</div>` : ''}
+      ${c.last_purchase ? `<div class="cust-card-sub" style="margin-top:2px;">🛍️ آخر شراء: ${c.last_purchase}</div>` : ''}
+      <div class="cust-card-actions">
+        ${c.phone ? `<button class="cust-btn" onclick="window.open('https://wa.me/968${c.phone.replace(/^0+/,'')}','_blank')">📲 واتساب</button>` : ''}
+        <button class="cust-btn" onclick="editCustomer(${c.id},'${encodeURIComponent(c.name)}','${encodeURIComponent(c.phone||'')}','${encodeURIComponent(c.notes||'')}')">✏️ تعديل</button>
+        <button class="cust-btn red" onclick="delCustomer(${c.id})">🗑️</button>
+      </div>
+    </div>`).join('');
+}
+function searchCustomers(){ loadCustomers(); }
+function showAddCustomer(){ document.getElementById('addCustForm').style.display='block'; }
+function hideAddCustomer(){ document.getElementById('addCustForm').style.display='none'; }
+async function addCustomer(){
+  const name = document.getElementById('custName').value.trim();
+  const phone = document.getElementById('custPhone').value.trim();
+  const notes = document.getElementById('custNotes').value.trim();
+  if(!name){ showToast('⚠️ الاسم مطلوب'); return; }
+  await api('/api/customers', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({name,phone,notes})});
+  document.getElementById('custName').value='';
+  document.getElementById('custPhone').value='';
+  document.getElementById('custNotes').value='';
+  hideAddCustomer();
+  showToast('✅ تم إضافة العميل');
+  loadCustomers();
+}
+async function editCustomer(id, encName, encPhone, encNotes){
+  const name = decodeURIComponent(encName);
+  const phone = decodeURIComponent(encPhone);
+  const notes = decodeURIComponent(encNotes);
+  const newName = prompt('الاسم:', name);
+  if(newName === null) return;
+  const newPhone = prompt('الهاتف:', phone);
+  if(newPhone === null) return;
+  const newNotes = prompt('ملاحظات:', notes);
+  if(newNotes === null) return;
+  await api(`/api/customers/${id}`, {method:'PATCH', headers:{'Content-Type':'application/json'}, body:JSON.stringify({name:newName,phone:newPhone,notes:newNotes})});
+  showToast('✅ تم التعديل');
+  loadCustomers();
+}
+async function delCustomer(id){
+  if(!confirm('حذف هذا العميل؟')) return;
+  await api(`/api/customers/${id}`, {method:'DELETE'});
+  showToast('🗑️ تم الحذف');
+  loadCustomers();
+}
+
+/* ══════════════════════════════════════════
+   DEBTS
+══════════════════════════════════════════ */
+async function loadDebts(){
+  const d = await api('/api/debts');
+  const list = d.debts || [];
+  const total = d.total_unpaid || 0;
+  const lbl = document.getElementById('totalDebtLabel');
+  if(lbl) lbl.textContent = `إجمالي الديون: ${fmt(total)} ر.ع`;
+  const el = document.getElementById('debtList');
+  if(!el) return;
+  if(!list.length){ el.innerHTML='<div style="text-align:center;color:var(--text3);padding:16px;">✅ لا توجد ديون غير مسددة</div>'; return; }
+  el.innerHTML = list.map(d => `
+    <div class="debt-card">
+      <div style="display:flex;align-items:flex-start;justify-content:space-between;">
+        <div>
+          <div style="font-size:14px;font-weight:800;color:var(--text);">👤 ${d.customer_name}</div>
+          ${d.customer_phone ? `<div style="font-size:12px;color:var(--text3);">📞 ${d.customer_phone}</div>` : ''}
+          ${d.description ? `<div style="font-size:12px;color:var(--text3);">📝 ${d.description}</div>` : ''}
+          <div style="font-size:11px;color:var(--text3);">📅 ${d.date}</div>
+        </div>
+        <div class="debt-amt">${fmt(d.amount)} ر.ع</div>
+      </div>
+      <div style="display:flex;gap:6px;margin-top:10px;">
+        <button onclick="payDebt(${d.id})" style="flex:1;padding:7px;background:var(--green);color:#fff;border:none;border-radius:8px;cursor:pointer;font-family:'Tajawal',sans-serif;font-size:12px;font-weight:700;">✅ سدّد</button>
+        <button onclick="delDebt(${d.id})" style="padding:7px 12px;border:1px solid rgba(232,121,138,.3);border-radius:8px;background:transparent;color:var(--accent);cursor:pointer;font-size:12px;">🗑️</button>
+      </div>
+    </div>`).join('');
+}
+function showAddDebt(){ document.getElementById('addDebtForm').style.display='block'; }
+async function addDebt(){
+  const name = document.getElementById('debtName').value.trim();
+  const amt = parseFloat(document.getElementById('debtAmt').value);
+  const phone = document.getElementById('debtPhone').value.trim();
+  const desc = document.getElementById('debtDesc').value.trim();
+  if(!name){ showToast('⚠️ الاسم مطلوب'); return; }
+  if(!amt || amt<=0){ showToast('⚠️ المبلغ مطلوب'); return; }
+  const date = new Date().toLocaleDateString('ar-EG',{day:'2-digit',month:'2-digit',year:'numeric'}).replace(/\//g,'/');
+  await api('/api/debts', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({customer_name:name,customer_phone:phone,amount:amt,description:desc,date:new Date().toLocaleDateString('en-GB')})});
+  ['debtName','debtPhone','debtAmt','debtDesc'].forEach(id=>{ const el=document.getElementById(id); if(el) el.value=''; });
+  document.getElementById('addDebtForm').style.display='none';
+  showToast('✅ تم تسجيل الدين');
+  loadDebts();
+}
+async function payDebt(id){
+  if(!confirm('تأكيد: تم سداد هذا الدين؟')) return;
+  await api(`/api/debts/${id}/pay`, {method:'POST'});
+  showToast('✅ تم تسجيل السداد');
+  loadDebts();
+}
+async function delDebt(id){
+  if(!confirm('حذف هذا الدين؟')) return;
+  await api(`/api/debts/${id}`, {method:'DELETE'});
+  showToast('🗑️ تم الحذف');
+  loadDebts();
+}
+
+/* ══════════════════════════════════════════
+   CATALOG
+══════════════════════════════════════════ */
+async function loadCatalog(){
+  const products = await api('/api/catalog');
+  const el = document.getElementById('catalogGrid');
+  if(!el) return;
+  if(!products.length){
+    el.innerHTML='<div style="grid-column:1/-1;text-align:center;color:var(--text3);padding:30px;">لا يوجد منتجات في الكتالوج بعد 📷</div>';
+    return;
+  }
+  el.innerHTML = products.map(p => `
+    <div class="cat-prod-card ${p.available?'':'cat-unavail'}">
+      ${p.img ? `<img class="cat-prod-img" src="${p.img}" onerror="this.style.display='none'" loading="lazy"/>` : `<div class="cat-prod-img-placeholder">🌸</div>`}
+      <div class="cat-prod-info">
+        <div class="cat-prod-name">${p.name}</div>
+        <div class="cat-prod-price">${fmt(p.price)} ر.ع</div>
+        ${p.description ? `<div class="cat-prod-desc">${p.description}</div>` : ''}
+        ${!p.available ? '<div style="font-size:10px;color:var(--accent);margin-top:4px;">غير متاح حالياً</div>' : ''}
+      </div>
+      <div class="cat-prod-actions">
+        <button class="cat-toggle" onclick="toggleCatalogProduct(${p.id},${p.available})">${p.available?'🔴 إخفاء':'✅ إظهار'}</button>
+        <button class="cat-del" onclick="delCatalogProduct(${p.id})">🗑️</button>
+      </div>
+    </div>`).join('');
+}
+async function addCatalogProduct(){
+  const name = document.getElementById('catName').value.trim();
+  const price = parseFloat(document.getElementById('catPrice').value);
+  const desc = document.getElementById('catDesc').value.trim();
+  const img = document.getElementById('catImg').value.trim();
+  if(!name){ showToast('⚠️ اسم المنتج مطلوب'); return; }
+  if(!price || price<=0){ showToast('⚠️ السعر مطلوب'); return; }
+  await api('/api/catalog', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({name,price,description:desc,img})});
+  ['catName','catPrice','catDesc','catImg'].forEach(id=>{ const el=document.getElementById(id); if(el) el.value=''; });
+  showToast('✅ تم إضافة المنتج');
+  loadCatalog();
+}
+async function toggleCatalogProduct(id, current){
+  await api(`/api/catalog/${id}`, {method:'PATCH', headers:{'Content-Type':'application/json'}, body:JSON.stringify({available:current?0:1})});
+  loadCatalog();
+}
+async function delCatalogProduct(id){
+  if(!confirm('حذف هذا المنتج من الكتالوج؟')) return;
+  await api(`/api/catalog/${id}`, {method:'DELETE'});
+  showToast('🗑️ تم الحذف');
+  loadCatalog();
+}
+async function shareCatalog(){
+  const products = await api('/api/catalog');
+  const available = products.filter(p=>p.available);
+  if(!available.length){ showToast('⚠️ لا توجد منتجات متاحة'); return; }
+  let msg = '🌸 *فيروز فلورز — كتالوج المنتجات*\n\n';
+  available.forEach((p,i)=>{
+    msg += `${i+1}. *${p.name}* — ${(+p.price).toFixed(3)} ر.ع\n`;
+    if(p.description) msg += `   ${p.description}\n`;
+  });
+  msg += '\n📞 للطلب تواصل معنا';
+  const url = `https://wa.me/?text=${encodeURIComponent(msg)}`;
+  window.open(url,'_blank');
+}
+
 function initApp(){
   // كل استدعاء معزول حتى لا يمنع فشلُ واحد البقيةَ
   try{ load(); }catch(e){ console.error('load init failed', e); }
   try{ loadFlowerInvPage(); }catch(e){ console.error('loadFlowerInvPage failed', e); }
   try{ loadInsights(); }catch(e){ console.error('loadInsights failed', e); }
   try{ loadAiStatus(); }catch(e){ console.error('loadAiStatus failed', e); }
+  try{ loadGoal(); }catch(e){ console.error('loadGoal failed', e); }
 }
 if(document.readyState === 'loading'){
   document.addEventListener('DOMContentLoaded', initApp);

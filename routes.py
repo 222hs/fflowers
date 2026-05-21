@@ -916,7 +916,9 @@ def webhook():
            "📊 /report — تقرير الشهر\n"
            "📈 /فئات — مبيعات حسب الفئة\n"
            "👤 /من_دفع — تفصيل المشتريات\n"
-           "💼 /مصاريف — المصاريف الثابتة")
+           "💼 /مصاريف — المصاريف الثابتة\n\n"
+           "👥 /عملائي — عرض العملاء الدائمين\n"
+           "💳 /ديوني — الديون غير المسددة")
         return "ok"
 
     # ── تقرير اليوم ──
@@ -1119,6 +1121,34 @@ def webhook():
         tg(chat,
            f"🗄️ <b>رف {shelf_name}</b>\n\n{lines}\n\n"
            f"للبيع أرسل مثلاً:\n<code>بعت {prods[0]['name']} من رف {shelf_name} بـ {prods[0]['price']}</code>")
+        return "ok"
+
+    if text in ["/عملائي", "/customers"]:
+        customers = db_get("SELECT * FROM customers ORDER BY name")
+        if not customers:
+            tg(chat, "👥 لا يوجد عملاء مسجلون بعد.\n\nأضف من الموقع في قسم العملاء.")
+        else:
+            lines = []
+            for c in customers:
+                ph = f"\n📞 {c['phone']}" if c.get("phone") else ""
+                nt = f"\n📝 {c['notes']}" if c.get("notes") else ""
+                lp = f"\n🛍️ آخر شراء: {c['last_purchase']}" if c.get("last_purchase") else ""
+                lines.append(f"👤 <b>{c['name']}</b>{ph}{nt}{lp}")
+            tg(chat, f"👥 <b>العملاء الدائمون ({len(customers)})</b>\n\n" + "\n\n".join(lines))
+        return "ok"
+
+    if text in ["/ديوني", "/debts"]:
+        debts = db_get("SELECT * FROM debts WHERE paid=0 ORDER BY created DESC")
+        if not debts:
+            tg(chat, "✅ لا توجد ديون غير مسددة 🎉")
+        else:
+            total = sum(float(d["amount"]) for d in debts)
+            lines = []
+            for d in debts:
+                ph = f" — {d['customer_phone']}" if d.get("customer_phone") else ""
+                desc = f"\n📝 {d['description']}" if d.get("description") else ""
+                lines.append(f"💳 <b>{d['customer_name']}</b>{ph}\n💰 {fmt_omr(float(d['amount']))}{desc}\n📅 {d['date']}")
+            tg(chat, f"💳 <b>الديون غير المسددة ({len(debts)})</b>\n\n" + "\n\n".join(lines) + f"\n\n{'━'*18}\n💰 الإجمالي: {fmt_omr(total)}")
         return "ok"
 
     if text in ["/من_دفع","/mandafa3"]:
@@ -1372,6 +1402,145 @@ def webhook():
     else:
         tg(chat, "لم أفهم 🤔\n\nجرّب مثلاً:\n<code>بعت باقة بـ 4.500 كاش</code>\n<code>اشتريت ورد بـ 8.000</code>\n<code>دفعت الراتب</code>\n<code>دفعت الإيجار</code>\n\n/help للمساعدة")
     return "ok"
+
+# ══════════════════════════════════════════════════════════════
+# ── Daily Goal API ────────────────────────────────────────────
+# ══════════════════════════════════════════════════════════════
+@app.route("/api/settings/goal", methods=["GET"])
+@auth
+def api_get_goal():
+    row = db_one("SELECT value FROM app_settings WHERE key='daily_goal'")
+    goal = float(row["value"]) if row else 50.0
+    today_str = datetime.now().strftime("%d/%m/%Y")
+    entries = db_get("SELECT amt FROM entries WHERE type='s' AND date=? AND shelf_id IS NULL", (today_str,))
+    today_total = round(sum(float(e["amt"]) for e in entries), 3)
+    return jsonify({"goal": goal, "today": today_total})
+
+@app.route("/api/settings/goal", methods=["POST"])
+@auth
+def api_set_goal():
+    d = request.json or {}
+    goal = float(d.get("goal", 50))
+    db_run("INSERT OR REPLACE INTO app_settings (key,value) VALUES (?,?)", ("daily_goal", str(goal)))
+    return jsonify({"ok": True})
+
+# ══════════════════════════════════════════════════════════════
+# ── Customers API ────────────────────────────────────────────
+# ══════════════════════════════════════════════════════════════
+@app.route("/api/customers", methods=["GET"])
+@auth
+def api_get_customers():
+    q = request.args.get("q","").strip()
+    if q:
+        rows = db_get("SELECT * FROM customers WHERE name LIKE ? OR phone LIKE ? ORDER BY name", (f"%{q}%", f"%{q}%"))
+    else:
+        rows = db_get("SELECT * FROM customers ORDER BY name")
+    return jsonify(rows)
+
+@app.route("/api/customers", methods=["POST"])
+@auth
+def api_add_customer():
+    d = request.json or {}
+    if not d.get("name"): return jsonify({"ok":False,"error":"name required"}), 400
+    db_run("INSERT INTO customers (name,phone,notes) VALUES (?,?,?)",
+           (d["name"].strip(), d.get("phone","").strip(), d.get("notes","").strip()))
+    return jsonify({"ok": True})
+
+@app.route("/api/customers/<int:cid>", methods=["PATCH"])
+@auth
+def api_edit_customer(cid):
+    d = request.json or {}
+    fields, vals = [], []
+    if "name"  in d: fields.append("name=?");  vals.append(d["name"].strip())
+    if "phone" in d: fields.append("phone=?"); vals.append(d["phone"].strip())
+    if "notes" in d: fields.append("notes=?"); vals.append(d["notes"].strip())
+    if not fields: return jsonify({"ok":False})
+    vals.append(cid)
+    db_run(f"UPDATE customers SET {','.join(fields)} WHERE id=?", vals)
+    return jsonify({"ok": True})
+
+@app.route("/api/customers/<int:cid>", methods=["DELETE"])
+@auth
+def api_del_customer(cid):
+    db_run("DELETE FROM customers WHERE id=?", (cid,))
+    return jsonify({"ok": True})
+
+# ══════════════════════════════════════════════════════════════
+# ── Product Catalog API ───────────────────────────────────────
+# ══════════════════════════════════════════════════════════════
+@app.route("/api/catalog", methods=["GET"])
+def api_get_catalog():
+    rows = db_get("SELECT * FROM catalog_products ORDER BY available DESC, name")
+    return jsonify(rows)
+
+@app.route("/api/catalog", methods=["POST"])
+@auth
+def api_add_catalog():
+    d = request.json or {}
+    if not d.get("name"): return jsonify({"ok":False}), 400
+    db_run("INSERT INTO catalog_products (name,price,description,img,available) VALUES (?,?,?,?,?)",
+           (d["name"].strip(), float(d.get("price",0)), d.get("description","").strip(),
+            d.get("img",""), int(d.get("available",1))))
+    return jsonify({"ok": True})
+
+@app.route("/api/catalog/<int:pid>", methods=["PATCH"])
+@auth
+def api_edit_catalog(pid):
+    d = request.json or {}
+    fields, vals = [], []
+    for col in ["name","price","description","img","available"]:
+        if col in d:
+            fields.append(f"{col}=?")
+            vals.append(float(d[col]) if col in ("price",) else int(d[col]) if col=="available" else d[col])
+    if not fields: return jsonify({"ok":False})
+    vals.append(pid)
+    db_run(f"UPDATE catalog_products SET {','.join(fields)} WHERE id=?", vals)
+    return jsonify({"ok": True})
+
+@app.route("/api/catalog/<int:pid>", methods=["DELETE"])
+@auth
+def api_del_catalog(pid):
+    db_run("DELETE FROM catalog_products WHERE id=?", (pid,))
+    return jsonify({"ok": True})
+
+# ══════════════════════════════════════════════════════════════
+# ── Debts API ─────────────────────────────────────────────────
+# ══════════════════════════════════════════════════════════════
+@app.route("/api/debts", methods=["GET"])
+@auth
+def api_get_debts():
+    show_paid = request.args.get("paid","0") == "1"
+    if show_paid:
+        rows = db_get("SELECT * FROM debts ORDER BY paid ASC, created DESC")
+    else:
+        rows = db_get("SELECT * FROM debts WHERE paid=0 ORDER BY created DESC")
+    total_unpaid = db_one("SELECT COALESCE(SUM(amount),0) as t FROM debts WHERE paid=0")
+    return jsonify({"debts": rows, "total_unpaid": float(total_unpaid["t"]) if total_unpaid else 0})
+
+@app.route("/api/debts", methods=["POST"])
+@auth
+def api_add_debt():
+    d = request.json or {}
+    if not d.get("customer_name") or not d.get("amount"):
+        return jsonify({"ok":False,"error":"name and amount required"}), 400
+    date_val = d.get("date", datetime.now().strftime("%d/%m/%Y"))
+    db_run("INSERT INTO debts (customer_name,customer_phone,amount,description,date) VALUES (?,?,?,?,?)",
+           (d["customer_name"].strip(), d.get("customer_phone","").strip(),
+            float(d["amount"]), d.get("description","").strip(), date_val))
+    return jsonify({"ok": True})
+
+@app.route("/api/debts/<int:did>/pay", methods=["POST"])
+@auth
+def api_pay_debt(did):
+    paid_date = datetime.now().strftime("%d/%m/%Y")
+    db_run("UPDATE debts SET paid=1, paid_date=? WHERE id=?", (paid_date, did))
+    return jsonify({"ok": True})
+
+@app.route("/api/debts/<int:did>", methods=["DELETE"])
+@auth
+def api_del_debt(did):
+    db_run("DELETE FROM debts WHERE id=?", (did,))
+    return jsonify({"ok": True})
 
 @app.route("/turso_debug")
 def turso_debug():

@@ -181,6 +181,44 @@ def init_db():
         try:
             conn4=sqlite3.connect(DB_PATH); conn4.execute("ALTER TABLE flowers ADD COLUMN unit TEXT DEFAULT 'وردة'"); conn4.commit(); conn4.close()
         except: pass
+    # Customers, Catalog, Debts tables
+    new_tables = [
+        """CREATE TABLE IF NOT EXISTS customers (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL,
+            phone TEXT,
+            notes TEXT,
+            last_purchase TEXT,
+            total_spent REAL DEFAULT 0,
+            created TEXT DEFAULT (datetime('now')))""",
+        """CREATE TABLE IF NOT EXISTS catalog_products (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL,
+            price REAL NOT NULL,
+            description TEXT,
+            img TEXT,
+            available INTEGER DEFAULT 1,
+            created TEXT DEFAULT (datetime('now')))""",
+        """CREATE TABLE IF NOT EXISTS debts (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            customer_name TEXT NOT NULL,
+            customer_phone TEXT,
+            amount REAL NOT NULL,
+            description TEXT,
+            date TEXT NOT NULL,
+            due_date TEXT,
+            paid INTEGER DEFAULT 0,
+            paid_date TEXT,
+            notified INTEGER DEFAULT 0,
+            created TEXT DEFAULT (datetime('now')))""",
+    ]
+    for sql in new_tables:
+        if USE_TURSO: turso_run(sql)
+        else:
+            try:
+                conn5=sqlite3.connect(DB_PATH); conn5.execute(sql); conn5.commit(); conn5.close()
+            except: pass
+
     # Expenses table
     fixed_sqls = [
         """CREATE TABLE IF NOT EXISTS expenses (

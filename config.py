@@ -49,6 +49,86 @@ def _insights_scheduler():
 _ti = threading.Thread(target=_insights_scheduler, daemon=True)
 _ti.start()
 
+# ── Smart Bot Notifications Scheduler ────────────────────────
+def _notifications_scheduler():
+    time.sleep(60)  # انتظر تهيئة كل شيء
+    last_no_sales_alert = None   # يوم آخر تنبيه "لا مبيعات"
+    last_goal_alert = None       # يوم آخر تنبيه "تجاوزت الهدف"
+    last_debt_check = None       # يوم آخر فحص ديون
+    while True:
+        try:
+            from datetime import timezone
+            from database import db_get, db_one, db_run
+            oman_offset = timedelta(hours=4)
+            now_oman = datetime.now(timezone.utc) + oman_offset
+            today_str = now_oman.strftime("%d/%m/%Y")
+            today_date = now_oman.strftime("%Y-%m-%d")
+
+            # ── 1. تنبيه "لا مبيعات" الساعة 6 مساءً عُمان (18:00) ──
+            if now_oman.hour == 18 and 0 <= now_oman.minute < 10 and last_no_sales_alert != today_date:
+                entries = db_get("SELECT id FROM entries WHERE type='s' AND date=?", (today_str,))
+                if not entries:
+                    token = os.environ.get("BOT_TOKEN","")
+                    chat_id = os.environ.get("OWNER_CHAT_ID","")
+                    if token and chat_id:
+                        try:
+                            requests.post(f"https://api.telegram.org/bot{token}/sendMessage",
+                                json={"chat_id":int(chat_id),"text":"⚠️ <b>تنبيه!</b>\n\nالساعة 6 مساءً ولا توجد مبيعات مسجلة حتى الآن 😟\nهل هناك مبيعات لم تُسجّل؟","parse_mode":"HTML"},
+                                timeout=10)
+                        except: pass
+                    last_no_sales_alert = today_date
+
+            # ── 2. تنبيه "تجاوزت الهدف" ──
+            goal_row = db_one("SELECT value FROM app_settings WHERE key='daily_goal'")
+            if goal_row:
+                try:
+                    goal_val = float(goal_row["value"])
+                    if goal_val > 0 and last_goal_alert != today_date:
+                        entries = db_get("SELECT amt FROM entries WHERE type='s' AND date=? AND shelf_id IS NULL", (today_str,))
+                        total = sum(float(e["amt"]) for e in entries)
+                        if total >= goal_val:
+                            token = os.environ.get("BOT_TOKEN","")
+                            chat_id = os.environ.get("OWNER_CHAT_ID","")
+                            if token and chat_id:
+                                try:
+                                    requests.post(f"https://api.telegram.org/bot{token}/sendMessage",
+                                        json={"chat_id":int(chat_id),"text":f"🎉 <b>تجاوزت الهدف اليومي!</b>\n\n🌸 مبيعات اليوم: {total:,.3f} ر.ع\n🎯 الهدف: {goal_val:,.3f} ر.ع\n\nعمل رائع! 🏆","parse_mode":"HTML"},
+                                        timeout=10)
+                                except: pass
+                            last_goal_alert = today_date
+                except: pass
+
+            # ── 3. تنبيه الديون بعد أسبوع (فحص مرة يومياً الساعة 9 صباحاً) ──
+            if now_oman.hour == 9 and 0 <= now_oman.minute < 10 and last_debt_check != today_date:
+                token = os.environ.get("BOT_TOKEN","")
+                chat_id = os.environ.get("OWNER_CHAT_ID","")
+                if token and chat_id:
+                    try:
+                        week_ago = (now_oman - timedelta(days=7)).strftime("%Y-%m-%d")
+                        overdue = db_get(
+                            "SELECT * FROM debts WHERE paid=0 AND created<=? AND notified=0",
+                            (week_ago,))
+                        for debt in overdue:
+                            msg = (f"💳 <b>تذكير: دين غير مسدد</b>\n\n"
+                                   f"👤 {debt['customer_name']}\n"
+                                   f"💰 {float(debt['amount']):,.3f} ر.ع\n"
+                                   f"📝 {debt.get('description','') or ''}\n"
+                                   f"📅 منذ: {debt.get('date','')}\n\n"
+                                   f"مضى أسبوع — هل تسددّ؟")
+                            requests.post(f"https://api.telegram.org/bot{token}/sendMessage",
+                                json={"chat_id":int(chat_id),"text":msg,"parse_mode":"HTML"},
+                                timeout=10)
+                            db_run("UPDATE debts SET notified=1 WHERE id=?", (debt["id"],))
+                    except: pass
+                last_debt_check = today_date
+
+            time.sleep(300)  # افحص كل 5 دقائق
+        except:
+            time.sleep(300)
+
+_tn = threading.Thread(target=_notifications_scheduler, daemon=True)
+_tn.start()
+
 # ── Config ────────────────────────────────────────────────────
 BOT_TOKEN       = os.environ.get("BOT_TOKEN", "")
 GROQ_KEY        = os.environ.get("GROQ_API_KEY", "")
