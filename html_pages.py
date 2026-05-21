@@ -2700,14 +2700,15 @@ async function shareCatalog(){
   const products = await api('/api/catalog');
   const available = products.filter(p=>p.available);
   if(!available.length){ showToast('⚠️ لا توجد منتجات متاحة'); return; }
-  let msg = '🌸 *فيروز فلورز — كتالوج المنتجات*\n\n';
+  let lines = ['🌸 *فيروز فلورز — كتالوج المنتجات*',''];
   available.forEach((p,i)=>{
-    msg += `${i+1}. *${p.name}* — ${(+p.price).toFixed(3)} ر.ع\n`;
-    if(p.description) msg += `   ${p.description}\n`;
+    lines.push((i+1)+'. *'+p.name+'* — '+(+p.price).toFixed(3)+' ر.ع');
+    if(p.description) lines.push('   '+p.description);
   });
-  msg += '\n📞 للطلب تواصل معنا';
-  const url = `https://wa.me/?text=${encodeURIComponent(msg)}`;
-  window.open(url,'_blank');
+  lines.push('');
+  lines.push('📞 للطلب تواصل معنا');
+  const msg = lines.join('%0A');
+  window.open('https://wa.me/?text='+msg,'_blank');
 }
 
 function initApp(){
