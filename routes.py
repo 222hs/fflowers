@@ -1650,7 +1650,7 @@ def api_del_debt(did):
 # ── Orders API ───────────────────────────────────────────────
 # ══════════════════════════════════════════════════════════════
 @app.route("/api/orders", methods=["GET"])
-@auth
+@worker_auth
 def api_get_orders():
     status = request.args.get("status", "")
     if status:
@@ -1674,7 +1674,7 @@ def api_add_order():
     return jsonify({"ok": True})
 
 @app.route("/api/orders/<int:oid>", methods=["PATCH"])
-@auth
+@worker_auth
 def api_edit_order(oid):
     d = request.json or {}
     fields, vals = [], []
