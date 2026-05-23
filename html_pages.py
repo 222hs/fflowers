@@ -3215,8 +3215,21 @@ body{font-family:'Tajawal',sans-serif;background:#fdf8f2;color:#3d2c24;min-heigh
     <div class="choice-grid g2" id="cat-grid"></div>
 
     <div class="big-field">
-      <label>💰 السعر (ر.ع)</label>
-      <input type="number" id="s-amt" placeholder="0.000" step="0.001" inputmode="decimal"/>
+      <label>💰 سعر القطعة (ر.ع)</label>
+      <input type="number" id="s-amt" placeholder="0.000" step="0.001" inputmode="decimal" oninput="updateSaleTotal()"/>
+    </div>
+
+    <div class="big-field">
+      <label>🔢 الكمية</label>
+      <div style="display:flex;align-items:center;gap:12px;">
+        <button class="qty-btn" style="width:48px;height:48px;font-size:26px;" onclick="adjSaleQty(-1)">−</button>
+        <input class="qty-inp" id="s-qty" type="number" value="1" min="1" inputmode="numeric" style="width:70px;font-size:22px;" oninput="updateSaleTotal()"/>
+        <button class="qty-btn" style="width:48px;height:48px;font-size:26px;" onclick="adjSaleQty(1)">+</button>
+        <div style="flex:1;text-align:left;">
+          <div style="font-size:11px;color:#b09888;">الإجمالي</div>
+          <div style="font-size:18px;font-weight:900;color:#5a8a6a;" id="s-total">—</div>
+        </div>
+      </div>
     </div>
 
     <span class="choice-lbl">💳 طريقة الدفع</span>
@@ -3611,26 +3624,43 @@ function adjQty(i,d){
 }
 
 // ── SUBMIT SALE ──
+function adjSaleQty(d){
+  const inp=document.getElementById('s-qty');
+  inp.value=Math.max(1,(parseInt(inp.value)||1)+d);
+  updateSaleTotal();
+}
+function updateSaleTotal(){
+  const amt=parseFloat(document.getElementById('s-amt').value)||0;
+  const qty=parseInt(document.getElementById('s-qty').value)||1;
+  const el=document.getElementById('s-total');
+  if(el) el.textContent = amt>0 ? (amt*qty).toFixed(3)+' ر.ع' : '—';
+}
+
 async function submitSale(){
-  const amt=parseFloat(document.getElementById('s-amt').value);
-  if(!amt||amt<=0){showToast('⚠️ أدخل السعر');return;}
+  const unitAmt=parseFloat(document.getElementById('s-amt').value);
+  const qty=parseInt(document.getElementById('s-qty').value)||1;
+  if(!unitAmt||unitAmt<=0){showToast('⚠️ أدخل السعر');return;}
   if(!selCat){showToast('⚠️ اختر نوع المنتج');return;}
   if(!selPay_){showToast('⚠️ اختر طريقة الدفع');return;}
+  const totalAmt=unitAmt*qty;
   try{
     const month=new Date().getFullYear()+'-'+String(new Date().getMonth()+1).padStart(2,'0');
+    const desc=qty>1 ? selCat+' ×'+qty : selCat;
     await api('/api/entries',{method:'POST',headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({type:'s',desc:selCat,amt,payment_method:selPay_,category:selCat,month})});
+      body:JSON.stringify({type:'s',desc,amt:totalAmt,payment_method:selPay_,category:selCat,month})});
     document.getElementById('sale-done-txt').textContent='✅ تم تسجيل المبيعة!';
-    document.getElementById('sale-done-sub').textContent=selCat+' — '+fmt(amt)+' ر.ع — '+selPay_;
+    document.getElementById('sale-done-sub').textContent=desc+' — '+fmt(totalAmt)+' ر.ع — '+selPay_;
     document.getElementById('sale-form').style.display='none';
     document.getElementById('sale-done').style.display='block';
-    loadDaySummary();
+    loadDaySummary(); loadCash();
   }catch(e){showToast('❌ خطأ في التسجيل');}
 }
 
 function resetSale(){
   selCat='';selPay_='';
   document.getElementById('s-amt').value='';
+  document.getElementById('s-qty').value='1';
+  document.getElementById('s-total').textContent='—';
   document.querySelectorAll('#sc-sale .choice-btn').forEach(b=>b.classList.remove('sel'));
   document.getElementById('sale-form').style.display='block';
   document.getElementById('sale-done').style.display='none';
