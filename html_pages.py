@@ -2976,6 +2976,18 @@ body{font-family:'Tajawal',sans-serif;background:#fdf8f2;color:#3d2c24;min-heigh
 .nb-flower{background:linear-gradient(135deg,#d4a843,#b8891f);box-shadow:0 6px 24px rgba(212,168,67,.35);}
 .nb-inv{background:linear-gradient(135deg,#9664dc,#7a44c0);box-shadow:0 6px 24px rgba(150,100,220,.35);}
 .nb-shelf{background:linear-gradient(135deg,#3b82f6,#1d4ed8);box-shadow:0 6px 24px rgba(59,130,246,.35);}
+.nb-today{background:linear-gradient(135deg,#f97316,#ea580c);box-shadow:0 6px 24px rgba(249,115,22,.35);}
+
+/* Today sales */
+.today-entry{background:#fff;border:2px solid #f9c8d0;border-radius:14px;padding:12px 14px;display:flex;align-items:center;gap:10px;margin-bottom:8px;}
+.today-entry-info{flex:1;min-width:0;}
+.today-entry-desc{font-size:14px;font-weight:800;color:#3d2c24;}
+.today-entry-meta{font-size:11px;color:#b09888;margin-top:3px;}
+.today-entry-amt{font-size:17px;font-weight:900;color:#5a8a6a;flex-shrink:0;}
+.today-del-btn{width:36px;height:36px;border-radius:10px;border:none;background:#fce4ec;color:#c4566a;font-size:18px;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+.today-total-bar{background:linear-gradient(135deg,#e8f5e9,#c8e6c9);border:2px solid #7aab8a;border-radius:14px;padding:12px 16px;margin-bottom:14px;display:flex;align-items:center;justify-content:space-between;}
+.today-total-lbl{font-size:12px;font-weight:800;color:#5a8a6a;}
+.today-total-val{font-size:22px;font-weight:900;color:#3a6a4a;}
 
 /* Shelf screen */
 .shelf-card{background:#fff;border:2px solid #f9c8d0;border-radius:18px;padding:16px;margin-bottom:10px;display:flex;align-items:center;gap:14px;cursor:pointer;transition:.2s;}
@@ -3150,10 +3162,15 @@ body{font-family:'Tajawal',sans-serif;background:#fdf8f2;color:#3d2c24;min-heigh
       <div class="nb-txt">فاتورة ورد</div>
       <div class="nb-sub">إضافة فاتورة</div>
     </button>
-    <button class="nav-btn nb-shelf" onclick="go('shelf')" style="grid-column:span 2;">
+    <button class="nav-btn nb-shelf" onclick="go('shelf')">
       <div class="nb-ico">🗄️</div>
       <div class="nb-txt">بيع من رف</div>
-      <div class="nb-sub">مبيعات الرفوف المؤجرة</div>
+      <div class="nb-sub">مبيعات الرفوف</div>
+    </button>
+    <button class="nav-btn nb-today" onclick="go('today')">
+      <div class="nb-ico">📋</div>
+      <div class="nb-txt">مبيعات اليوم</div>
+      <div class="nb-sub">عرض وحذف</div>
     </button>
   </div>
 </div>
@@ -3303,6 +3320,19 @@ body{font-family:'Tajawal',sans-serif;background:#fdf8f2;color:#3d2c24;min-heigh
   <div id="w-orders-list" style="display:flex;flex-direction:column;gap:12px;"></div>
 </div>
 
+<!-- TODAY SALES SCREEN -->
+<div class="screen" id="sc-today">
+  <div class="sc-hdr">
+    <div class="sc-back" onclick="go('home')">←</div>
+    <div class="sc-title" style="color:#ea580c;">📋 مبيعات اليوم</div>
+  </div>
+  <div class="today-total-bar">
+    <div class="today-total-lbl">💰 إجمالي اليوم</div>
+    <div class="today-total-val" id="todayTotalVal">—</div>
+  </div>
+  <div id="today-entries-list"></div>
+</div>
+
 <!-- SHELF SCREEN -->
 <div class="screen" id="sc-shelf">
   <div class="sc-hdr">
@@ -3429,6 +3459,7 @@ function go(sc){
   if(sc==='home'){ loadDaySummary(); loadCash(); loadPendingOrders(); }
   if(sc==='flower') loadFlowerTypes();
   if(sc==='orders') loadWorkerOrders();
+  if(sc==='today') loadTodaySales();
   if(sc==='shelf'){ document.getElementById('shelf-done').style.display='none'; document.getElementById('shelf-list-view').style.display='block'; document.getElementById('shelf-products-view').style.display='none'; loadShelves(); }
 }
 
@@ -3738,6 +3769,49 @@ async function cashAdjust(type){
   showToast(type==='in' ? '✅ تمت الإضافة' : '✅ تم السحب');
   openCashModal();
   loadCash();
+}
+
+// ── TODAY SALES ──
+async function loadTodaySales(){
+  try{
+    const today = new Date();
+    const day = String(today.getDate()).padStart(2,'0')+'/'+String(today.getMonth()+1).padStart(2,'0')+'/'+today.getFullYear();
+    const month = today.getFullYear()+'-'+String(today.getMonth()+1).padStart(2,'0');
+    const d = await api('/api/entries?month='+month);
+    const sales = (d.sales||[]).filter(e=>e.date===day);
+    const total = sales.reduce((a,e)=>a+(+e.amt),0);
+    document.getElementById('todayTotalVal').textContent = total.toFixed(3)+' ر.ع';
+    const el = document.getElementById('today-entries-list');
+    if(!sales.length){
+      el.innerHTML='<div style="text-align:center;padding:40px;color:#b09888;font-size:15px;">لا توجد مبيعات مسجلة اليوم</div>';
+      return;
+    }
+    el.innerHTML = sales.map(e=>{
+      const pay = e.payment_method ? ' — '+e.payment_method : '';
+      const shelf = e.shelf_id ? ' 🗄️' : '';
+      const time = e.sale_time || '';
+      return `<div class="today-entry" id="te-${e.id}">
+        <div class="today-entry-info">
+          <div class="today-entry-desc">${e.desc}${shelf}</div>
+          <div class="today-entry-meta">${time}${pay}</div>
+        </div>
+        <div class="today-entry-amt">+${(+e.amt).toFixed(3)}</div>
+        <button class="today-del-btn" onclick="deleteTodayEntry(${e.id},this)" title="حذف">🗑️</button>
+      </div>`;
+    }).join('');
+  }catch(err){ showToast('❌ تعذر التحميل'); }
+}
+
+async function deleteTodayEntry(id, btn){
+  if(!confirm('حذف هذه المبيعة؟')) return;
+  btn.disabled=true; btn.textContent='⏳';
+  try{
+    await api('/api/entries/'+id, {method:'DELETE'});
+    const row = document.getElementById('te-'+id);
+    if(row){ row.style.opacity='0'; row.style.transition='opacity .3s'; setTimeout(()=>{row.remove(); loadTodaySales();},350); }
+    loadDaySummary();
+    showToast('🗑️ تم الحذف');
+  }catch(e){ showToast('❌ فشل الحذف'); btn.disabled=false; btn.textContent='🗑️'; }
 }
 
 // ── SHELF SALE ──
