@@ -3092,6 +3092,23 @@ body{font-family:'Tajawal',sans-serif;background:#fdf8f2;color:#3d2c24;min-heigh
 .cash-log-amt{font-size:15px;font-weight:900;flex-shrink:0;}
 .cash-in{color:#5a8a6a;}
 .cash-out{color:#c4566a;}
+
+/* Calculator */
+.calc-header-btn{background:#f0f4ff;border:1px solid #c7d7f9;border-radius:10px;font-size:20px;width:38px;height:38px;cursor:pointer;display:flex;align-items:center;justify-content:center;}
+.calc-modal{position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:300;display:flex;align-items:flex-end;}
+.calc-inner{background:#fff;border-radius:28px 28px 0 0;width:100%;padding:16px 12px 32px;}
+.calc-screen{background:#1a1a2e;border-radius:18px;padding:16px 20px;margin-bottom:14px;min-height:84px;display:flex;flex-direction:column;align-items:flex-end;justify-content:flex-end;overflow:hidden;}
+.calc-expr{font-size:14px;color:#6a7ab0;min-height:20px;word-break:break-all;text-align:right;}
+.calc-result{font-size:38px;font-weight:900;color:#fff;line-height:1.1;word-break:break-all;text-align:right;}
+.calc-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;}
+.ck{border:none;border-radius:16px;font-family:'Tajawal',sans-serif;font-size:22px;font-weight:900;padding:18px 8px;cursor:pointer;transition:transform .1s;-webkit-appearance:none;}
+.ck:active{transform:scale(.93);}
+.ck-num{background:#f5f0eb;color:#3d2c24;}
+.ck-op{background:#fce4ec;color:#c4566a;}
+.ck-eq{background:linear-gradient(135deg,#7aab8a,#5a8a6a);color:#fff;box-shadow:0 4px 16px rgba(90,138,106,.35);}
+.ck-clr{background:#fce4ec;color:#c4566a;font-size:16px;}
+.ck-zero{grid-column:span 2;}
+.calc-use-btn{width:100%;margin-top:10px;padding:13px;background:#eff6ff;border:2px solid #3b82f6;border-radius:14px;color:#1d4ed8;font-family:'Tajawal',sans-serif;font-size:14px;font-weight:800;cursor:pointer;}
 </style>
 </head>
 <body>
@@ -3104,7 +3121,10 @@ body{font-family:'Tajawal',sans-serif;background:#fdf8f2;color:#3d2c24;min-heigh
       <div class="wh-sub">واجهة العامل</div>
     </div>
   </div>
-  <button class="logout-w" onclick="location.href='/worker-logout'">خروج 🔒</button>
+  <div style="display:flex;gap:8px;align-items:center;">
+    <button class="calc-header-btn" onclick="openCalc()" title="آلة حاسبة">🧮</button>
+    <button class="logout-w" onclick="location.href='/worker-logout'">خروج 🔒</button>
+  </div>
 </div>
 
 <!-- HOME -->
@@ -3410,6 +3430,44 @@ body{font-family:'Tajawal',sans-serif;background:#fdf8f2;color:#3d2c24;min-heigh
     <!-- السجل -->
     <div style="font-size:11px;font-weight:800;color:#b09888;letter-spacing:1px;margin-bottom:10px;">آخر العمليات</div>
     <div id="cashLogList"></div>
+  </div>
+</div>
+
+<!-- CALCULATOR MODAL -->
+<div class="calc-modal" id="calcModal" style="display:none;" onclick="closeCalcOutside(event)">
+  <div class="calc-inner">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+      <div style="font-size:17px;font-weight:900;color:#3d2c24;">🧮 الآلة الحاسبة</div>
+      <button onclick="closeCalc()" style="background:#f5ede0;border:none;border-radius:10px;padding:6px 14px;font-size:13px;cursor:pointer;font-family:'Tajawal',sans-serif;font-weight:700;">إغلاق</button>
+    </div>
+    <div class="calc-screen">
+      <div class="calc-expr" id="calcExpr"></div>
+      <div class="calc-result" id="calcResult">0</div>
+    </div>
+    <div class="calc-grid">
+      <button class="ck ck-clr" onclick="calcClear()">مسح</button>
+      <button class="ck ck-clr" onclick="calcDel()">⌫</button>
+      <button class="ck ck-clr" onclick="calcPercent()">%</button>
+      <button class="ck ck-op"  onclick="calcOp('÷')">÷</button>
+      <button class="ck ck-num" onclick="calcNum('7')">7</button>
+      <button class="ck ck-num" onclick="calcNum('8')">8</button>
+      <button class="ck ck-num" onclick="calcNum('9')">9</button>
+      <button class="ck ck-op"  onclick="calcOp('×')">×</button>
+      <button class="ck ck-num" onclick="calcNum('4')">4</button>
+      <button class="ck ck-num" onclick="calcNum('5')">5</button>
+      <button class="ck ck-num" onclick="calcNum('6')">6</button>
+      <button class="ck ck-op"  onclick="calcOp('−')">−</button>
+      <button class="ck ck-num" onclick="calcNum('1')">1</button>
+      <button class="ck ck-num" onclick="calcNum('2')">2</button>
+      <button class="ck ck-num" onclick="calcNum('3')">3</button>
+      <button class="ck ck-op"  onclick="calcOp('+')">+</button>
+      <button class="ck ck-num ck-zero" onclick="calcNum('0')">0</button>
+      <button class="ck ck-num" onclick="calcDot()">.</button>
+      <button class="ck ck-eq"  onclick="calcEquals()">=</button>
+    </div>
+    <button class="calc-use-btn" onclick="useCalcResult()" id="calcUseBtn" style="display:none;">
+      ← استخدم الناتج في حقل السعر
+    </button>
   </div>
 </div>
 
@@ -3988,6 +4046,89 @@ async function workerDoneOrder(id, btn){
   showToast('✅ تم تسجيل الطلب كمنجز!');
   btn.closest('div[style]').style.opacity='0.4';
   setTimeout(()=>{ loadWorkerOrders(); loadPendingOrders(); }, 1200);
+}
+
+// ── CALCULATOR ──
+let calcExpr_ = '';
+let calcCurrent_ = '0';
+let calcJustEvaled_ = false;
+
+function openCalc(){
+  document.getElementById('calcModal').style.display='flex';
+  // إذا كان في حقل سعر مفتوح، أظهر زر الاستخدام
+  const activeAmt = document.querySelector('.screen.on #s-amt, .screen.on #b-amt, .screen.on #sh-amt');
+  document.getElementById('calcUseBtn').style.display = activeAmt ? 'block' : 'none';
+}
+function closeCalc(){ document.getElementById('calcModal').style.display='none'; }
+function closeCalcOutside(e){ if(e.target===document.getElementById('calcModal')) closeCalc(); }
+
+function calcRender(){
+  document.getElementById('calcExpr').textContent = calcExpr_;
+  document.getElementById('calcResult').textContent = calcCurrent_;
+}
+
+function calcNum(n){
+  if(calcJustEvaled_){ calcExpr_=''; calcCurrent_='0'; calcJustEvaled_=false; }
+  if(calcCurrent_==='0' && n!=='.') calcCurrent_=n;
+  else if(calcCurrent_.length < 12) calcCurrent_+=n;
+  calcRender();
+}
+
+function calcDot(){
+  if(calcJustEvaled_){ calcExpr_=''; calcCurrent_='0'; calcJustEvaled_=false; }
+  if(!calcCurrent_.includes('.')) calcCurrent_+='.';
+  calcRender();
+}
+
+function calcOp(op){
+  calcJustEvaled_=false;
+  if(calcExpr_ && !['÷','×','−','+'].includes(calcExpr_.slice(-1))){
+    calcEval_();
+    calcExpr_=calcCurrent_+' '+op+' ';
+  } else {
+    calcExpr_=calcCurrent_+' '+op+' ';
+  }
+  calcCurrent_='0';
+  calcRender();
+}
+
+function calcEval_(){
+  if(!calcExpr_) return;
+  try{
+    const expr = calcExpr_.replace(/÷/g,'/').replace(/×/g,'*').replace(/−/g,'-') + calcCurrent_;
+    const res = Function('"use strict"; return ('+expr+')')();
+    calcCurrent_ = isFinite(res) ? (+res.toFixed(6)).toString() : '0';
+  }catch(e){ calcCurrent_='0'; }
+}
+
+function calcEquals(){
+  if(!calcExpr_) return;
+  calcEval_();
+  calcExpr_='';
+  calcJustEvaled_=true;
+  calcRender();
+}
+
+function calcClear(){ calcExpr_=''; calcCurrent_='0'; calcJustEvaled_=false; calcRender(); }
+
+function calcDel(){
+  if(calcJustEvaled_){ calcClear(); return; }
+  calcCurrent_ = calcCurrent_.length>1 ? calcCurrent_.slice(0,-1) : '0';
+  calcRender();
+}
+
+function calcPercent(){
+  const v = parseFloat(calcCurrent_);
+  if(!isNaN(v)) calcCurrent_ = (v/100).toFixed(6).replace(/\.?0+$/,'');
+  calcRender();
+}
+
+function useCalcResult(){
+  const v = parseFloat(calcCurrent_);
+  if(isNaN(v)){ showToast('⚠️ لا يوجد ناتج'); return; }
+  const activeAmt = document.querySelector('.screen.on #s-amt, .screen.on #b-amt, .screen.on #sh-amt');
+  if(activeAmt){ activeAmt.value = v.toFixed(3); showToast('✅ تم نقل الناتج'); }
+  closeCalc();
 }
 
 // Init
