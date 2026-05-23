@@ -2975,6 +2975,22 @@ body{font-family:'Tajawal',sans-serif;background:#fdf8f2;color:#3d2c24;min-heigh
 .nb-buy{background:linear-gradient(135deg,#e8798a,#c4566a);box-shadow:0 6px 24px rgba(232,121,138,.35);}
 .nb-flower{background:linear-gradient(135deg,#d4a843,#b8891f);box-shadow:0 6px 24px rgba(212,168,67,.35);}
 .nb-inv{background:linear-gradient(135deg,#9664dc,#7a44c0);box-shadow:0 6px 24px rgba(150,100,220,.35);}
+.nb-shelf{background:linear-gradient(135deg,#3b82f6,#1d4ed8);box-shadow:0 6px 24px rgba(59,130,246,.35);}
+
+/* Shelf screen */
+.shelf-card{background:#fff;border:2px solid #f9c8d0;border-radius:18px;padding:16px;margin-bottom:10px;display:flex;align-items:center;gap:14px;cursor:pointer;transition:.2s;}
+.shelf-card:active{transform:scale(.97);}
+.shelf-card-dot{width:16px;height:16px;border-radius:50%;flex-shrink:0;}
+.shelf-card-name{font-size:17px;font-weight:900;color:#3d2c24;flex:1;}
+.shelf-card-count{font-size:12px;color:#b09888;}
+.shelf-card-arrow{font-size:20px;color:#b09888;}
+.prod-card{background:#fff;border:2px solid #f9c8d0;border-radius:16px;padding:14px;margin-bottom:8px;cursor:pointer;transition:.2s;}
+.prod-card:active{transform:scale(.97);}
+.prod-card.sel{border-color:#3b82f6;background:#eff6ff;}
+.prod-card-top{display:flex;align-items:center;justify-content:space-between;}
+.prod-card-name{font-size:15px;font-weight:800;color:#3d2c24;}
+.prod-card-price{font-size:18px;font-weight:900;color:#5a8a6a;}
+.prod-card-qty{font-size:11px;color:#b09888;margin-top:3px;}
 
 /* Screen header */
 .sc-hdr{display:flex;align-items:center;gap:12px;margin-bottom:20px;}
@@ -3134,6 +3150,11 @@ body{font-family:'Tajawal',sans-serif;background:#fdf8f2;color:#3d2c24;min-heigh
       <div class="nb-txt">فاتورة ورد</div>
       <div class="nb-sub">إضافة فاتورة</div>
     </button>
+    <button class="nav-btn nb-shelf" onclick="go('shelf')" style="grid-column:span 2;">
+      <div class="nb-ico">🗄️</div>
+      <div class="nb-txt">بيع من رف</div>
+      <div class="nb-sub">مبيعات الرفوف المؤجرة</div>
+    </button>
   </div>
 </div>
 
@@ -3282,6 +3303,59 @@ body{font-family:'Tajawal',sans-serif;background:#fdf8f2;color:#3d2c24;min-heigh
   <div id="w-orders-list" style="display:flex;flex-direction:column;gap:12px;"></div>
 </div>
 
+<!-- SHELF SCREEN -->
+<div class="screen" id="sc-shelf">
+  <div class="sc-hdr">
+    <div class="sc-back" id="shelfBack" onclick="shelfGoBack()">←</div>
+    <div class="sc-title" style="color:#1d4ed8;" id="shelfTitle">🗄️ بيع من رف</div>
+  </div>
+
+  <!-- بطاقة النجاح -->
+  <div class="done-card" id="shelf-done">
+    <div class="done-ico">✅</div>
+    <div class="done-txt" id="shelf-done-txt">تم تسجيل المبيعة!</div>
+    <div class="done-sub" id="shelf-done-sub"></div>
+    <button class="done-again" onclick="resetShelf()">➕ بيعة أخرى من رف</button>
+  </div>
+
+  <!-- قائمة الرفوف -->
+  <div id="shelf-list-view">
+    <div id="shelf-list" style="display:flex;flex-direction:column;gap:0;"></div>
+  </div>
+
+  <!-- قائمة المنتجات -->
+  <div id="shelf-products-view" style="display:none;">
+    <div id="shelf-prods-list" style="margin-bottom:14px;"></div>
+
+    <!-- السعر -->
+    <div class="big-field" id="shelf-price-field" style="display:none;">
+      <label>💰 السعر (ر.ع)</label>
+      <input type="number" id="sh-amt" placeholder="0.000" step="0.001" inputmode="decimal"/>
+    </div>
+
+    <!-- الكمية -->
+    <div class="big-field" id="shelf-qty-field" style="display:none;">
+      <label>🔢 الكمية</label>
+      <div style="display:flex;align-items:center;gap:12px;">
+        <button class="qty-btn" style="width:48px;height:48px;font-size:26px;" onclick="adjShelfQty(-1)">−</button>
+        <input class="qty-inp" id="sh-qty" type="number" value="1" min="1" inputmode="numeric" style="width:70px;font-size:22px;"/>
+        <button class="qty-btn" style="width:48px;height:48px;font-size:26px;" onclick="adjShelfQty(1)">+</button>
+        <div style="font-size:13px;color:#b09888;" id="sh-stock-lbl"></div>
+      </div>
+    </div>
+
+    <!-- طريقة الدفع -->
+    <span class="choice-lbl" id="shelf-pay-lbl" style="display:none;">💳 طريقة الدفع</span>
+    <div class="choice-grid g3" id="shelf-pay-grid" style="display:none;">
+      <button class="choice-btn" style="--sel-clr:#5a8a6a;--sel-bg:#e8f5e9;" data-spay="كاش 💵" onclick="selShelfPay(this)"><div class="cb-ico">💵</div>كاش</button>
+      <button class="choice-btn" style="--sel-clr:#4a7ab0;--sel-bg:#e3f2fd;" data-spay="فيزا 💳" onclick="selShelfPay(this)"><div class="cb-ico">💳</div>فيزا</button>
+      <button class="choice-btn" style="--sel-clr:#7a44c0;--sel-bg:#f3e5ff;" data-spay="تحويل 🏦" onclick="selShelfPay(this)"><div class="cb-ico">🏦</div>تحويل</button>
+    </div>
+
+    <button class="sub-btn" id="sh-sub-btn" style="display:none;background:linear-gradient(135deg,#3b82f6,#1d4ed8);color:#fff;box-shadow:0 6px 24px rgba(59,130,246,.4);" onclick="submitShelfSale()">✅ تسجيل البيعة</button>
+  </div>
+</div>
+
 <!-- CASH MODAL -->
 <div class="cash-modal" id="cashModal" style="display:none;" onclick="closeCashModal(event)">
   <div class="cash-modal-inner">
@@ -3355,6 +3429,7 @@ function go(sc){
   if(sc==='home'){ loadDaySummary(); loadCash(); loadPendingOrders(); }
   if(sc==='flower') loadFlowerTypes();
   if(sc==='orders') loadWorkerOrders();
+  if(sc==='shelf'){ document.getElementById('shelf-done').style.display='none'; document.getElementById('shelf-list-view').style.display='block'; document.getElementById('shelf-products-view').style.display='none'; loadShelves(); }
 }
 
 function showToast(msg,ms=3000){
@@ -3663,6 +3738,130 @@ async function cashAdjust(type){
   showToast(type==='in' ? '✅ تمت الإضافة' : '✅ تم السحب');
   openCashModal();
   loadCash();
+}
+
+// ── SHELF SALE ──
+let shelfSelProd = null;
+let shelfSelPay_ = '';
+let shelfShelves = [];
+
+async function loadShelves(){
+  try{
+    const d = await api('/api/shelves');
+    shelfShelves = d.shelves || [];
+    const el = document.getElementById('shelf-list');
+    if(!shelfShelves.length){
+      el.innerHTML = '<div style="text-align:center;padding:40px;color:#b09888;">لا توجد رفوف مسجلة</div>';
+      return;
+    }
+    el.innerHTML = shelfShelves.map(s => `
+      <div class="shelf-card" onclick="openShelfProducts(${s.id},'${s.name}','${s.color||'#e8547a'}')">
+        <div class="shelf-card-dot" style="background:${s.color||'#e8547a'};"></div>
+        <div style="flex:1;">
+          <div class="shelf-card-name">${s.name}</div>
+          <div class="shelf-card-count">${(s.products||[]).length} منتج</div>
+        </div>
+        <div class="shelf-card-arrow">←</div>
+      </div>`).join('');
+  }catch(e){showToast('❌ تعذر تحميل الرفوف');}
+}
+
+function openShelfProducts(sid, sname, scolor){
+  const shelf = shelfShelves.find(s=>s.id===sid);
+  if(!shelf) return;
+  const prods = shelf.products || [];
+  document.getElementById('shelf-list-view').style.display = 'none';
+  document.getElementById('shelf-products-view').style.display = 'block';
+  document.getElementById('shelfTitle').textContent = '🗄️ ' + sname;
+  shelfSelProd = null; shelfSelPay_ = '';
+  const hide = id => { const e=document.getElementById(id); if(e) e.style.display='none'; };
+  hide('shelf-price-field'); hide('shelf-qty-field');
+  hide('shelf-pay-lbl'); hide('shelf-pay-grid'); hide('sh-sub-btn');
+  document.querySelectorAll('[data-spay]').forEach(b=>b.classList.remove('sel'));
+  if(!prods.length){
+    document.getElementById('shelf-prods-list').innerHTML = '<div style="text-align:center;padding:30px;color:#b09888;">لا توجد منتجات في هذا الرف</div>';
+    return;
+  }
+  document.getElementById('shelf-prods-list').innerHTML = prods.map(p=>`
+    <div class="prod-card" id="prod-${p.id}" onclick="selectProd(${p.id},${p.price},${p.qty},'${p.name.replace(/'/g,"\\'")}')">
+      <div class="prod-card-top">
+        <div class="prod-card-name">${p.name}</div>
+        <div class="prod-card-price">${(+p.price).toFixed(3)} ر.ع</div>
+      </div>
+      <div class="prod-card-qty">المخزون: ${p.qty} قطعة</div>
+    </div>`).join('');
+}
+
+function shelfGoBack(){
+  const pv = document.getElementById('shelf-products-view');
+  const lv = document.getElementById('shelf-list-view');
+  if(pv.style.display !== 'none'){
+    pv.style.display = 'none';
+    lv.style.display = 'block';
+    document.getElementById('shelfTitle').textContent = '🗄️ بيع من رف';
+  } else {
+    go('home');
+  }
+}
+
+function selectProd(pid, price, qty, name){
+  shelfSelProd = {id:pid, price, qty, name};
+  document.querySelectorAll('.prod-card').forEach(c=>c.classList.remove('sel'));
+  const card = document.getElementById('prod-'+pid);
+  if(card) card.classList.add('sel');
+  // إظهار السعر والكمية وطريقة الدفع
+  const show = id => { const e=document.getElementById(id); if(e) e.style.display=''; };
+  show('shelf-price-field'); show('shelf-qty-field');
+  show('shelf-pay-lbl'); show('shelf-pay-grid'); show('sh-sub-btn');
+  document.getElementById('sh-amt').value = price.toFixed(3);
+  document.getElementById('sh-qty').value = '1';
+  document.getElementById('sh-stock-lbl').textContent = qty > 0 ? ('متوفر: '+qty) : '⚠️ نفد المخزون';
+  document.getElementById('sh-amt').scrollIntoView({behavior:'smooth',block:'center'});
+}
+
+function adjShelfQty(d){
+  const inp = document.getElementById('sh-qty');
+  const max = shelfSelProd ? shelfSelProd.qty : 999;
+  const v = Math.min(max, Math.max(1, (parseInt(inp.value)||1)+d));
+  inp.value = v;
+}
+
+function selShelfPay(el){
+  shelfSelPay_ = el.dataset.spay;
+  document.querySelectorAll('[data-spay]').forEach(b=>b.classList.remove('sel'));
+  el.classList.add('sel');
+}
+
+async function submitShelfSale(){
+  if(!shelfSelProd){ showToast('⚠️ اختر منتجاً'); return; }
+  if(!shelfSelPay_){ showToast('⚠️ اختر طريقة الدفع'); return; }
+  const qty = parseInt(document.getElementById('sh-qty').value)||1;
+  const amt = parseFloat(document.getElementById('sh-amt').value);
+  if(!amt||amt<=0){ showToast('⚠️ السعر غير صحيح'); return; }
+  const btn = document.getElementById('sh-sub-btn');
+  btn.disabled=true; btn.textContent='⏳ جاري التسجيل...';
+  try{
+    const d = await api('/api/shelf_products/'+shelfSelProd.id+'/sell',{
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({qty, payment_method:shelfSelPay_})
+    });
+    if(!d.ok){ showToast('❌ فشل التسجيل'); btn.disabled=false; btn.textContent='✅ تسجيل البيعة'; return; }
+    document.getElementById('shelf-done-txt').textContent = '✅ تم تسجيل المبيعة!';
+    document.getElementById('shelf-done-sub').textContent = shelfSelProd.name+' × '+qty+' — '+(+d.total).toFixed(3)+' ر.ع — '+shelfSelPay_;
+    document.getElementById('shelf-products-view').style.display='none';
+    document.getElementById('shelf-list-view').style.display='none';
+    document.getElementById('shelf-done').style.display='block';
+    loadDaySummary(); loadCash();
+  }catch(e){ showToast('❌ خطأ في الاتصال'); }
+  btn.disabled=false; btn.textContent='✅ تسجيل البيعة';
+}
+
+function resetShelf(){
+  document.getElementById('shelf-done').style.display='none';
+  document.getElementById('shelf-list-view').style.display='block';
+  document.getElementById('shelf-products-view').style.display='none';
+  document.getElementById('shelfTitle').textContent='🗄️ بيع من رف';
+  loadShelves();
 }
 
 // ── PENDING ORDERS ──
