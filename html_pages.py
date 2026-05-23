@@ -3077,13 +3077,25 @@ body{font-family:'Tajawal',sans-serif;background:#fdf8f2;color:#3d2c24;min-heigh
 .cash-box-sub{font-size:11px;color:#c4960a;margin-top:2px;}
 .cash-box-btn{padding:8px 12px;background:#f5c842;border:none;border-radius:10px;font-family:'Tajawal',sans-serif;font-size:12px;font-weight:800;color:#5a3a00;cursor:pointer;flex-shrink:0;}
 
-/* Pending orders badge */
-.orders-alert{background:linear-gradient(135deg,#fff5f0,#ffe8e0);border:2px solid #f9a88a;border-radius:16px;padding:12px 14px;margin-bottom:12px;display:flex;align-items:center;gap:10px;cursor:pointer;}
-.orders-alert-ico{font-size:28px;flex-shrink:0;}
-.orders-alert-txt{flex:1;}
-.orders-alert-title{font-size:14px;font-weight:900;color:#c4566a;}
-.orders-alert-sub{font-size:11px;color:#b09888;margin-top:2px;}
-.orders-alert-count{font-size:22px;font-weight:900;color:#c4566a;flex-shrink:0;}
+/* Orders widget */
+.ord-widget{margin-bottom:14px;cursor:pointer;-webkit-tap-highlight-color:transparent;}
+.ord-widget-empty{background:#f0fdf4;border:2px solid #86efac;border-radius:18px;padding:14px 16px;display:flex;align-items:center;gap:12px;}
+.ord-widget-empty-ico{font-size:28px;}
+.ord-widget-empty-txt{font-size:14px;font-weight:800;color:#16a34a;}
+.ord-widget-active{border-radius:20px;overflow:hidden;box-shadow:0 6px 28px rgba(220,38,38,.22);}
+.ord-widget-top{background:linear-gradient(135deg,#ef4444,#b91c1c);padding:14px 16px;display:flex;align-items:center;gap:12px;position:relative;}
+.ord-pulse{position:absolute;inset:0;border-radius:20px 20px 0 0;animation:ordPulse 2s ease-in-out infinite;}
+@keyframes ordPulse{0%,100%{box-shadow:inset 0 0 0 0 rgba(255,255,255,.15);}50%{box-shadow:inset 0 0 0 6px rgba(255,255,255,.08);}}
+.ord-badge{width:52px;height:52px;background:rgba(255,255,255,.2);border-radius:50%;display:flex;align-items:center;justify-content:center;flex-shrink:0;border:2px solid rgba(255,255,255,.4);}
+.ord-badge-num{font-size:24px;font-weight:900;color:#fff;}
+.ord-top-info{flex:1;}
+.ord-top-title{font-size:15px;font-weight:900;color:#fff;}
+.ord-top-sub{font-size:11px;color:rgba(255,255,255,.8);margin-top:2px;}
+.ord-top-arr{font-size:22px;color:rgba(255,255,255,.8);flex-shrink:0;}
+.ord-preview{background:#fff;border-top:none;padding:12px 16px 14px;display:flex;gap:10px;align-items:flex-start;border:2px solid #fca5a5;border-top:none;border-radius:0 0 20px 20px;}
+.ord-preview-tag{background:#fef2f2;border:1px solid #fca5a5;border-radius:8px;padding:4px 8px;font-size:10px;font-weight:800;color:#dc2626;white-space:nowrap;flex-shrink:0;}
+.ord-preview-name{font-size:14px;font-weight:900;color:#1e293b;}
+.ord-preview-desc{font-size:12px;color:#64748b;margin-top:2px;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;}
 
 /* Cash log modal */
 .cash-modal{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:200;display:flex;align-items:flex-end;}
@@ -3159,15 +3171,8 @@ body{font-family:'Tajawal',sans-serif;background:#fdf8f2;color:#3d2c24;min-heigh
     <button class="cash-box-btn" onclick="openCashModal()" data-i18n="cash_log">السجل ←</button>
   </div>
 
-  <!-- الطلبات المعلقة -->
-  <div class="orders-alert" id="ordersAlert" onclick="go('orders')" style="display:none;">
-    <div class="orders-alert-ico">📋</div>
-    <div class="orders-alert-txt">
-      <div class="orders-alert-title" data-i18n="orders_pending">طلبات تنتظر التنفيذ</div>
-      <div class="orders-alert-sub" data-i18n="tap_details">اضغط لعرض التفاصيل</div>
-    </div>
-    <div class="orders-alert-count" id="ordersAlertCount">0</div>
-  </div>
+  <!-- ويدجت الطلبات -->
+  <div class="ord-widget" id="ordWidget" onclick="go('orders')"></div>
 
   <!-- إجمالي اليوم -->
   <div class="day-bar" id="dayBar">
@@ -4258,16 +4263,49 @@ function resetShelf(){
   loadShelves();
 }
 
-// ── PENDING ORDERS ──
+// ── PENDING ORDERS WIDGET ──
 async function loadPendingOrders(){
+  const el = document.getElementById('ordWidget');
+  if(!el) return;
   try{
     const d = await api('/api/orders?status=pending');
-    const count = (d.orders||[]).length;
-    const alertEl = document.getElementById('ordersAlert');
-    const countEl = document.getElementById('ordersAlertCount');
-    if(alertEl) alertEl.style.display = count > 0 ? 'flex' : 'none';
-    if(countEl) countEl.textContent = count;
-  }catch(e){}
+    const orders = d.orders || [];
+    const count = orders.length;
+    if(count === 0){
+      el.innerHTML = `
+        <div class="ord-widget-empty">
+          <div class="ord-widget-empty-ico">✅</div>
+          <div class="ord-widget-empty-txt" data-i18n="no_orders">${t('no_orders')}</div>
+        </div>`;
+      return;
+    }
+    const first = orders[0];
+    const subtitle = count===1 ? t('tap_details') : `${count-1} ${curLang==='bn'?'আরো':'more'} ...`;
+    el.innerHTML = `
+      <div class="ord-widget-active">
+        <div class="ord-widget-top">
+          <div class="ord-pulse"></div>
+          <div class="ord-badge"><div class="ord-badge-num">${count}</div></div>
+          <div class="ord-top-info">
+            <div class="ord-top-title" data-i18n="orders_pending">${t('orders_pending')}</div>
+            <div class="ord-top-sub">${subtitle}</div>
+          </div>
+          <div class="ord-top-arr">→</div>
+        </div>
+        <div class="ord-preview">
+          <div style="flex:1;min-width:0;">
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">
+              <div class="ord-preview-tag">#${first.id}</div>
+              <div class="ord-preview-name">👤 ${first.customer_name}</div>
+            </div>
+            <div class="ord-preview-desc">${first.description||''}</div>
+          </div>
+          ${first.price&&+first.price>0?`<div style="font-size:16px;font-weight:900;color:#16a34a;flex-shrink:0;">${(+first.price).toFixed(3)}<br><span style="font-size:10px;">OMR</span></div>`:''}
+        </div>
+      </div>`;
+  }catch(e){
+    el.innerHTML='';
+  }
 }
 
 async function loadWorkerOrders(){
