@@ -2990,11 +2990,11 @@ body{font-family:'Tajawal',sans-serif;background:#fdf8f2;color:#3d2c24;min-heigh
 .today-total-val{font-size:22px;font-weight:900;color:#3a6a4a;}
 
 /* Shelf screen */
-.shelf-card{background:#fff;border:2px solid #f9c8d0;border-radius:18px;padding:16px;margin-bottom:10px;display:flex;align-items:center;gap:14px;cursor:pointer;transition:.2s;}
+.shelf-card{background:#fff;border:1.5px solid #f0e0e8;border-radius:18px;padding:14px;margin-bottom:10px;display:flex;align-items:center;gap:14px;cursor:pointer;transition:.2s;box-shadow:0 2px 12px rgba(0,0,0,.06);}
 .shelf-card:active{transform:scale(.97);}
-.shelf-card-dot{width:16px;height:16px;border-radius:50%;flex-shrink:0;}
-.shelf-card-name{font-size:17px;font-weight:900;color:#3d2c24;flex:1;}
-.shelf-card-count{font-size:12px;color:#b09888;}
+.shelf-card-name{font-size:17px;font-weight:900;color:#3d2c24;}
+.shelf-card-count{font-size:11px;color:#b09888;margin-top:3px;}
+.shelf-card-arrow{font-size:20px;color:#c4566a;flex-shrink:0;}
 .shelf-card-arrow{font-size:20px;color:#b09888;}
 .prod-card{background:#fff;border:2px solid #f9c8d0;border-radius:16px;padding:14px;margin-bottom:8px;cursor:pointer;transition:.2s;}
 .prod-card:active{transform:scale(.97);}
@@ -3020,11 +3020,15 @@ body{font-family:'Tajawal',sans-serif;background:#fdf8f2;color:#3d2c24;min-heigh
 .choice-grid{display:grid;gap:10px;margin-bottom:16px;}
 .choice-grid.g2{grid-template-columns:1fr 1fr;}
 .choice-grid.g3{grid-template-columns:1fr 1fr 1fr;}
-.choice-btn{border:2px solid #f9c8d0;border-radius:16px;background:#fff;padding:12px 8px;cursor:pointer;font-family:'Tajawal',sans-serif;font-size:13px;font-weight:800;color:#7a6458;display:flex;flex-direction:column;align-items:center;gap:7px;transition:.2s;-webkit-appearance:none;}
+.choice-btn{border:2px solid transparent;border-radius:18px;background:#fff;padding:0;cursor:pointer;font-family:'Tajawal',sans-serif;font-size:12px;font-weight:800;color:#3d2c24;display:flex;flex-direction:column;align-items:center;gap:0;transition:.2s;-webkit-appearance:none;overflow:hidden;box-shadow:0 2px 10px rgba(0,0,0,.08);}
 .choice-btn .cb-ico{font-size:28px;}
-.choice-btn .cb-img{width:54px;height:54px;border-radius:12px;object-fit:cover;display:block;background:#f5ede0;}
-.choice-btn.sel{border-color:var(--sel-clr,#e8798a);background:var(--sel-bg,#fce4ec);color:var(--sel-clr,#c4566a);}
-.choice-btn.sel .cb-img{box-shadow:0 0 0 3px var(--sel-clr,#e8798a);}
+.cb-card-img{width:100%;height:72px;display:flex;align-items:center;justify-content:center;font-size:36px;flex-shrink:0;}
+.cb-card-lbl{width:100%;padding:7px 4px;text-align:center;font-size:11px;font-weight:800;background:#fff;color:#3d2c24;line-height:1.2;}
+.choice-btn.sel{border-color:var(--sel-clr,#e8798a);box-shadow:0 0 0 3px var(--sel-clr,#e8798a),0 4px 16px rgba(0,0,0,.15);}
+.choice-btn.sel .cb-card-lbl{background:var(--sel-bg,#fce4ec);color:var(--sel-clr,#c4566a);}
+/* Pay method buttons keep old style */
+.pay-btn{border:2px solid #f9c8d0;border-radius:16px;background:#fff;padding:12px 8px;cursor:pointer;font-family:'Tajawal',sans-serif;font-size:13px;font-weight:800;color:#7a6458;display:flex;flex-direction:column;align-items:center;gap:7px;transition:.2s;-webkit-appearance:none;}
+.pay-btn.sel{border-color:var(--sel-clr,#e8798a);background:var(--sel-bg,#fce4ec);color:var(--sel-clr,#c4566a);}
 
 /* Submit button */
 .sub-btn{width:100%;padding:18px;border:none;border-radius:16px;font-family:'Tajawal',sans-serif;font-size:18px;font-weight:900;cursor:pointer;transition:all .3s cubic-bezier(.34,1.56,.64,1);-webkit-appearance:none;display:flex;align-items:center;justify-content:center;gap:8px;margin-top:6px;}
@@ -3221,7 +3225,7 @@ body{font-family:'Tajawal',sans-serif;background:#fdf8f2;color:#3d2c24;min-heigh
 
   <div id="sale-form">
     <span class="choice-lbl" data-i18n="product_type">📦 نوع المنتج</span>
-    <div class="choice-grid g2" id="cat-grid"></div>
+    <div class="choice-grid g3" id="cat-grid"></div>
 
     <div class="big-field">
       <label data-i18n="unit_price">💰 سعر القطعة (ر.ع)</label>
@@ -3696,25 +3700,31 @@ function setLang(lang){
   if(calcUseBtn) calcUseBtn.textContent = t('calc_use');
   // تحديث cashSub
   loadCash();
+  // إعادة بناء شبكة الفئات بالاسم الجديد
+  buildCatGrid();
 }
 
 const CAT_SALE=[
-  {img:'https://images.unsplash.com/photo-1490750967868-88df5691cc41?w=120&q=70',name:'ورد وباقات',val:'ورد وباقات'},
-  {img:'https://images.unsplash.com/photo-1519225421980-715cb0215aed?w=120&q=70',name:'تاجات',val:'تاجات'},
-  {img:'https://images.unsplash.com/photo-1549465220-1a8b9238cd48?w=120&q=70',name:'هدايا',val:'هدايا'},
-  {img:'https://images.unsplash.com/photo-1541643600914-78b084683702?w=120&q=70',name:'عطور',val:'عطور'},
-  {img:'https://images.unsplash.com/photo-1611085583191-a3b181a88401?w=120&q=70',name:'اكسسوارات',val:'اكسسوارات'},
-  {img:'https://images.unsplash.com/photo-1612838320302-4b3b3996765e?w=120&q=70',name:'طباعة',val:'طباعة'},
-  {img:'https://images.unsplash.com/photo-1501004318641-b39e6451bec6?w=120&q=70',name:'مجفف',val:'تجفيف'},
-  {img:'https://images.unsplash.com/photo-1556742049-0cfed4f6a45d?w=120&q=70',name:'أخرى',val:'أخرى'},
+  {ico:'💐',name:'ورد وباقات',val:'ورد وباقات',   grad:'linear-gradient(135deg,#ff9a9e,#e8547a)',en:'Bouquets',bn:'বুকে'},
+  {ico:'👑',name:'تاجات',     val:'تاجات',         grad:'linear-gradient(135deg,#f5c842,#d4a020)',en:'Crowns',bn:'মুকুট'},
+  {ico:'🎁',name:'هدايا',     val:'هدايا',         grad:'linear-gradient(135deg,#a18cd1,#7a44c0)',en:'Gifts',bn:'উপহার'},
+  {ico:'🌹',name:'ورد مفرد',  val:'ورد مفرد',      grad:'linear-gradient(135deg,#f093fb,#c4566a)',en:'Single Rose',bn:'একক গোলাপ'},
+  {ico:'🌸',name:'ورد مجمد',  val:'ورد مجمد',      grad:'linear-gradient(135deg,#89f7fe,#4a90d9)',en:'Frozen Flower',bn:'হিমায়িত ফুল'},
+  {ico:'🧴',name:'عطور',      val:'عطور',          grad:'linear-gradient(135deg,#fbc2eb,#9c4dcc)',en:'Perfumes',bn:'পারফিউম'},
+  {ico:'💎',name:'اكسسوارات', val:'اكسسوارات',     grad:'linear-gradient(135deg,#43e97b,#38b2ac)',en:'Accessories',bn:'আনুষঙ্গিক'},
+  {ico:'🖨️',name:'طباعة',    val:'طباعة',         grad:'linear-gradient(135deg,#4facfe,#3b82f6)',en:'Printing',bn:'প্রিন্টিং'},
+  {ico:'🌾',name:'ورد مجفف',  val:'تجفيف',         grad:'linear-gradient(135deg,#f6d365,#b8891f)',en:'Dried Flowers',bn:'শুকনো ফুল'},
+  {ico:'✏️',name:'كرت',       val:'كرت',           grad:'linear-gradient(135deg,#fd7043,#e53935)',en:'Card',bn:'কার্ড'},
+  {ico:'🎊',name:'بالونات',   val:'بالونات',       grad:'linear-gradient(135deg,#ff6b6b,#ee5a24)',en:'Balloons',bn:'বেলুন'},
+  {ico:'🌿',name:'أخرى',      val:'أخرى',          grad:'linear-gradient(135deg,#96fbc4,#5a8a6a)',en:'Other',bn:'অন্যান্য'},
 ];
 const CAT_BUY=[
-  {ico:'🌹',name:'ورد طازج',val:'ورد طازج'},
-  {ico:'🌿',name:'نباتات',val:'نباتات'},
-  {ico:'🎀',name:'لوازم باقات',val:'لوازم باقات'},
-  {ico:'🧴',name:'مواد عطرية',val:'مواد عطرية'},
-  {ico:'📦',name:'تغليف',val:'تغليف'},
-  {ico:'✨',name:'أخرى',val:'أخرى'},
+  {ico:'🌹',name:'ورد طازج',    val:'ورد طازج',    grad:'linear-gradient(135deg,#ff9a9e,#e8547a)',en:'Fresh Flowers',bn:'তাজা ফুল'},
+  {ico:'🌿',name:'نباتات',      val:'نباتات',      grad:'linear-gradient(135deg,#43e97b,#3aaa6a)',en:'Plants',bn:'গাছপালা'},
+  {ico:'🎀',name:'لوازم باقات', val:'لوازم باقات', grad:'linear-gradient(135deg,#f5c842,#e9a820)',en:'Bouquet Supplies',bn:'বুকে সামগ্রী'},
+  {ico:'🧴',name:'مواد عطرية',  val:'مواد عطرية',  grad:'linear-gradient(135deg,#fbc2eb,#9c4dcc)',en:'Fragrance',bn:'সুগন্ধি'},
+  {ico:'📦',name:'تغليف',       val:'تغليف',       grad:'linear-gradient(135deg,#89f7fe,#4a90d9)',en:'Packaging',bn:'প্যাকেজিং'},
+  {ico:'✨',name:'أخرى',        val:'أخرى',        grad:'linear-gradient(135deg,#96fbc4,#5a8a6a)',en:'Other',bn:'অন্যান্য'},
 ];
 const COMPANIES=[
   {ico:'🏪',name:'نانا هايبر',val:'نانا هايبر'},
@@ -3773,14 +3783,18 @@ async function loadDaySummary(){
 }
 
 // ── BUILD GRIDS ──
+function catName(c){ return curLang==='en'?(c.en||c.name):curLang==='bn'?(c.bn||c.name):c.name; }
+
 function buildCatGrid(){
   document.getElementById('cat-grid').innerHTML=CAT_SALE.map(c=>`
     <button class="choice-btn" style="--sel-clr:#5a8a6a;--sel-bg:#e8f5e9;" data-cat="${c.val}" onclick="selCatBtn(this)">
-      <img class="cb-img" src="${c.img}" alt="${c.name}" loading="lazy" onerror="this.style.display='none';this.nextElementSibling.style.display='block'"/><span class="cb-ico" style="display:none">🌸</span>${c.name}
+      <div class="cb-card-img" style="background:${c.grad};">${c.ico}</div>
+      <div class="cb-card-lbl">${catName(c)}</div>
     </button>`).join('');
   document.getElementById('buy-cat-grid').innerHTML=CAT_BUY.map(c=>`
     <button class="choice-btn" style="--sel-clr:#c4566a;--sel-bg:#fce4ec;" data-cat="${c.val}" onclick="selBuyCat(this)">
-      <div class="cb-ico">${c.ico}</div>${c.name}
+      <div class="cb-card-img" style="background:${c.grad};">${c.ico}</div>
+      <div class="cb-card-lbl">${catName(c)}</div>
     </button>`).join('');
   if(document.getElementById('company-grid'))
   document.getElementById('company-grid').innerHTML=COMPANIES.map(c=>`
@@ -4128,15 +4142,21 @@ async function loadShelves(){
       return;
     }
     const arrow = curLang==='ar' ? '←' : '→';
-    el.innerHTML = shelfShelves.map(s => `
-      <div class="shelf-card" onclick="openShelfProducts(${s.id},'${s.name}','${s.color||'#e8547a'}')">
-        <div class="shelf-card-dot" style="background:${s.color||'#e8547a'};"></div>
-        <div style="flex:1;">
+    el.innerHTML = shelfShelves.map((s,i) => {
+      const clr = s.color||'#e8547a';
+      const prodCount = (s.products||[]).length;
+      return `<div class="shelf-card" onclick="openShelfProducts(${s.id},'${s.name}','${clr}')">
+        <div style="width:52px;height:52px;border-radius:14px;background:${clr};display:flex;flex-direction:column;align-items:center;justify-content:center;flex-shrink:0;box-shadow:0 3px 10px ${clr}55;">
+          <div style="font-size:9px;color:rgba(255,255,255,.8);font-weight:700;letter-spacing:.5px;">#${s.id}</div>
+          <div style="font-size:18px;line-height:1;">🗄️</div>
+        </div>
+        <div style="flex:1;min-width:0;">
           <div class="shelf-card-name">${s.name}</div>
-          <div class="shelf-card-count">${(s.products||[]).length} ${t('item_count')}</div>
+          <div class="shelf-card-count">${prodCount} ${t('item_count')} · #${s.id}</div>
         </div>
         <div class="shelf-card-arrow">${arrow}</div>
-      </div>`).join('');
+      </div>`;
+    }).join('');
   }catch(e){showToast('❌ تعذر تحميل الرفوف');}
 }
 
