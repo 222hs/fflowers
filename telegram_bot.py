@@ -457,4 +457,71 @@ def groq_read_invoice(file_id):
         print("Groq error:", e)
         return None
 
+def generate_caption(file_id, style=""):
+    """توليد كابشن تسويقي للصورة بالذكاء الاصطناعي — يدعم Groq Vision + Gemini Vision"""
+    import base64, re as _re
+    try:
+        r = requests.get(f"https://api.telegram.org/bot{BOT_TOKEN}/getFile",
+                         params={"file_id": file_id}, timeout=10)
+        fp = r.json()["result"]["file_path"]
+        img = requests.get(f"https://api.telegram.org/file/bot{BOT_TOKEN}/{fp}", timeout=15).content
+        b64 = base64.b64encode(img).decode()
+    except Exception as e:
+        print("Caption: image download error:", e)
+        return None
+
+    style_map = {
+        "رومانسي": "رومانسي وعاطفي يناسب باقات الأزواج والمناسبات الرومانسية",
+        "رسمي":    "رسمي وأنيق يناسب الفعاليات والتهاني الرسمية",
+        "مرح":     "مرح وخفيف يناسب الأعياد والمفاجآت",
+        "عيد":     "مناسب للأعياد والمناسبات الدينية، دافئ ومحتفل",
+    }
+    style_desc = style_map.get(style, "راقٍ وجذاب يناسب محل ورد فاخر")
+
+    prompt = f"""أنت خبير تسويق رقمي لمحل ورد فاخر اسمه "فيروز فلورز" في عُمان.
+انظر إلى هذه الصورة واكتب كابشن {style_desc} للنشر على انستغرام وواتساب.
+
+المتطلبات:
+- باللغة العربية الفصيحة أو الخليجية اللطيفة
+- من سطرين إلى أربعة أسطر كحد أقصى
+- يبدأ بجملة تشويقية مؤثرة
+- يحتوي على إيموجي مناسبة (2-3 كحد أقصى)
+- في النهاية هاشتاق واحد أو اثنين مناسبين لعُمان
+- لا تذكر الأسعار
+
+اكتب الكابشن فقط بدون أي شرح إضافي."""
+
+    # 1. Groq Vision
+    if GROQ_KEY:
+        try:
+            res = requests.post("https://api.groq.com/openai/v1/chat/completions",
+                headers={"Authorization": f"Bearer {GROQ_KEY}", "Content-Type": "application/json"},
+                json={"model": "meta-llama/llama-4-scout-17b-16e-instruct",
+                      "messages": [{"role": "user", "content": [
+                          {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{b64}"}},
+                          {"type": "text", "text": prompt}
+                      ]}],
+                      "max_tokens": 300, "temperature": 0.85}, timeout=25)
+            txt = res.json()["choices"][0]["message"]["content"].strip()
+            if txt: return txt
+        except Exception as e:
+            print("Caption Groq error:", e)
+
+    # 2. Gemini Vision
+    if GEMINI_KEY:
+        try:
+            body = {"contents": [{"parts": [
+                {"inline_data": {"mime_type": "image/jpeg", "data": b64}},
+                {"text": prompt}
+            ]}], "generationConfig": {"maxOutputTokens": 300, "temperature": 0.85}}
+            res = requests.post(
+                f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={GEMINI_KEY}",
+                headers={"Content-Type": "application/json"}, json=body, timeout=20)
+            txt = res.json()["candidates"][0]["content"]["parts"][0]["text"].strip()
+            if txt: return txt
+        except Exception as e:
+            print("Caption Gemini error:", e)
+
+    return None
+
 # ── Web API ───────────────────────────────────────────────

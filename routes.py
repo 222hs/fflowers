@@ -629,6 +629,29 @@ def webhook():
             return "ok"
 
         # Check if flower counting request
+        # ── كابشن تسويقي بالذكاء الاصطناعي ──
+        caption_is_caption = any(w in caption.lower() for w in [
+            "كابشن","كابشن","caption","وصف","بوست","post","نشر","انستقرام",
+            "instagram","واتس اب","whatsapp","اكتب","اكتبي","اكتبلي"])
+        if caption_is_caption:
+            style = ""
+            if any(w in caption for w in ["رومانسي","رومانسية","حب","حبيب"]): style="رومانسي"
+            elif any(w in caption for w in ["رسمي","فعالية","تهنئة"]): style="رسمي"
+            elif any(w in caption for w in ["مرح","مضحك","فن","هدية"]): style="مرح"
+            elif any(w in caption for w in ["عيد","رمضان","مبارك"]): style="عيد"
+            tg(chat, "✍️ جاري كتابة الكابشن...")
+            from telegram_bot import generate_caption
+            result_txt = generate_caption(file_id, style)
+            if result_txt:
+                tg(chat,
+                   f"✨ <b>كابشن جاهز للنشر:</b>\n\n"
+                   f"{result_txt}\n\n"
+                   f"——\n"
+                   f"💡 أرسل الصورة مع كلمة <code>كابشن رومانسي</code> أو <code>كابشن رسمي</code> أو <code>كابشن مرح</code> لتغيير الأسلوب")
+            else:
+                tg(chat, "⚠️ تعذر توليد الكابشن، تأكد من ضبط مفاتيح AI في الإعدادات.")
+            return "ok"
+
         caption_is_flowers = any(w in caption for w in ["عد الورد","عد ورد","عد زهور","مخزون ورد","count flower"])
         # Check if flower supplier invoice
         caption_is_flower_inv = any(w in caption for w in [
