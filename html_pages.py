@@ -3029,12 +3029,41 @@ body{font-family:'Tajawal',sans-serif;background:#fdf8f2;color:#3d2c24;min-heigh
 .add-inv-item-btn{width:100%;padding:12px;border:2px dashed #f9c8d0;border-radius:14px;background:transparent;color:#b09888;font-family:'Tajawal',sans-serif;font-size:14px;font-weight:700;cursor:pointer;margin-bottom:14px;}
 
 /* Day summary bar */
-.day-bar{background:#fff;border:1px solid #f9c8d0;border-radius:16px;padding:14px 16px;display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px;}
+.day-bar{background:#fff;border:1px solid #f9c8d0;border-radius:16px;padding:14px 16px;display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px;}
 .day-stat{text-align:center;}
 .day-stat .ds-val{font-size:20px;font-weight:900;}
 .day-stat .ds-lbl{font-size:10px;color:#b09888;margin-top:2px;}
 .ds-s .ds-val{color:#5a8a6a;}
 .ds-b .ds-val{color:#c4566a;}
+
+/* Cash box */
+.cash-box{background:linear-gradient(135deg,#fffbea,#fff8d6);border:2px solid #f5c842;border-radius:18px;padding:14px 16px;margin-bottom:12px;display:flex;align-items:center;gap:12px;}
+.cash-box-ico{font-size:32px;flex-shrink:0;}
+.cash-box-info{flex:1;min-width:0;}
+.cash-box-lbl{font-size:10px;font-weight:800;color:#a07010;letter-spacing:1px;text-transform:uppercase;}
+.cash-box-val{font-size:26px;font-weight:900;color:#7a5000;line-height:1.1;}
+.cash-box-sub{font-size:11px;color:#c4960a;margin-top:2px;}
+.cash-box-btn{padding:8px 12px;background:#f5c842;border:none;border-radius:10px;font-family:'Tajawal',sans-serif;font-size:12px;font-weight:800;color:#5a3a00;cursor:pointer;flex-shrink:0;}
+
+/* Pending orders badge */
+.orders-alert{background:linear-gradient(135deg,#fff5f0,#ffe8e0);border:2px solid #f9a88a;border-radius:16px;padding:12px 14px;margin-bottom:12px;display:flex;align-items:center;gap:10px;cursor:pointer;}
+.orders-alert-ico{font-size:28px;flex-shrink:0;}
+.orders-alert-txt{flex:1;}
+.orders-alert-title{font-size:14px;font-weight:900;color:#c4566a;}
+.orders-alert-sub{font-size:11px;color:#b09888;margin-top:2px;}
+.orders-alert-count{font-size:22px;font-weight:900;color:#c4566a;flex-shrink:0;}
+
+/* Cash log modal */
+.cash-modal{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:200;display:flex;align-items:flex-end;}
+.cash-modal-inner{background:#fff;border-radius:24px 24px 0 0;width:100%;max-height:85vh;overflow-y:auto;padding:20px 16px 32px;}
+.cash-modal-title{font-size:18px;font-weight:900;color:#3d2c24;margin-bottom:16px;display:flex;align-items:center;justify-content:space-between;}
+.cash-log-row{display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid #f9c8d0;}
+.cash-log-ico{font-size:20px;flex-shrink:0;}
+.cash-log-desc{flex:1;font-size:13px;color:#3d2c24;font-weight:600;}
+.cash-log-date{font-size:10px;color:#b09888;}
+.cash-log-amt{font-size:15px;font-weight:900;flex-shrink:0;}
+.cash-in{color:#5a8a6a;}
+.cash-out{color:#c4566a;}
 </style>
 </head>
 <body>
@@ -3055,6 +3084,27 @@ body{font-family:'Tajawal',sans-serif;background:#fdf8f2;color:#3d2c24;min-heigh
   <div style="text-align:center;padding:20px 0 16px;">
     <div style="font-size:28px;font-weight:900;color:#c4566a;">مرحباً 👋</div>
     <div style="font-size:13px;color:#b09888;margin-top:4px;">اختر العملية</div>
+  </div>
+
+  <!-- خزينة الكاش -->
+  <div class="cash-box" id="cashBox">
+    <div class="cash-box-ico">💵</div>
+    <div class="cash-box-info">
+      <div class="cash-box-lbl">خزينة الكاش</div>
+      <div class="cash-box-val" id="cashBalance">—</div>
+      <div class="cash-box-sub" id="cashSub">اليوم: جاري التحميل...</div>
+    </div>
+    <button class="cash-box-btn" onclick="openCashModal()">السجل ←</button>
+  </div>
+
+  <!-- الطلبات المعلقة -->
+  <div class="orders-alert" id="ordersAlert" onclick="go('orders')" style="display:none;">
+    <div class="orders-alert-ico">📋</div>
+    <div class="orders-alert-txt">
+      <div class="orders-alert-title">طلبات تنتظر التنفيذ</div>
+      <div class="orders-alert-sub">اضغط لعرض التفاصيل</div>
+    </div>
+    <div class="orders-alert-count" id="ordersAlertCount">0</div>
   </div>
 
   <!-- إجمالي اليوم -->
@@ -3223,6 +3273,42 @@ body{font-family:'Tajawal',sans-serif;background:#fdf8f2;color:#3d2c24;min-heigh
   </div>
 </div>
 
+<!-- ORDERS SCREEN -->
+<div class="screen" id="sc-orders">
+  <div class="sc-hdr">
+    <div class="sc-back" onclick="go('home')">←</div>
+    <div class="sc-title" style="color:#c4566a;">📋 الطلبات المعلقة</div>
+  </div>
+  <div id="w-orders-list" style="display:flex;flex-direction:column;gap:12px;"></div>
+</div>
+
+<!-- CASH MODAL -->
+<div class="cash-modal" id="cashModal" style="display:none;" onclick="closeCashModal(event)">
+  <div class="cash-modal-inner">
+    <div class="cash-modal-title">
+      <span>💵 خزينة الكاش</span>
+      <button onclick="closeCashModal()" style="background:#f5ede0;border:none;border-radius:10px;padding:6px 12px;font-size:13px;cursor:pointer;font-family:'Tajawal',sans-serif;">إغلاق</button>
+    </div>
+
+    <!-- الرصيد الحالي -->
+    <div style="background:linear-gradient(135deg,#fffbea,#fff8d6);border:2px solid #f5c842;border-radius:16px;padding:16px;margin-bottom:16px;text-align:center;">
+      <div style="font-size:12px;color:#a07010;font-weight:700;margin-bottom:4px;">الرصيد الحالي</div>
+      <div style="font-size:32px;font-weight:900;color:#7a5000;" id="modalCashBalance">—</div>
+      <div style="font-size:11px;color:#c4960a;margin-top:4px;" id="modalCashToday"></div>
+    </div>
+
+    <!-- تعديل يدوي -->
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:16px;">
+      <button onclick="cashAdjust('in')" style="padding:12px;background:#e8f5e9;border:2px solid #7aab8a;border-radius:12px;color:#5a8a6a;font-family:'Tajawal',sans-serif;font-size:13px;font-weight:800;cursor:pointer;">➕ إضافة كاش</button>
+      <button onclick="cashAdjust('out')" style="padding:12px;background:#fce4ec;border:2px solid #e8798a;border-radius:12px;color:#c4566a;font-family:'Tajawal',sans-serif;font-size:13px;font-weight:800;cursor:pointer;">➖ سحب كاش</button>
+    </div>
+
+    <!-- السجل -->
+    <div style="font-size:11px;font-weight:800;color:#b09888;letter-spacing:1px;margin-bottom:10px;">آخر العمليات</div>
+    <div id="cashLogList"></div>
+  </div>
+</div>
+
 <div class="toast" id="toast"></div>
 
 <script>
@@ -3266,8 +3352,9 @@ const fmt=n=>(+n).toLocaleString('ar-OM',{minimumFractionDigits:3,maximumFractio
 function go(sc){
   document.querySelectorAll('.screen').forEach(s=>s.classList.remove('on'));
   document.getElementById('sc-'+(sc==='home'?'home':sc)).classList.add('on');
-  if(sc==='home') loadDaySummary();
+  if(sc==='home'){ loadDaySummary(); loadCash(); loadPendingOrders(); }
   if(sc==='flower') loadFlowerTypes();
+  if(sc==='orders') loadWorkerOrders();
 }
 
 function showToast(msg,ms=3000){
@@ -3518,9 +3605,123 @@ function resetInvoice(){
   document.getElementById('inv-done').style.display='none';
 }
 
+// ── CASH REGISTER ──
+async function loadCash(){
+  try{
+    const d = await api('/api/cash');
+    const bal = d.balance || 0;
+    const todayIn = d.today_in || 0;
+    const el = document.getElementById('cashBalance');
+    const sub = document.getElementById('cashSub');
+    if(el) el.textContent = (bal).toFixed(3) + ' ر.ع';
+    if(sub) sub.textContent = 'دخل اليوم: ' + todayIn.toFixed(3) + ' ر.ع';
+    // لون الرصيد
+    const box = document.getElementById('cashBox');
+    if(box) box.style.borderColor = bal < 10 ? '#e8798a' : '#f5c842';
+  }catch(e){}
+}
+
+async function openCashModal(){
+  document.getElementById('cashModal').style.display='flex';
+  const d = await api('/api/cash');
+  const bal = d.balance || 0;
+  const todayIn = d.today_in || 0;
+  const todayOut = d.today_out || 0;
+  const balEl = document.getElementById('modalCashBalance');
+  const todayEl = document.getElementById('modalCashToday');
+  if(balEl) balEl.textContent = bal.toFixed(3) + ' ر.ع';
+  if(todayEl) todayEl.textContent = 'دخل اليوم: +'+todayIn.toFixed(3)+' | خرج: -'+todayOut.toFixed(3)+' ر.ع';
+  const log = d.log || [];
+  const listEl = document.getElementById('cashLogList');
+  if(!listEl) return;
+  if(!log.length){ listEl.innerHTML='<div style="text-align:center;color:#b09888;padding:20px;">لا توجد عمليات بعد</div>'; return; }
+  listEl.innerHTML = log.map(r => `
+    <div class="cash-log-row">
+      <div class="cash-log-ico">${r.type==='in'?'💵':'💸'}</div>
+      <div style="flex:1;">
+        <div class="cash-log-desc">${r.description||''}</div>
+        <div class="cash-log-date">📅 ${r.date}</div>
+      </div>
+      <div class="cash-log-amt ${r.type==='in'?'cash-in':'cash-out'}">${r.type==='in'?'+':'-'}${(+r.amount).toFixed(3)}</div>
+    </div>`).join('');
+}
+
+function closeCashModal(e){
+  if(!e || e.target===document.getElementById('cashModal'))
+    document.getElementById('cashModal').style.display='none';
+}
+
+async function cashAdjust(type){
+  const label = type==='in' ? 'كم تضيف للخزينة؟ (ر.ع)' : 'كم تسحب من الخزينة؟ (ر.ع)';
+  const amt = prompt(label);
+  if(!amt) return;
+  const val = parseFloat(amt);
+  if(isNaN(val) || val <= 0){ showToast('⚠️ رقم غير صحيح'); return; }
+  const desc = prompt('السبب (اختياري):') || (type==='in' ? 'إضافة يدوية' : 'سحب يدوي');
+  await api('/api/cash/adjust', {method:'POST', headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({type, amount:val, description:desc})});
+  showToast(type==='in' ? '✅ تمت الإضافة' : '✅ تم السحب');
+  openCashModal();
+  loadCash();
+}
+
+// ── PENDING ORDERS ──
+async function loadPendingOrders(){
+  try{
+    const d = await api('/api/orders?status=pending');
+    const count = (d.orders||[]).length;
+    const alertEl = document.getElementById('ordersAlert');
+    const countEl = document.getElementById('ordersAlertCount');
+    if(alertEl) alertEl.style.display = count > 0 ? 'flex' : 'none';
+    if(countEl) countEl.textContent = count;
+  }catch(e){}
+}
+
+async function loadWorkerOrders(){
+  const d = await api('/api/orders?status=pending');
+  const list = d.orders || [];
+  const el = document.getElementById('w-orders-list');
+  if(!el) return;
+  if(!list.length){
+    el.innerHTML='<div style="text-align:center;padding:40px;color:#b09888;font-size:15px;">✅ لا توجد طلبات معلقة</div>';
+    return;
+  }
+  el.innerHTML = list.map(o => {
+    const imgHtml = o.img_file_id
+      ? `<img src="/api/orders/${o.id}/image" style="width:100%;max-height:180px;object-fit:cover;border-radius:12px;margin-bottom:10px;display:block;" onclick="this.style.maxHeight=this.style.maxHeight==='none'?'180px':'none'" loading="lazy"/>`
+      : '';
+    const priceHtml = o.price && parseFloat(o.price)>0
+      ? `<div style="font-size:16px;font-weight:900;color:#5a8a6a;">💰 ${(+o.price).toFixed(3)} ر.ع</div>` : '';
+    const phoneHtml = o.customer_phone
+      ? `<a href="tel:${o.customer_phone}" style="display:inline-block;margin-top:6px;background:#e8f5e9;padding:6px 12px;border-radius:10px;color:#5a8a6a;text-decoration:none;font-size:13px;font-weight:700;">📞 اتصال</a>` : '';
+    return `<div style="background:#fff;border:2px solid #f9c8d0;border-radius:18px;overflow:hidden;">
+      ${imgHtml}
+      <div style="padding:14px;">
+        <div style="font-size:12px;color:#b09888;margin-bottom:4px;">طلب #${o.id} — 📅 ${o.date}</div>
+        <div style="font-size:17px;font-weight:900;color:#3d2c24;">👤 ${o.customer_name}</div>
+        <div style="font-size:14px;color:#7a6458;margin-top:4px;line-height:1.5;">${o.description}</div>
+        ${priceHtml}
+        ${o.notes ? `<div style="font-size:12px;color:#b09888;margin-top:4px;">📝 ${o.notes}</div>` : ''}
+        ${phoneHtml}
+        <button onclick="workerDoneOrder(${o.id},this)" style="display:block;width:100%;margin-top:12px;padding:13px;background:linear-gradient(135deg,#7aab8a,#5a8a6a);color:#fff;border:none;border-radius:12px;font-family:'Tajawal',sans-serif;font-size:15px;font-weight:900;cursor:pointer;">✅ تم التنفيذ</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+async function workerDoneOrder(id, btn){
+  btn.disabled=true; btn.textContent='⏳ جاري...';
+  await api('/api/orders/'+id, {method:'PATCH', headers:{'Content-Type':'application/json'}, body:JSON.stringify({status:'done'})});
+  showToast('✅ تم تسجيل الطلب كمنجز!');
+  btn.closest('div[style]').style.opacity='0.4';
+  setTimeout(()=>{ loadWorkerOrders(); loadPendingOrders(); }, 1200);
+}
+
 // Init
 buildCatGrid();
 loadDaySummary();
+loadCash();
+loadPendingOrders();
 </script>
 </body>
 </html>"""

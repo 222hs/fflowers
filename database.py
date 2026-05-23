@@ -225,6 +225,14 @@ def init_db():
             done_date TEXT,
             source TEXT DEFAULT 'web',
             created TEXT DEFAULT (datetime('now')))""",
+        """CREATE TABLE IF NOT EXISTS cash_log (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            type TEXT NOT NULL,
+            amount REAL NOT NULL,
+            description TEXT,
+            ref_id INTEGER,
+            date TEXT NOT NULL,
+            created TEXT DEFAULT (datetime('now')))""",
     ]
     for sql in new_tables:
         if USE_TURSO: turso_run(sql)

@@ -430,14 +430,31 @@ def api_get():
     s,b=get_month_data(month)
     return jsonify({"sales":s,"buys":b})
 
+def auto_cash_log(entry_type, amt, desc, pay_method, date_val, ref_id=None):
+    """تسجيل تلقائي في الخزينة عند بيع أو شراء كاش"""
+    pay = (pay_method or "").lower()
+    is_cash = any(w in pay for w in ["كاش","نقد","cash","💵"])
+    if not is_cash: return
+    if entry_type == "s":
+        db_run("INSERT INTO cash_log (type,amount,description,date,ref_id) VALUES (?,?,?,?,?)",
+               ("in", amt, f"بيعة: {desc}", date_val, ref_id))
+    elif entry_type in ("b","expense"):
+        db_run("INSERT INTO cash_log (type,amount,description,date,ref_id) VALUES (?,?,?,?,?)",
+               ("out", amt, f"مصروف: {desc}", date_val, ref_id))
+
 @app.route("/api/entries",methods=["POST"])
 def api_add():
     d=request.json
     month=d.get("month",cur_month())
+    date_val = d.get("date",datetime.now().strftime("%d/%m/%Y"))
     db_run("INSERT INTO entries (type,desc,amt,date,month,img,paid_by,payment_method,sale_time,category) VALUES (?,?,?,?,?,?,?,?,?,?)",
         (d["type"],d["desc"],float(d["amt"]),
-         d.get("date",datetime.now().strftime("%d/%m/%Y")),
-         month,d.get("img"),d.get("paid_by"),d.get("payment_method"),d.get("sale_time"),d.get("category")))
+         date_val, month,d.get("img"),d.get("paid_by"),d.get("payment_method"),d.get("sale_time"),d.get("category")))
+    # تسجيل تلقائي في الخزينة
+    try:
+        row = db_one("SELECT id FROM entries ORDER BY id DESC LIMIT 1")
+        auto_cash_log(d["type"], float(d["amt"]), d["desc"], d.get("payment_method",""), date_val, row["id"] if row else None)
+    except: pass
     return jsonify({"ok":True})
 
 @app.route("/api/entries/<int:eid>",methods=["DELETE"])
@@ -1684,6 +1701,54 @@ def api_order_image(oid):
         return Response(img_r.content, mimetype="image/jpeg")
     except:
         return "", 404
+
+# ══════════════════════════════════════════════════════════════
+# ── Cash Register API (خزينة الكاش) ─────────────────────────
+# ══════════════════════════════════════════════════════════════
+def get_cash_balance():
+    """احسب رصيد الخزينة الحالي"""
+    row = db_one("SELECT COALESCE(SUM(CASE WHEN type='in' THEN amount ELSE -amount END),0) as bal FROM cash_log")
+    return float(row["bal"]) if row else 0.0
+
+@app.route("/api/cash")
+@worker_auth
+def api_get_cash():
+    balance = get_cash_balance()
+    today_str = datetime.now().strftime("%d/%m/%Y")
+    log = db_get("SELECT * FROM cash_log ORDER BY created DESC LIMIT 30")
+    today_in  = sum(r["amount"] for r in log if r["type"]=="in"  and r["date"]==today_str)
+    today_out = sum(r["amount"] for r in log if r["type"]=="out" and r["date"]==today_str)
+    return jsonify({"balance": round(balance,3), "log": log,
+                    "today_in": round(today_in,3), "today_out": round(today_out,3)})
+
+@app.route("/api/cash/adjust", methods=["POST"])
+@worker_auth
+def api_cash_adjust():
+    """إضافة أو سحب يدوي من الخزينة"""
+    d = request.json or {}
+    amt   = float(d.get("amount", 0))
+    typ   = d.get("type", "in")   # in / out
+    desc  = d.get("description", "تعديل يدوي")
+    if amt <= 0: return jsonify({"ok": False, "error": "invalid amount"}), 400
+    date_val = datetime.now().strftime("%d/%m/%Y")
+    db_run("INSERT INTO cash_log (type,amount,description,date) VALUES (?,?,?,?)",
+           (typ, amt, desc, date_val))
+    return jsonify({"ok": True, "balance": round(get_cash_balance(), 3)})
+
+@app.route("/api/cash/reset", methods=["POST"])
+@auth
+def api_cash_reset():
+    """مسح سجل الخزينة (للمدير فقط)"""
+    db_run("DELETE FROM cash_log")
+    return jsonify({"ok": True})
+
+@app.route("/api/cash/log/<int:lid>", methods=["DELETE"])
+@auth
+def api_cash_del_log(lid):
+    row = db_one("SELECT * FROM cash_log WHERE id=?", (lid,))
+    if not row: return jsonify({"ok": False}), 404
+    db_run("DELETE FROM cash_log WHERE id=?", (lid,))
+    return jsonify({"ok": True, "balance": round(get_cash_balance(), 3)})
 
 @app.route("/turso_debug")
 def turso_debug():
