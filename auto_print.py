@@ -23,6 +23,7 @@ PRINT_TOKEN   = "CHANGE_ME_123"                    # نفس PRINT_TOKEN في Rai
 PRINTER_NAME  = ""          # اسم الطابعة (فارغ = الافتراضية). مثال: "HP_LaserJet"
 CHECK_EVERY   = 30          # ثواني بين كل فحص
 PAPER_WIDTH   = "A4"        # A4 أو A5 أو "80mm" لطابعة حرارية
+LANGUAGE      = "tri"       # ar=عربي | en=English | bn=বাংলা | tri=الثلاثة معاً
 # ══════════════════════════════════════
 
 PRINTED_FILE = os.path.expanduser("~/.fairuz_printed_ids.json")
@@ -52,30 +53,114 @@ def get_new_orders(printed):
         print(f"⚠️  خطأ في الاتصال: {e}")
         return []
 
+# ── قاموس الترجمات ──
+TR = {
+    "ar": {
+        "new_order":  "● طلب جديد",
+        "order_num":  "رقم الطلب",
+        "customer":   "العميل",
+        "phone":      "الهاتف",
+        "date":       "التاريخ",
+        "price":      "السعر المتفق",
+        "notes":      "ملاحظات",
+        "printed_at": "طُبع",
+        "status_new": "طلب جديد ●",
+        "web":        "🌐 موقع",
+        "telegram":   "💬 تيليغرام",
+        "omr":        "OMR",
+        "dir":        "rtl",
+    },
+    "en": {
+        "new_order":  "● New Order",
+        "order_num":  "Order Number",
+        "customer":   "Customer",
+        "phone":      "Phone",
+        "date":       "Date",
+        "price":      "Agreed Price",
+        "notes":      "Notes",
+        "printed_at": "Printed",
+        "status_new": "New Order ●",
+        "web":        "🌐 Website",
+        "telegram":   "💬 Telegram",
+        "omr":        "OMR",
+        "dir":        "ltr",
+    },
+    "bn": {
+        "new_order":  "● নতুন অর্ডার",
+        "order_num":  "অর্ডার নম্বর",
+        "customer":   "গ্রাহক",
+        "phone":      "ফোন",
+        "date":       "তারিখ",
+        "price":      "সম্মত মূল্য",
+        "notes":      "নোট",
+        "printed_at": "মুদ্রিত",
+        "status_new": "নতুন অর্ডার ●",
+        "web":        "🌐 ওয়েবসাইট",
+        "telegram":   "💬 টেলিগ্রাম",
+        "omr":        "OMR",
+        "dir":        "ltr",
+    },
+}
+
+def t(key, lang=None):
+    """ترجمة مفتاح حسب اللغة المحددة"""
+    lg = lang or LANGUAGE
+    if lg == "tri":
+        lg = "ar"
+    return TR.get(lg, TR["en"]).get(key, key)
+
+def label_row(ar_key, value, lang):
+    """صف مع الترجمة المناسبة"""
+    if lang == "tri":
+        ar  = TR["ar"].get(ar_key, ar_key)
+        en  = TR["en"].get(ar_key, ar_key)
+        bn  = TR["bn"].get(ar_key, ar_key)
+        lbl = f'{ar}<br><small style="color:#aaa;font-size:9pt;">{en} / {bn}</small>'
+    else:
+        lbl = TR.get(lang, TR["ar"]).get(ar_key, ar_key)
+    return lbl
+
 def make_receipt_html(order):
-    price_line = ""
+    lang = LANGUAGE
+
+    price_html = ""
     if order.get("price") and float(order.get("price", 0)) > 0:
-        price_line = f'<div class="row"><span class="lbl">السعر</span><span class="val">{float(order["price"]):.3f} OMR</span></div>'
+        price_lbl = label_row("price", "", lang)
+        price_html = f'''<div class="price-box">
+          <span class="price-lbl">💰 {price_lbl}</span>
+          <span class="price-val">{float(order["price"]):.3f} OMR</span>
+        </div>'''
 
-    notes_line = ""
+    notes_html = ""
     if order.get("notes"):
-        notes_line = f'<div class="notes">📝 {order["notes"]}</div>'
+        notes_lbl = TR.get(lang if lang != "tri" else "ar", TR["ar"]).get("notes","Notes")
+        notes_html = f'<div class="notes">📝 {notes_lbl}: {order["notes"]}</div>'
 
-    source_badge = "🌐 موقع"
-    if order.get("source") == "telegram":
-        source_badge = "💬 تيليغرام"
+    source_key = "telegram" if order.get("source") == "telegram" else "web"
+    source_badge = TR.get(lang if lang != "tri" else "ar", TR["ar"]).get(source_key, "🌐")
+
+    # اتجاه الصفحة
+    page_dir = "rtl" if lang in ("ar","tri") else "ltr"
+
+    # ترجمة التسميات
+    lbl_customer  = label_row("customer",  "", lang)
+    lbl_phone     = label_row("phone",     "", lang)
+    lbl_date      = label_row("date",      "", lang)
+    lbl_order_num = label_row("order_num", "", lang)
+    lbl_new_order = TR.get(lang if lang != "tri" else "ar", TR["ar"]).get("new_order","New Order")
+    lbl_printed   = TR.get(lang if lang != "tri" else "ar", TR["ar"]).get("printed_at","Printed")
 
     now = datetime.now().strftime("%H:%M  %d/%m/%Y")
 
     return f"""<!DOCTYPE html>
-<html dir="rtl" lang="ar">
+<html dir="{page_dir}" lang="{lang if lang != 'tri' else 'ar'}">
 <head>
 <meta charset="UTF-8">
 <style>
-  @import url('https://fonts.googleapis.com/css2?family=Tajawal:wght@400;700;900&display=swap');
+  @import url('https://fonts.googleapis.com/css2?family=Tajawal:wght@400;700;900&family=Noto+Sans+Bengali:wght@400;700&display=swap');
   * {{ margin:0; padding:0; box-sizing:border-box; }}
   body {{
-    font-family: 'Tajawal', Arial, sans-serif;
+    font-family: 'Tajawal','Noto Sans Bengali', Arial, sans-serif;
     width: 100%;
     max-width: 200mm;
     margin: 0 auto;
@@ -171,39 +256,36 @@ def make_receipt_html(order):
 </div>
 
 <div class="order-badge">
-  <div class="status-new">● طلب جديد</div>
+  <div class="status-new">{lbl_new_order}</div>
   <div class="order-num">#{order["id"]}</div>
-  <div class="order-lbl">رقم الطلب</div>
+  <div class="order-lbl">{lbl_order_num}</div>
   <div class="source">{source_badge}</div>
 </div>
 
 <div class="section">
   <div class="row">
-    <span class="lbl">👤 العميل</span>
+    <span class="lbl">👤 {lbl_customer}</span>
     <span class="val">{order.get("customer_name","—")}</span>
   </div>
   <div class="row">
-    <span class="lbl">📞 الهاتف</span>
+    <span class="lbl">📞 {lbl_phone}</span>
     <span class="phone-val">{order.get("customer_phone","—") or "—"}</span>
   </div>
   <div class="row">
-    <span class="lbl">📅 التاريخ</span>
+    <span class="lbl">📅 {lbl_date}</span>
     <span class="val">{order.get("date","")}</span>
   </div>
 </div>
 
 <div class="desc-box">{order.get("description","")}</div>
 
-{f'''<div class="price-box">
-  <span class="price-lbl">💰 السعر المتفق</span>
-  <span class="price-val">{float(order.get("price",0)):.3f} OMR</span>
-</div>''' if order.get("price") and float(order.get("price",0)) > 0 else ""}
+{price_html}
 
-{notes_line}
+{notes_html}
 
 <div class="footer">
-  🕐 طُبع: {now}<br>
-  فيروز فلورز — نظام إدارة المحل
+  🕐 {lbl_printed}: {now}<br>
+  🌹 Fairuz Flowers | فيروز فلورز | ফেরুজ ফ্লাওয়ার্স
 </div>
 
 </body>
