@@ -1647,6 +1647,17 @@ def api_del_debt(did):
     return jsonify({"ok": True})
 
 # ══════════════════════════════════════════════════════════════
+# ── Print Feed (للطباعة التلقائية من الماك) ──────────────────
+@app.route("/api/print-feed")
+def api_print_feed():
+    """Endpoint آمن بـ token للسكريبت على الماك"""
+    token = request.args.get("token","")
+    expected = os.environ.get("PRINT_TOKEN","")
+    if not expected or token != expected:
+        return jsonify({"error":"unauthorized"}), 401
+    orders = db_get("SELECT * FROM orders WHERE status='pending' ORDER BY created DESC")
+    return jsonify({"orders": orders, "count": len(orders)})
+
 # ── Orders API ───────────────────────────────────────────────
 # ══════════════════════════════════════════════════════════════
 @app.route("/api/orders", methods=["GET"])
