@@ -3748,7 +3748,7 @@ let shelfShelves = [];
 async function loadShelves(){
   try{
     const d = await api('/api/shelves');
-    shelfShelves = d.shelves || [];
+    shelfShelves = Array.isArray(d) ? d : (d.shelves || []);
     const el = document.getElementById('shelf-list');
     if(!shelfShelves.length){
       el.innerHTML = '<div style="text-align:center;padding:40px;color:#b09888;">لا توجد رفوف مسجلة</div>';
