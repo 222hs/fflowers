@@ -1915,7 +1915,7 @@ async function addExpensePrompt(){
 
 /* ── SHELVES ── */
 async function delShelfSale(eid){
-  if(!confirm('حذف هذه المبيعة؟')) return;
+  if(!confirm(t('toast_del_confirm'))) return;
   await api(`/api/entries/${eid}`,{method:'DELETE'});
   showToast('🗑️ تم الحذف'); loadShelves(); load();
 }
@@ -2273,7 +2273,7 @@ async function saveFlowerInvManual(){
     closeAddFlowerInvModal();
     loadFlowerInvPage();
     showToast('✅ تم حفظ الفاتورة بنجاح');
-  }catch(e){showToast('❌ خطأ في الحفظ');}
+  }catch(e){showToast(t('toast_error'));}
 }
 
 /* ── REPORTS ── */
@@ -3109,6 +3109,11 @@ body{font-family:'Tajawal',sans-serif;background:#fdf8f2;color:#3d2c24;min-heigh
 .ck-clr{background:#fce4ec;color:#c4566a;font-size:16px;}
 .ck-zero{grid-column:span 2;}
 .calc-use-btn{width:100%;margin-top:10px;padding:13px;background:#eff6ff;border:2px solid #3b82f6;border-radius:14px;color:#1d4ed8;font-family:'Tajawal',sans-serif;font-size:14px;font-weight:800;cursor:pointer;}
+
+/* Language switcher */
+.lang-switcher{display:flex;gap:4px;align-items:center;background:#f5ede0;border-radius:12px;padding:3px;}
+.lang-btn{border:none;background:transparent;border-radius:9px;padding:5px 8px;font-size:12px;font-weight:800;cursor:pointer;color:#7a6458;transition:.2s;font-family:'Tajawal',sans-serif;white-space:nowrap;}
+.lang-btn.active{background:#fff;color:#c4566a;box-shadow:0 1px 6px rgba(0,0,0,.1);}
 </style>
 </head>
 <body>
@@ -3117,80 +3122,85 @@ body{font-family:'Tajawal',sans-serif;background:#fdf8f2;color:#3d2c24;min-heigh
   <div class="wh-brand">
     <div class="wh-logo">🌹</div>
     <div>
-      <div class="wh-title">فيروز فلورز</div>
-      <div class="wh-sub">واجهة العامل</div>
+      <div class="wh-title">Fairuz Flowers</div>
+      <div class="wh-sub" data-i18n="worker_panel">واجهة العامل</div>
     </div>
   </div>
-  <div style="display:flex;gap:8px;align-items:center;">
-    <button class="calc-header-btn" onclick="openCalc()" title="آلة حاسبة">🧮</button>
-    <button class="logout-w" onclick="location.href='/worker-logout'">خروج 🔒</button>
+  <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;justify-content:flex-end;">
+    <div class="lang-switcher">
+      <button class="lang-btn" id="lb-ar" onclick="setLang('ar')">ع</button>
+      <button class="lang-btn active" id="lb-en" onclick="setLang('en')">EN</button>
+      <button class="lang-btn" id="lb-bn" onclick="setLang('bn')">বাং</button>
+    </div>
+    <button class="calc-header-btn" onclick="openCalc()" title="Calculator">🧮</button>
+    <button class="logout-w" id="logoutBtn" onclick="location.href='/worker-logout'" data-i18n="logout">خروج 🔒</button>
   </div>
 </div>
 
 <!-- HOME -->
 <div class="screen on" id="sc-home">
   <div style="text-align:center;padding:20px 0 16px;">
-    <div style="font-size:28px;font-weight:900;color:#c4566a;">مرحباً 👋</div>
-    <div style="font-size:13px;color:#b09888;margin-top:4px;">اختر العملية</div>
+    <div style="font-size:28px;font-weight:900;color:#c4566a;" data-i18n="hello">مرحباً 👋</div>
+    <div style="font-size:13px;color:#b09888;margin-top:4px;" data-i18n="choose_op">اختر العملية</div>
   </div>
 
   <!-- خزينة الكاش -->
   <div class="cash-box" id="cashBox">
     <div class="cash-box-ico">💵</div>
     <div class="cash-box-info">
-      <div class="cash-box-lbl">خزينة الكاش</div>
+      <div class="cash-box-lbl" data-i18n="cash_box">خزينة الكاش</div>
       <div class="cash-box-val" id="cashBalance">—</div>
-      <div class="cash-box-sub" id="cashSub">اليوم: جاري التحميل...</div>
+      <div class="cash-box-sub" id="cashSub"></div>
     </div>
-    <button class="cash-box-btn" onclick="openCashModal()">السجل ←</button>
+    <button class="cash-box-btn" onclick="openCashModal()" data-i18n="cash_log">السجل ←</button>
   </div>
 
   <!-- الطلبات المعلقة -->
   <div class="orders-alert" id="ordersAlert" onclick="go('orders')" style="display:none;">
     <div class="orders-alert-ico">📋</div>
     <div class="orders-alert-txt">
-      <div class="orders-alert-title">طلبات تنتظر التنفيذ</div>
-      <div class="orders-alert-sub">اضغط لعرض التفاصيل</div>
+      <div class="orders-alert-title" data-i18n="orders_pending">طلبات تنتظر التنفيذ</div>
+      <div class="orders-alert-sub" data-i18n="tap_details">اضغط لعرض التفاصيل</div>
     </div>
     <div class="orders-alert-count" id="ordersAlertCount">0</div>
   </div>
 
   <!-- إجمالي اليوم -->
   <div class="day-bar" id="dayBar">
-    <div class="day-stat ds-s"><div class="ds-val" id="wDaySales">—</div><div class="ds-lbl">💰 مبيعات اليوم</div></div>
-    <div class="day-stat ds-b"><div class="ds-val" id="wDayBuys">—</div><div class="ds-lbl">🛒 مشتريات اليوم</div></div>
+    <div class="day-stat ds-s"><div class="ds-val" id="wDaySales">—</div><div class="ds-lbl" data-i18n="today_sales">💰 مبيعات اليوم</div></div>
+    <div class="day-stat ds-b"><div class="ds-val" id="wDayBuys">—</div><div class="ds-lbl" data-i18n="today_buys">🛒 مشتريات اليوم</div></div>
   </div>
 
   <div class="nav-grid">
     <button class="nav-btn nb-sale" onclick="go('sale')">
       <div class="nb-ico">🌸</div>
-      <div class="nb-txt">مبيعة</div>
-      <div class="nb-sub">تسجيل بيع</div>
+      <div class="nb-txt" data-i18n="nav_sale">مبيعة</div>
+      <div class="nb-sub" data-i18n="nav_sale_sub">تسجيل بيع</div>
     </button>
     <button class="nav-btn nb-buy" onclick="go('buy')">
       <div class="nb-ico">📦</div>
-      <div class="nb-txt">مشتريات</div>
-      <div class="nb-sub">تسجيل شراء</div>
+      <div class="nb-txt" data-i18n="nav_buy">مشتريات</div>
+      <div class="nb-sub" data-i18n="nav_buy_sub">تسجيل شراء</div>
     </button>
     <button class="nav-btn nb-flower" onclick="go('flower')">
       <div class="nb-ico">🌹</div>
-      <div class="nb-txt">عد الورد</div>
-      <div class="nb-sub">تحديث المخزون</div>
+      <div class="nb-txt" data-i18n="nav_flower">عد الورد</div>
+      <div class="nb-sub" data-i18n="nav_flower_sub">تحديث المخزون</div>
     </button>
     <button class="nav-btn nb-inv" onclick="go('invoice')">
       <div class="nb-ico">🧾</div>
-      <div class="nb-txt">فاتورة ورد</div>
-      <div class="nb-sub">إضافة فاتورة</div>
+      <div class="nb-txt" data-i18n="nav_inv">فاتورة ورد</div>
+      <div class="nb-sub" data-i18n="nav_inv_sub">إضافة فاتورة</div>
     </button>
     <button class="nav-btn nb-shelf" onclick="go('shelf')">
       <div class="nb-ico">🗄️</div>
-      <div class="nb-txt">بيع من رف</div>
-      <div class="nb-sub">مبيعات الرفوف</div>
+      <div class="nb-txt" data-i18n="nav_shelf">بيع من رف</div>
+      <div class="nb-sub" data-i18n="nav_shelf_sub">مبيعات الرفوف</div>
     </button>
     <button class="nav-btn nb-today" onclick="go('today')">
       <div class="nb-ico">📋</div>
-      <div class="nb-txt">مبيعات اليوم</div>
-      <div class="nb-sub">عرض وحذف</div>
+      <div class="nb-txt" data-i18n="nav_today">مبيعات اليوم</div>
+      <div class="nb-sub" data-i18n="nav_today_sub">عرض وحذف</div>
     </button>
   </div>
 </div>
@@ -3199,23 +3209,22 @@ body{font-family:'Tajawal',sans-serif;background:#fdf8f2;color:#3d2c24;min-heigh
 <div class="screen" id="sc-sale">
   <div class="sc-hdr">
     <div class="sc-back" onclick="go('home')">←</div>
-    <div class="sc-title" style="color:#5a8a6a;">🌸 تسجيل مبيعة</div>
+    <div class="sc-title" style="color:#5a8a6a;" data-i18n="sale_title">🌸 تسجيل مبيعة</div>
   </div>
 
-  <!-- بطاقة النجاح -->
   <div class="done-card" id="sale-done">
     <div class="done-ico">✅</div>
-    <div class="done-txt" id="sale-done-txt">تم التسجيل!</div>
+    <div class="done-txt" id="sale-done-txt" data-i18n="done">تم التسجيل!</div>
     <div class="done-sub" id="sale-done-sub"></div>
-    <button class="done-again" onclick="resetSale()">➕ تسجيل مبيعة أخرى</button>
+    <button class="done-again" onclick="resetSale()" data-i18n="sale_again">➕ تسجيل مبيعة أخرى</button>
   </div>
 
   <div id="sale-form">
-    <span class="choice-lbl">📦 نوع المنتج</span>
+    <span class="choice-lbl" data-i18n="product_type">📦 نوع المنتج</span>
     <div class="choice-grid g2" id="cat-grid"></div>
 
     <div class="big-field">
-      <label>💰 سعر القطعة (ر.ع)</label>
+      <label data-i18n="unit_price">💰 سعر القطعة (ر.ع)</label>
       <input type="number" id="s-amt" placeholder="0.000" step="0.001" inputmode="decimal" oninput="updateSaleTotal()"/>
     </div>
 
@@ -3226,20 +3235,20 @@ body{font-family:'Tajawal',sans-serif;background:#fdf8f2;color:#3d2c24;min-heigh
         <input class="qty-inp" id="s-qty" type="number" value="1" min="1" inputmode="numeric" style="width:70px;font-size:22px;" oninput="updateSaleTotal()"/>
         <button class="qty-btn" style="width:48px;height:48px;font-size:26px;" onclick="adjSaleQty(1)">+</button>
         <div style="flex:1;text-align:left;">
-          <div style="font-size:11px;color:#b09888;">الإجمالي</div>
+          <div style="font-size:11px;color:#b09888;" data-i18n="total">الإجمالي</div>
           <div style="font-size:18px;font-weight:900;color:#5a8a6a;" id="s-total">—</div>
         </div>
       </div>
     </div>
 
-    <span class="choice-lbl">💳 طريقة الدفع</span>
+    <span class="choice-lbl" data-i18n="pay_method">💳 طريقة الدفع</span>
     <div class="choice-grid g3">
-      <button class="choice-btn" style="--sel-clr:#5a8a6a;--sel-bg:#e8f5e9;" data-pay="كاش 💵" onclick="selPay(this)"><div class="cb-ico">💵</div>كاش</button>
-      <button class="choice-btn" style="--sel-clr:#4a7ab0;--sel-bg:#e3f2fd;" data-pay="فيزا 💳" onclick="selPay(this)"><div class="cb-ico">💳</div>فيزا</button>
-      <button class="choice-btn" style="--sel-clr:#7a44c0;--sel-bg:#f3e5ff;" data-pay="تحويل 🏦" onclick="selPay(this)"><div class="cb-ico">🏦</div>تحويل</button>
+      <button class="choice-btn" style="--sel-clr:#5a8a6a;--sel-bg:#e8f5e9;" data-pay="كاش 💵" onclick="selPay(this)"><div class="cb-ico">💵</div><span data-i18n="cash">كاش</span></button>
+      <button class="choice-btn" style="--sel-clr:#4a7ab0;--sel-bg:#e3f2fd;" data-pay="فيزا 💳" onclick="selPay(this)"><div class="cb-ico">💳</div><span data-i18n="visa">فيزا</span></button>
+      <button class="choice-btn" style="--sel-clr:#7a44c0;--sel-bg:#f3e5ff;" data-pay="تحويل 🏦" onclick="selPay(this)"><div class="cb-ico">🏦</div><span data-i18n="transfer">تحويل</span></button>
     </div>
 
-    <button class="sub-btn sub-s" onclick="submitSale()">✅ تسجيل المبيعة</button>
+    <button class="sub-btn sub-s" onclick="submitSale()" data-i18n="submit_sale">✅ تسجيل المبيعة</button>
   </div>
 </div>
 
@@ -3247,32 +3256,32 @@ body{font-family:'Tajawal',sans-serif;background:#fdf8f2;color:#3d2c24;min-heigh
 <div class="screen" id="sc-buy">
   <div class="sc-hdr">
     <div class="sc-back" onclick="go('home')">←</div>
-    <div class="sc-title" style="color:#c4566a;">📦 تسجيل مشتريات</div>
+    <div class="sc-title" style="color:#c4566a;" data-i18n="buy_title">📦 تسجيل مشتريات</div>
   </div>
 
   <div class="done-card" id="buy-done">
     <div class="done-ico">✅</div>
-    <div class="done-txt">تم التسجيل!</div>
+    <div class="done-txt" data-i18n="done">تم التسجيل!</div>
     <div class="done-sub" id="buy-done-sub"></div>
-    <button class="done-again" onclick="resetBuy()">➕ تسجيل مشتريات أخرى</button>
+    <button class="done-again" onclick="resetBuy()" data-i18n="buy_again">➕ تسجيل مشتريات أخرى</button>
   </div>
 
   <div id="buy-form">
-    <span class="choice-lbl">📦 نوع المشتريات</span>
+    <span class="choice-lbl" data-i18n="buy_type">📦 نوع المشتريات</span>
     <div class="choice-grid g2" id="buy-cat-grid"></div>
 
     <div class="big-field">
-      <label>💰 المبلغ (ر.ع)</label>
+      <label data-i18n="amount">💰 المبلغ (ر.ع)</label>
       <input type="number" id="b-amt" placeholder="0.000" step="0.001" inputmode="decimal"/>
     </div>
 
-    <span class="choice-lbl">👤 من دفع؟</span>
+    <span class="choice-lbl" data-i18n="who_paid">👤 من دفع؟</span>
     <div class="choice-grid g2">
       <button class="choice-btn" style="--sel-clr:#5a8a6a;--sel-bg:#e8f5e9;" data-payer="حسين" onclick="selPayer(this)"><div class="cb-ico">👤</div>حسين</button>
       <button class="choice-btn" style="--sel-clr:#9664dc;--sel-bg:#f3e5ff;" data-payer="شوق" onclick="selPayer(this)"><div class="cb-ico">👤</div>شوق</button>
     </div>
 
-    <button class="sub-btn sub-b" onclick="submitBuy()">✅ تسجيل المشتريات</button>
+    <button class="sub-btn sub-b" onclick="submitBuy()" data-i18n="submit_buy">✅ تسجيل المشتريات</button>
   </div>
 </div>
 
@@ -3280,33 +3289,32 @@ body{font-family:'Tajawal',sans-serif;background:#fdf8f2;color:#3d2c24;min-heigh
 <div class="screen" id="sc-flower">
   <div class="sc-hdr">
     <div class="sc-back" onclick="go('home')">←</div>
-    <div class="sc-title" style="color:#d4a843;">🌹 عد الورد</div>
+    <div class="sc-title" style="color:#d4a843;" data-i18n="flower_title">🌹 عد الورد</div>
   </div>
 
   <div class="done-card" id="flower-done">
     <div class="done-ico">🌹</div>
-    <div class="done-txt">تم تحديث المخزون!</div>
-    <div class="done-sub">تم حفظ عدد الورود</div>
-    <button class="done-again" onclick="resetFlower()">🔄 تحديث مرة أخرى</button>
+    <div class="done-txt" data-i18n="flower_done">تم تحديث المخزون!</div>
+    <div class="done-sub" data-i18n="flower_done_sub">تم حفظ عدد الورود</div>
+    <button class="done-again" onclick="resetFlower()" data-i18n="flower_again">🔄 تحديث مرة أخرى</button>
   </div>
 
   <div id="flower-form">
-    <!-- زر رفع صورة الورد -->
     <div style="background:#fff7f0;border:2px dashed #f9c8d0;border-radius:16px;padding:16px;margin-bottom:16px;text-align:center;">
-      <div style="font-size:13px;font-weight:800;color:#7a6458;margin-bottom:10px;">📷 رفع صورة الورد للتحليل التلقائي</div>
-      <div style="font-size:11px;color:#b09888;margin-bottom:12px;">صوّر الورد وسيتم احتساب العدد تلقائياً</div>
+      <div style="font-size:13px;font-weight:800;color:#7a6458;margin-bottom:10px;" data-i18n="flower_scan_title">📷 رفع صورة الورد للتحليل التلقائي</div>
+      <div style="font-size:11px;color:#b09888;margin-bottom:12px;" data-i18n="flower_scan_sub">صوّر الورد وسيتم احتساب العدد تلقائياً</div>
       <input type="file" id="flower-img-input" accept="image/*" capture="environment" style="display:none;" onchange="handleFlowerImage(this)"/>
-      <button class="sub-btn sub-gold" style="margin:0;padding:12px 20px;font-size:13px;" onclick="document.getElementById('flower-img-input').click()">
+      <button class="sub-btn sub-gold" style="margin:0;padding:12px 20px;font-size:13px;" onclick="document.getElementById('flower-img-input').click()" data-i18n="take_photo">
         📸 التقط / اختر صورة
       </button>
       <div id="flower-scan-status" style="margin-top:10px;font-size:12px;color:#9664dc;min-height:18px;"></div>
     </div>
 
-    <div style="font-size:12px;color:#b09888;margin-bottom:14px;text-align:center;line-height:1.8;">
+    <div style="font-size:12px;color:#b09888;margin-bottom:14px;text-align:center;line-height:1.8;" data-i18n="or_manual">
       أو أدخل العدد يدوياً 👇
     </div>
     <div id="flower-list"></div>
-    <button class="sub-btn sub-gold" onclick="submitFlower()">💾 حفظ العدد</button>
+    <button class="sub-btn sub-gold" onclick="submitFlower()" data-i18n="save_count">💾 حفظ العدد</button>
   </div>
 </div>
 
@@ -3314,15 +3322,14 @@ body{font-family:'Tajawal',sans-serif;background:#fdf8f2;color:#3d2c24;min-heigh
 <div class="screen" id="sc-invoice">
   <div class="sc-hdr">
     <div class="sc-back" onclick="go('home')">←</div>
-    <div class="sc-title" style="color:#9664dc;">🧾 فاتورة ورد</div>
+    <div class="sc-title" style="color:#9664dc;" data-i18n="inv_title">🧾 فاتورة ورد</div>
   </div>
 
-  <!-- حالة النجاح -->
   <div class="done-card" id="inv-done" style="display:none;">
     <div class="done-ico">✅</div>
-    <div class="done-txt">تم حفظ الفاتورة!</div>
+    <div class="done-txt" data-i18n="inv_done">تم حفظ الفاتورة!</div>
     <div class="done-sub" id="inv-done-sub"></div>
-    <button class="done-again" onclick="resetInvoice()">📷 رفع فاتورة أخرى</button>
+    <button class="done-again" onclick="resetInvoice()" data-i18n="inv_again">📷 رفع فاتورة أخرى</button>
   </div>
 
   <!-- زر الرفع -->
@@ -3340,7 +3347,7 @@ body{font-family:'Tajawal',sans-serif;background:#fdf8f2;color:#3d2c24;min-heigh
   <div id="inv-scanning" style="display:none;flex-direction:column;align-items:center;justify-content:center;padding:60px 20px;gap:16px;">
     <div style="font-size:48px;animation:spin 1s linear infinite;display:inline-block;">⏳</div>
     <div style="color:var(--text2);font-weight:700;font-size:15px;">جاري تحليل الفاتورة...</div>
-    <div style="color:var(--text3);font-size:12px;">لحظة من فضلك</div>
+    <div style="color:var(--text3);font-size:12px;" data-i18n="wait">لحظة من فضلك</div>
   </div>
 </div>
 
@@ -3348,7 +3355,7 @@ body{font-family:'Tajawal',sans-serif;background:#fdf8f2;color:#3d2c24;min-heigh
 <div class="screen" id="sc-orders">
   <div class="sc-hdr">
     <div class="sc-back" onclick="go('home')">←</div>
-    <div class="sc-title" style="color:#c4566a;">📋 الطلبات المعلقة</div>
+    <div class="sc-title" style="color:#c4566a;" data-i18n="orders_title">📋 الطلبات المعلقة</div>
   </div>
   <div id="w-orders-list" style="display:flex;flex-direction:column;gap:12px;"></div>
 </div>
@@ -3357,10 +3364,10 @@ body{font-family:'Tajawal',sans-serif;background:#fdf8f2;color:#3d2c24;min-heigh
 <div class="screen" id="sc-today">
   <div class="sc-hdr">
     <div class="sc-back" onclick="go('home')">←</div>
-    <div class="sc-title" style="color:#ea580c;">📋 مبيعات اليوم</div>
+    <div class="sc-title" style="color:#ea580c;" data-i18n="nav_today">📋 مبيعات اليوم</div>
   </div>
   <div class="today-total-bar">
-    <div class="today-total-lbl">💰 إجمالي اليوم</div>
+    <div class="today-total-lbl" data-i18n="today_total">💰 إجمالي اليوم</div>
     <div class="today-total-val" id="todayTotalVal">—</div>
   </div>
   <div id="today-entries-list"></div>
@@ -3370,15 +3377,14 @@ body{font-family:'Tajawal',sans-serif;background:#fdf8f2;color:#3d2c24;min-heigh
 <div class="screen" id="sc-shelf">
   <div class="sc-hdr">
     <div class="sc-back" id="shelfBack" onclick="shelfGoBack()">←</div>
-    <div class="sc-title" style="color:#1d4ed8;" id="shelfTitle">🗄️ بيع من رف</div>
+    <div class="sc-title" style="color:#1d4ed8;" id="shelfTitle" data-i18n="nav_shelf">🗄️ بيع من رف</div>
   </div>
 
-  <!-- بطاقة النجاح -->
   <div class="done-card" id="shelf-done">
     <div class="done-ico">✅</div>
-    <div class="done-txt" id="shelf-done-txt">تم تسجيل المبيعة!</div>
+    <div class="done-txt" id="shelf-done-txt" data-i18n="done">تم تسجيل المبيعة!</div>
     <div class="done-sub" id="shelf-done-sub"></div>
-    <button class="done-again" onclick="resetShelf()">➕ بيعة أخرى من رف</button>
+    <button class="done-again" onclick="resetShelf()" data-i18n="shelf_again">➕ بيعة أخرى من رف</button>
   </div>
 
   <!-- قائمة الرفوف -->
@@ -3392,7 +3398,7 @@ body{font-family:'Tajawal',sans-serif;background:#fdf8f2;color:#3d2c24;min-heigh
 
     <!-- السعر -->
     <div class="big-field" id="shelf-price-field" style="display:none;">
-      <label>💰 السعر (ر.ع)</label>
+      <label data-i18n="amount">💰 السعر (ر.ع)</label>
       <input type="number" id="sh-amt" placeholder="0.000" step="0.001" inputmode="decimal"/>
     </div>
 
@@ -3408,14 +3414,14 @@ body{font-family:'Tajawal',sans-serif;background:#fdf8f2;color:#3d2c24;min-heigh
     </div>
 
     <!-- طريقة الدفع -->
-    <span class="choice-lbl" id="shelf-pay-lbl" style="display:none;">💳 طريقة الدفع</span>
+    <span class="choice-lbl" id="shelf-pay-lbl" style="display:none;" data-i18n="pay_method">💳 طريقة الدفع</span>
     <div class="choice-grid g3" id="shelf-pay-grid" style="display:none;">
-      <button class="choice-btn" style="--sel-clr:#5a8a6a;--sel-bg:#e8f5e9;" data-spay="كاش 💵" onclick="selShelfPay(this)"><div class="cb-ico">💵</div>كاش</button>
-      <button class="choice-btn" style="--sel-clr:#4a7ab0;--sel-bg:#e3f2fd;" data-spay="فيزا 💳" onclick="selShelfPay(this)"><div class="cb-ico">💳</div>فيزا</button>
-      <button class="choice-btn" style="--sel-clr:#7a44c0;--sel-bg:#f3e5ff;" data-spay="تحويل 🏦" onclick="selShelfPay(this)"><div class="cb-ico">🏦</div>تحويل</button>
+      <button class="choice-btn" style="--sel-clr:#5a8a6a;--sel-bg:#e8f5e9;" data-spay="كاش 💵" onclick="selShelfPay(this)"><div class="cb-ico">💵</div><span data-i18n="cash">كاش</span></button>
+      <button class="choice-btn" style="--sel-clr:#4a7ab0;--sel-bg:#e3f2fd;" data-spay="فيزا 💳" onclick="selShelfPay(this)"><div class="cb-ico">💳</div><span data-i18n="visa">فيزا</span></button>
+      <button class="choice-btn" style="--sel-clr:#7a44c0;--sel-bg:#f3e5ff;" data-spay="تحويل 🏦" onclick="selShelfPay(this)"><div class="cb-ico">🏦</div><span data-i18n="transfer">تحويل</span></button>
     </div>
 
-    <button class="sub-btn" id="sh-sub-btn" style="display:none;background:linear-gradient(135deg,#3b82f6,#1d4ed8);color:#fff;box-shadow:0 6px 24px rgba(59,130,246,.4);" onclick="submitShelfSale()">✅ تسجيل البيعة</button>
+    <button class="sub-btn" id="sh-sub-btn" style="display:none;background:linear-gradient(135deg,#3b82f6,#1d4ed8);color:#fff;box-shadow:0 6px 24px rgba(59,130,246,.4);" onclick="submitShelfSale()" data-i18n="submit_sale">✅ تسجيل البيعة</button>
   </div>
 </div>
 
@@ -3423,25 +3429,22 @@ body{font-family:'Tajawal',sans-serif;background:#fdf8f2;color:#3d2c24;min-heigh
 <div class="cash-modal" id="cashModal" style="display:none;" onclick="closeCashModal(event)">
   <div class="cash-modal-inner">
     <div class="cash-modal-title">
-      <span>💵 خزينة الكاش</span>
-      <button onclick="closeCashModal()" style="background:#f5ede0;border:none;border-radius:10px;padding:6px 12px;font-size:13px;cursor:pointer;font-family:'Tajawal',sans-serif;">إغلاق</button>
+      <span data-i18n="cash_box">💵 خزينة الكاش</span>
+      <button onclick="closeCashModal()" style="background:#f5ede0;border:none;border-radius:10px;padding:6px 12px;font-size:13px;cursor:pointer;font-family:'Tajawal',sans-serif;" data-i18n="close">إغلاق</button>
     </div>
 
-    <!-- الرصيد الحالي -->
     <div style="background:linear-gradient(135deg,#fffbea,#fff8d6);border:2px solid #f5c842;border-radius:16px;padding:16px;margin-bottom:16px;text-align:center;">
-      <div style="font-size:12px;color:#a07010;font-weight:700;margin-bottom:4px;">الرصيد الحالي</div>
+      <div style="font-size:12px;color:#a07010;font-weight:700;margin-bottom:4px;" data-i18n="current_bal">الرصيد الحالي</div>
       <div style="font-size:32px;font-weight:900;color:#7a5000;" id="modalCashBalance">—</div>
       <div style="font-size:11px;color:#c4960a;margin-top:4px;" id="modalCashToday"></div>
     </div>
 
-    <!-- تعديل يدوي -->
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:16px;">
-      <button onclick="cashAdjust('in')" style="padding:12px;background:#e8f5e9;border:2px solid #7aab8a;border-radius:12px;color:#5a8a6a;font-family:'Tajawal',sans-serif;font-size:13px;font-weight:800;cursor:pointer;">➕ إضافة كاش</button>
-      <button onclick="cashAdjust('out')" style="padding:12px;background:#fce4ec;border:2px solid #e8798a;border-radius:12px;color:#c4566a;font-family:'Tajawal',sans-serif;font-size:13px;font-weight:800;cursor:pointer;">➖ سحب كاش</button>
+      <button onclick="cashAdjust('in')" style="padding:12px;background:#e8f5e9;border:2px solid #7aab8a;border-radius:12px;color:#5a8a6a;font-family:'Tajawal',sans-serif;font-size:13px;font-weight:800;cursor:pointer;" data-i18n="cash_add">➕ إضافة كاش</button>
+      <button onclick="cashAdjust('out')" style="padding:12px;background:#fce4ec;border:2px solid #e8798a;border-radius:12px;color:#c4566a;font-family:'Tajawal',sans-serif;font-size:13px;font-weight:800;cursor:pointer;" data-i18n="cash_out">➖ سحب كاش</button>
     </div>
 
-    <!-- السجل -->
-    <div style="font-size:11px;font-weight:800;color:#b09888;letter-spacing:1px;margin-bottom:10px;">آخر العمليات</div>
+    <div style="font-size:11px;font-weight:800;color:#b09888;letter-spacing:1px;margin-bottom:10px;" data-i18n="last_ops">آخر العمليات</div>
     <div id="cashLogList"></div>
   </div>
 </div>
@@ -3450,15 +3453,15 @@ body{font-family:'Tajawal',sans-serif;background:#fdf8f2;color:#3d2c24;min-heigh
 <div class="calc-modal" id="calcModal" style="display:none;" onclick="closeCalcOutside(event)">
   <div class="calc-inner">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
-      <div style="font-size:17px;font-weight:900;color:#3d2c24;">🧮 الآلة الحاسبة</div>
-      <button onclick="closeCalc()" style="background:#f5ede0;border:none;border-radius:10px;padding:6px 14px;font-size:13px;cursor:pointer;font-family:'Tajawal',sans-serif;font-weight:700;">إغلاق</button>
+      <div style="font-size:17px;font-weight:900;color:#3d2c24;" data-i18n="calculator">🧮 الآلة الحاسبة</div>
+      <button onclick="closeCalc()" style="background:#f5ede0;border:none;border-radius:10px;padding:6px 14px;font-size:13px;cursor:pointer;font-family:'Tajawal',sans-serif;font-weight:700;" data-i18n="close">إغلاق</button>
     </div>
     <div class="calc-screen">
       <div class="calc-expr" id="calcExpr"></div>
       <div class="calc-result" id="calcResult">0</div>
     </div>
     <div class="calc-grid">
-      <button class="ck ck-clr" onclick="calcClear()">مسح</button>
+      <button class="ck ck-clr" onclick="calcClear()" data-i18n="clear">مسح</button>
       <button class="ck ck-clr" onclick="calcDel()">⌫</button>
       <button class="ck ck-clr" onclick="calcPercent()">%</button>
       <button class="ck ck-op"  onclick="calcOp('÷')">÷</button>
@@ -3487,6 +3490,214 @@ body{font-family:'Tajawal',sans-serif;background:#fdf8f2;color:#3d2c24;min-heigh
 <div class="toast" id="toast"></div>
 
 <script>
+// ══════════════════════════════════════
+// TRANSLATIONS
+// ══════════════════════════════════════
+const TR = {
+  ar: {
+    dir:'rtl', font:'Tajawal',
+    worker_panel:'واجهة العامل', logout:'خروج 🔒',
+    hello:'مرحباً 👋', choose_op:'اختر العملية',
+    cash_box:'خزينة الكاش', cash_log:'السجل ←', today_in:'دخل اليوم:',
+    orders_pending:'طلبات تنتظر التنفيذ', tap_details:'اضغط لعرض التفاصيل',
+    today_sales:'💰 مبيعات اليوم', today_buys:'🛒 مشتريات اليوم',
+    nav_sale:'مبيعة', nav_sale_sub:'تسجيل بيع',
+    nav_buy:'مشتريات', nav_buy_sub:'تسجيل شراء',
+    nav_flower:'عد الورد', nav_flower_sub:'تحديث المخزون',
+    nav_inv:'فاتورة ورد', nav_inv_sub:'إضافة فاتورة',
+    nav_shelf:'بيع من رف', nav_shelf_sub:'مبيعات الرفوف',
+    nav_today:'مبيعات اليوم', nav_today_sub:'عرض وحذف',
+    sale_title:'🌸 تسجيل مبيعة', done:'تم التسجيل!',
+    sale_again:'➕ تسجيل مبيعة أخرى',
+    product_type:'📦 نوع المنتج', unit_price:'💰 سعر القطعة (ر.ع)',
+    qty:'🔢 الكمية', total:'الإجمالي',
+    pay_method:'💳 طريقة الدفع',
+    cash:'كاش', visa:'فيزا', transfer:'تحويل',
+    submit_sale:'✅ تسجيل المبيعة',
+    buy_title:'📦 تسجيل مشتريات', buy_again:'➕ تسجيل مشتريات أخرى',
+    buy_type:'📦 نوع المشتريات', amount:'💰 المبلغ (ر.ع)',
+    who_paid:'👤 من دفع؟', submit_buy:'✅ تسجيل المشتريات',
+    flower_title:'🌹 عد الورد', flower_done:'تم تحديث المخزون!',
+    flower_done_sub:'تم حفظ عدد الورود', flower_again:'🔄 تحديث مرة أخرى',
+    flower_scan_title:'📷 رفع صورة الورد للتحليل التلقائي',
+    flower_scan_sub:'صوّر الورد وسيتم احتساب العدد تلقائياً',
+    take_photo:'📸 التقط / اختر صورة', or_manual:'أو أدخل العدد يدوياً 👇',
+    save_count:'💾 حفظ العدد',
+    inv_title:'🧾 فاتورة ورد', inv_done:'تم حفظ الفاتورة!',
+    inv_again:'📷 رفع فاتورة أخرى', wait:'لحظة من فضلك',
+    orders_title:'📋 الطلبات المعلقة',
+    today_total:'💰 إجمالي اليوم',
+    shelf_again:'➕ بيعة أخرى من رف',
+    cash_add:'➕ إضافة كاش', cash_out:'➖ سحب كاش',
+    current_bal:'الرصيد الحالي', last_ops:'آخر العمليات',
+    close:'إغلاق', calculator:'🧮 الآلة الحاسبة', clear:'مسح',
+    calc_use:'← استخدم الناتج في حقل السعر',
+    done_order:'✅ تم التنفيذ', call_btn:'📞 اتصال',
+    no_orders:'✅ لا توجد طلبات معلقة',
+    no_sales:'لا توجد مبيعات مسجلة اليوم',
+    no_shelves:'لا توجد رفوف مسجلة',
+    no_products:'لا توجد منتجات في هذا الرف',
+    stock:'المخزون:', available:'متوفر:', out_of_stock:'⚠️ نفد المخزون',
+    toast_enter_price:'⚠️ أدخل السعر', toast_choose_product:'⚠️ اختر نوع المنتج',
+    toast_choose_pay:'⚠️ اختر طريقة الدفع', toast_error:'❌ خطأ في التسجيل',
+    toast_enter_amount:'⚠️ أدخل المبلغ', toast_choose_buy:'⚠️ اختر نوع المشتريات',
+    toast_saved:'✅ تم الحفظ', toast_deleted:'🗑️ تم الحذف',
+    toast_del_fail:'❌ فشل الحذف', toast_del_confirm:'حذف هذه المبيعة؟',
+    toast_load_fail:'❌ تعذر التحميل', toast_conn_err:'❌ خطأ في الاتصال',
+    toast_no_result:'⚠️ لا يوجد ناتج', toast_result_used:'✅ تم نقل الناتج',
+    toast_added:'✅ تمت الإضافة', toast_withdrawn:'✅ تم السحب',
+    prompt_add_cash:'كم تضيف للخزينة؟ (ر.ع)', prompt_withdraw:'كم تسحب من الخزينة؟ (ر.ع)',
+    prompt_reason:'السبب (اختياري):', prompt_add_default:'إضافة يدوية', prompt_out_default:'سحب يدوي',
+    scanning:'⏳ جاري تحليل الصورة...', loading:'جاري التحميل...',
+    item_count:'منتج', sale_registered:'✅ تم تسجيل المبيعة!',
+  },
+  en: {
+    dir:'ltr', font:'Tajawal',
+    worker_panel:'Worker Panel', logout:'Logout 🔒',
+    hello:'Hello 👋', choose_op:'Choose Operation',
+    cash_box:'CASH REGISTER', cash_log:'Log →', today_in:'Today in:',
+    orders_pending:'Pending Orders', tap_details:'Tap to view details',
+    today_sales:'💰 Today Sales', today_buys:'🛒 Today Purchases',
+    nav_sale:'Sale', nav_sale_sub:'Record a sale',
+    nav_buy:'Purchase', nav_buy_sub:'Record a purchase',
+    nav_flower:'Count Flowers', nav_flower_sub:'Update inventory',
+    nav_inv:'Flower Invoice', nav_inv_sub:'Add invoice',
+    nav_shelf:'Shelf Sale', nav_shelf_sub:'Rented shelves',
+    nav_today:"Today's Sales", nav_today_sub:'View & delete',
+    sale_title:'🌸 Record Sale', done:'Recorded!',
+    sale_again:'➕ Record Another Sale',
+    product_type:'📦 Product Type', unit_price:'💰 Unit Price (OMR)',
+    qty:'🔢 Quantity', total:'Total',
+    pay_method:'💳 Payment Method',
+    cash:'Cash', visa:'Visa', transfer:'Transfer',
+    submit_sale:'✅ Submit Sale',
+    buy_title:'📦 Record Purchase', buy_again:'➕ Record Another Purchase',
+    buy_type:'📦 Purchase Type', amount:'💰 Amount (OMR)',
+    who_paid:'👤 Who paid?', submit_buy:'✅ Submit Purchase',
+    flower_title:'🌹 Count Flowers', flower_done:'Inventory Updated!',
+    flower_done_sub:'Flower count saved', flower_again:'🔄 Update Again',
+    flower_scan_title:'📷 Upload photo for auto analysis',
+    flower_scan_sub:'Take a photo and count will be calculated automatically',
+    take_photo:'📸 Capture / Choose Photo', or_manual:'Or enter count manually 👇',
+    save_count:'💾 Save Count',
+    inv_title:'🧾 Flower Invoice', inv_done:'Invoice Saved!',
+    inv_again:'📷 Upload Another Invoice', wait:'Please wait...',
+    orders_title:'📋 Pending Orders',
+    today_total:'💰 Today Total',
+    shelf_again:'➕ Another Shelf Sale',
+    cash_add:'➕ Add Cash', cash_out:'➖ Withdraw',
+    current_bal:'Current Balance', last_ops:'Recent Transactions',
+    close:'Close', calculator:'🧮 Calculator', clear:'Clear',
+    calc_use:'→ Use result in price field',
+    done_order:'✅ Done', call_btn:'📞 Call',
+    no_orders:'✅ No pending orders',
+    no_sales:'No sales recorded today',
+    no_shelves:'No shelves registered',
+    no_products:'No products in this shelf',
+    stock:'Stock:', available:'Available:', out_of_stock:'⚠️ Out of stock',
+    toast_enter_price:'⚠️ Enter price', toast_choose_product:'⚠️ Choose product type',
+    toast_choose_pay:'⚠️ Choose payment method', toast_error:'❌ Registration error',
+    toast_enter_amount:'⚠️ Enter amount', toast_choose_buy:'⚠️ Choose purchase type',
+    toast_saved:'✅ Saved', toast_deleted:'🗑️ Deleted',
+    toast_del_fail:'❌ Delete failed', toast_del_confirm:'Delete this sale?',
+    toast_load_fail:'❌ Failed to load', toast_conn_err:'❌ Connection error',
+    toast_no_result:'⚠️ No result', toast_result_used:'✅ Result applied',
+    toast_added:'✅ Cash added', toast_withdrawn:'✅ Withdrawn',
+    prompt_add_cash:'How much to add? (OMR)', prompt_withdraw:'How much to withdraw? (OMR)',
+    prompt_reason:'Reason (optional):', prompt_add_default:'Manual add', prompt_out_default:'Manual withdraw',
+    scanning:'⏳ Analyzing image...', loading:'Loading...',
+    item_count:'items', sale_registered:'✅ Sale recorded!',
+  },
+  bn: {
+    dir:'ltr', font:'Tajawal',
+    worker_panel:'কর্মী প্যানেল', logout:'লগআউট 🔒',
+    hello:'স্বাগতম 👋', choose_op:'কাজ বেছে নিন',
+    cash_box:'নগদ বাক্স', cash_log:'লগ →', today_in:'আজকের আয়:',
+    orders_pending:'অপেক্ষমাণ অর্ডার', tap_details:'বিবরণ দেখতে চাপুন',
+    today_sales:'💰 আজকের বিক্রয়', today_buys:'🛒 আজকের কেনাকাটা',
+    nav_sale:'বিক্রয়', nav_sale_sub:'বিক্রয় নথিভুক্ত',
+    nav_buy:'কেনাকাটা', nav_buy_sub:'কেনা নথিভুক্ত',
+    nav_flower:'ফুল গণনা', nav_flower_sub:'স্টক আপডেট',
+    nav_inv:'ফুলের ইনভয়েস', nav_inv_sub:'ইনভয়েস যোগ',
+    nav_shelf:'শেলফ বিক্রয়', nav_shelf_sub:'ভাড়া শেলফ',
+    nav_today:'আজকের বিক্রয়', nav_today_sub:'দেখুন ও মুছুন',
+    sale_title:'🌸 বিক্রয় নথিভুক্ত', done:'নথিভুক্ত হয়েছে!',
+    sale_again:'➕ আরেকটি বিক্রয়',
+    product_type:'📦 পণ্যের ধরন', unit_price:'💰 প্রতি পিস দাম (OMR)',
+    qty:'🔢 পরিমাণ', total:'মোট',
+    pay_method:'💳 পেমেন্ট পদ্ধতি',
+    cash:'নগদ', visa:'ভিসা', transfer:'ট্রান্সফার',
+    submit_sale:'✅ বিক্রয় জমা',
+    buy_title:'📦 কেনাকাটা নথিভুক্ত', buy_again:'➕ আরেকটি কেনাকাটা',
+    buy_type:'📦 কেনার ধরন', amount:'💰 পরিমাণ (OMR)',
+    who_paid:'👤 কে পরিশোধ করেছে?', submit_buy:'✅ কেনাকাটা জমা',
+    flower_title:'🌹 ফুল গণনা', flower_done:'স্টক আপডেট হয়েছে!',
+    flower_done_sub:'ফুলের সংখ্যা সেভ হয়েছে', flower_again:'🔄 আবার আপডেট',
+    flower_scan_title:'📷 স্বয়ংক্রিয় বিশ্লেষণের জন্য ছবি আপলোড করুন',
+    flower_scan_sub:'ছবি তুলুন, সংখ্যা স্বয়ংক্রিয়ভাবে গণনা হবে',
+    take_photo:'📸 ছবি তুলুন / বেছে নিন', or_manual:'অথবা ম্যানুয়ালি সংখ্যা দিন 👇',
+    save_count:'💾 সংখ্যা সেভ করুন',
+    inv_title:'🧾 ফুলের ইনভয়েস', inv_done:'ইনভয়েস সেভ হয়েছে!',
+    inv_again:'📷 আরেকটি ইনভয়েস', wait:'অনুগ্রহ করে অপেক্ষা করুন...',
+    orders_title:'📋 অপেক্ষমাণ অর্ডার',
+    today_total:'💰 আজকের মোট',
+    shelf_again:'➕ আরেকটি শেলফ বিক্রয়',
+    cash_add:'➕ নগদ যোগ', cash_out:'➖ উত্তোলন',
+    current_bal:'বর্তমান ব্যালেন্স', last_ops:'সাম্প্রতিক লেনদেন',
+    close:'বন্ধ', calculator:'🧮 ক্যালকুলেটর', clear:'মুছুন',
+    calc_use:'→ দামের ঘরে ফলাফল ব্যবহার করুন',
+    done_order:'✅ সম্পন্ন', call_btn:'📞 কল',
+    no_orders:'✅ কোনো অপেক্ষমাণ অর্ডার নেই',
+    no_sales:'আজকে কোনো বিক্রয় নেই',
+    no_shelves:'কোনো শেলফ নেই',
+    no_products:'এই শেলফে কোনো পণ্য নেই',
+    stock:'স্টক:', available:'পাওয়া যাচ্ছে:', out_of_stock:'⚠️ স্টক শেষ',
+    toast_enter_price:'⚠️ দাম দিন', toast_choose_product:'⚠️ পণ্যের ধরন বেছে নিন',
+    toast_choose_pay:'⚠️ পেমেন্ট পদ্ধতি বেছে নিন', toast_error:'❌ নথিভুক্তির ত্রুটি',
+    toast_enter_amount:'⚠️ পরিমাণ দিন', toast_choose_buy:'⚠️ কেনার ধরন বেছে নিন',
+    toast_saved:'✅ সেভ হয়েছে', toast_deleted:'🗑️ মুছে গেছে',
+    toast_del_fail:'❌ মুছতে ব্যর্থ', toast_del_confirm:'এই বিক্রয় মুছবেন?',
+    toast_load_fail:'❌ লোড ব্যর্থ', toast_conn_err:'❌ সংযোগ ত্রুটি',
+    toast_no_result:'⚠️ কোনো ফলাফল নেই', toast_result_used:'✅ ফলাফল প্রয়োগ হয়েছে',
+    toast_added:'✅ নগদ যোগ হয়েছে', toast_withdrawn:'✅ উত্তোলন হয়েছে',
+    prompt_add_cash:'কত যোগ করবেন? (OMR)', prompt_withdraw:'কত উত্তোলন করবেন? (OMR)',
+    prompt_reason:'কারণ (ঐচ্ছিক):', prompt_add_default:'ম্যানুয়াল যোগ', prompt_out_default:'ম্যানুয়াল উত্তোলন',
+    scanning:'⏳ ছবি বিশ্লেষণ হচ্ছে...', loading:'লোড হচ্ছে...',
+    item_count:'পণ্য', sale_registered:'✅ বিক্রয় নথিভুক্ত!',
+  }
+};
+
+let curLang = localStorage.getItem('wLang') || 'en';
+
+function t(key){ return (TR[curLang] && TR[curLang][key]) || TR['en'][key] || key; }
+
+function setLang(lang){
+  curLang = lang;
+  localStorage.setItem('wLang', lang);
+  const L = TR[lang];
+  // اتجاه الصفحة
+  document.documentElement.dir = L.dir;
+  document.documentElement.lang = lang;
+  // تفعيل زر اللغة
+  ['ar','en','bn'].forEach(l => {
+    const b = document.getElementById('lb-'+l);
+    if(b) b.classList.toggle('active', l===lang);
+  });
+  // تحديث كل العناصر
+  document.querySelectorAll('[data-i18n]').forEach(el => {
+    const key = el.dataset.i18n;
+    if(TR[lang][key] !== undefined) el.textContent = TR[lang][key];
+  });
+  // تحديث الـ placeholder في حقل الكمية
+  const sQtyLabel = document.querySelector('#sale-form .big-field label[data-i18n="qty"]');
+  if(sQtyLabel) sQtyLabel.textContent = t('qty');
+  // تحديث زر الحاسبة
+  const calcUseBtn = document.getElementById('calcUseBtn');
+  if(calcUseBtn) calcUseBtn.textContent = t('calc_use');
+  // تحديث cashSub
+  loadCash();
+}
+
 const CAT_SALE=[
   {img:'https://images.unsplash.com/photo-1490750967868-88df5691cc41?w=120&q=70',name:'ورد وباقات',val:'ورد وباقات'},
   {img:'https://images.unsplash.com/photo-1519225421980-715cb0215aed?w=120&q=70',name:'تاجات',val:'تاجات'},
@@ -3639,21 +3850,21 @@ function updateSaleTotal(){
 async function submitSale(){
   const unitAmt=parseFloat(document.getElementById('s-amt').value);
   const qty=parseInt(document.getElementById('s-qty').value)||1;
-  if(!unitAmt||unitAmt<=0){showToast('⚠️ أدخل السعر');return;}
-  if(!selCat){showToast('⚠️ اختر نوع المنتج');return;}
-  if(!selPay_){showToast('⚠️ اختر طريقة الدفع');return;}
+  if(!unitAmt||unitAmt<=0){showToast(t('toast_enter_price'));return;}
+  if(!selCat){showToast(t('toast_choose_product'));return;}
+  if(!selPay_){showToast(t('toast_choose_pay'));return;}
   const totalAmt=unitAmt*qty;
   try{
     const month=new Date().getFullYear()+'-'+String(new Date().getMonth()+1).padStart(2,'0');
     const desc=qty>1 ? selCat+' ×'+qty : selCat;
     await api('/api/entries',{method:'POST',headers:{'Content-Type':'application/json'},
       body:JSON.stringify({type:'s',desc,amt:totalAmt,payment_method:selPay_,category:selCat,month})});
-    document.getElementById('sale-done-txt').textContent='✅ تم تسجيل المبيعة!';
-    document.getElementById('sale-done-sub').textContent=desc+' — '+fmt(totalAmt)+' ر.ع — '+selPay_;
+    document.getElementById('sale-done-txt').textContent=t('sale_registered');
+    document.getElementById('sale-done-sub').textContent=desc+' — '+fmt(totalAmt)+' OMR — '+selPay_;
     document.getElementById('sale-form').style.display='none';
     document.getElementById('sale-done').style.display='block';
     loadDaySummary(); loadCash();
-  }catch(e){showToast('❌ خطأ في التسجيل');}
+  }catch(e){showToast(t('toast_error'));}
 }
 
 function resetSale(){
@@ -3669,8 +3880,8 @@ function resetSale(){
 // ── SUBMIT BUY ──
 async function submitBuy(){
   const amt=parseFloat(document.getElementById('b-amt').value);
-  if(!amt||amt<=0){showToast('⚠️ أدخل المبلغ');return;}
-  if(!selCat){showToast('⚠️ اختر نوع المشتريات');return;}
+  if(!amt||amt<=0){showToast(t('toast_enter_amount'));return;}
+  if(!selCat){showToast(t('toast_choose_buy'));return;}
   try{
     const month=new Date().getFullYear()+'-'+String(new Date().getMonth()+1).padStart(2,'0');
     await api('/api/entries',{method:'POST',headers:{'Content-Type':'application/json'},
@@ -3679,7 +3890,7 @@ async function submitBuy(){
     document.getElementById('buy-form').style.display='none';
     document.getElementById('buy-done').style.display='block';
     loadDaySummary();
-  }catch(e){showToast('❌ خطأ في التسجيل');}
+  }catch(e){showToast(t('toast_error'));}
 }
 
 function resetBuy(){
@@ -3748,7 +3959,7 @@ async function submitFlower(){
       body:JSON.stringify({flowers})});
     document.getElementById('flower-form').style.display='none';
     document.getElementById('flower-done').style.display='block';
-  }catch(e){showToast('❌ خطأ في الحفظ');}
+  }catch(e){showToast(t('toast_error'));}
 }
 
 function resetFlower(){
@@ -3808,7 +4019,7 @@ async function loadCash(){
     const el = document.getElementById('cashBalance');
     const sub = document.getElementById('cashSub');
     if(el) el.textContent = (bal).toFixed(3) + ' ر.ع';
-    if(sub) sub.textContent = 'دخل اليوم: ' + todayIn.toFixed(3) + ' ر.ع';
+    if(sub) sub.textContent = t('today_in') + ' ' + todayIn.toFixed(3) + ' OMR';
     // لون الرصيد
     const box = document.getElementById('cashBox');
     if(box) box.style.borderColor = bal < 10 ? '#e8798a' : '#f5c842';
@@ -3824,11 +4035,11 @@ async function openCashModal(){
   const balEl = document.getElementById('modalCashBalance');
   const todayEl = document.getElementById('modalCashToday');
   if(balEl) balEl.textContent = bal.toFixed(3) + ' ر.ع';
-  if(todayEl) todayEl.textContent = 'دخل اليوم: +'+todayIn.toFixed(3)+' | خرج: -'+todayOut.toFixed(3)+' ر.ع';
+  if(todayEl) todayEl.textContent = t('today_in')+' +'+todayIn.toFixed(3)+' | -'+todayOut.toFixed(3)+' OMR';
   const log = d.log || [];
   const listEl = document.getElementById('cashLogList');
   if(!listEl) return;
-  if(!log.length){ listEl.innerHTML='<div style="text-align:center;color:#b09888;padding:20px;">لا توجد عمليات بعد</div>'; return; }
+  if(!log.length){ listEl.innerHTML='<div style="text-align:center;color:#b09888;padding:20px;">'+t('last_ops')+'...</div>'; return; }
   listEl.innerHTML = log.map(r => `
     <div class="cash-log-row">
       <div class="cash-log-ico">${r.type==='in'?'💵':'💸'}</div>
@@ -3846,15 +4057,15 @@ function closeCashModal(e){
 }
 
 async function cashAdjust(type){
-  const label = type==='in' ? 'كم تضيف للخزينة؟ (ر.ع)' : 'كم تسحب من الخزينة؟ (ر.ع)';
+  const label = type==='in' ? t('prompt_add_cash') : t('prompt_withdraw');
   const amt = prompt(label);
   if(!amt) return;
   const val = parseFloat(amt);
-  if(isNaN(val) || val <= 0){ showToast('⚠️ رقم غير صحيح'); return; }
-  const desc = prompt('السبب (اختياري):') || (type==='in' ? 'إضافة يدوية' : 'سحب يدوي');
+  if(isNaN(val) || val <= 0){ showToast(t('toast_enter_amount')); return; }
+  const desc = prompt(t('prompt_reason')) || (type==='in' ? t('prompt_add_default') : t('prompt_out_default'));
   await api('/api/cash/adjust', {method:'POST', headers:{'Content-Type':'application/json'},
     body:JSON.stringify({type, amount:val, description:desc})});
-  showToast(type==='in' ? '✅ تمت الإضافة' : '✅ تم السحب');
+  showToast(type==='in' ? t('toast_added') : t('toast_withdrawn'));
   openCashModal();
   loadCash();
 }
@@ -3871,7 +4082,7 @@ async function loadTodaySales(){
     document.getElementById('todayTotalVal').textContent = total.toFixed(3)+' ر.ع';
     const el = document.getElementById('today-entries-list');
     if(!sales.length){
-      el.innerHTML='<div style="text-align:center;padding:40px;color:#b09888;font-size:15px;">لا توجد مبيعات مسجلة اليوم</div>';
+      el.innerHTML='<div style="text-align:center;padding:40px;color:#b09888;font-size:15px;">'+t('no_sales')+'</div>';
       return;
     }
     el.innerHTML = sales.map(e=>{
@@ -3891,15 +4102,15 @@ async function loadTodaySales(){
 }
 
 async function deleteTodayEntry(id, btn){
-  if(!confirm('حذف هذه المبيعة؟')) return;
+  if(!confirm(t('toast_del_confirm'))) return;
   btn.disabled=true; btn.textContent='⏳';
   try{
     await api('/api/entries/'+id, {method:'DELETE'});
     const row = document.getElementById('te-'+id);
     if(row){ row.style.opacity='0'; row.style.transition='opacity .3s'; setTimeout(()=>{row.remove(); loadTodaySales();},350); }
     loadDaySummary();
-    showToast('🗑️ تم الحذف');
-  }catch(e){ showToast('❌ فشل الحذف'); btn.disabled=false; btn.textContent='🗑️'; }
+    showToast(t('toast_deleted'));
+  }catch(e){ showToast(t('toast_del_fail')); btn.disabled=false; btn.textContent='🗑️'; }
 }
 
 // ── SHELF SALE ──
@@ -3913,17 +4124,18 @@ async function loadShelves(){
     shelfShelves = Array.isArray(d) ? d : (d.shelves || []);
     const el = document.getElementById('shelf-list');
     if(!shelfShelves.length){
-      el.innerHTML = '<div style="text-align:center;padding:40px;color:#b09888;">لا توجد رفوف مسجلة</div>';
+      el.innerHTML = '<div style="text-align:center;padding:40px;color:#b09888;">'+t('no_shelves')+'</div>';
       return;
     }
+    const arrow = curLang==='ar' ? '←' : '→';
     el.innerHTML = shelfShelves.map(s => `
       <div class="shelf-card" onclick="openShelfProducts(${s.id},'${s.name}','${s.color||'#e8547a'}')">
         <div class="shelf-card-dot" style="background:${s.color||'#e8547a'};"></div>
         <div style="flex:1;">
           <div class="shelf-card-name">${s.name}</div>
-          <div class="shelf-card-count">${(s.products||[]).length} منتج</div>
+          <div class="shelf-card-count">${(s.products||[]).length} ${t('item_count')}</div>
         </div>
-        <div class="shelf-card-arrow">←</div>
+        <div class="shelf-card-arrow">${arrow}</div>
       </div>`).join('');
   }catch(e){showToast('❌ تعذر تحميل الرفوف');}
 }
@@ -3941,7 +4153,7 @@ function openShelfProducts(sid, sname, scolor){
   hide('shelf-pay-lbl'); hide('shelf-pay-grid'); hide('sh-sub-btn');
   document.querySelectorAll('[data-spay]').forEach(b=>b.classList.remove('sel'));
   if(!prods.length){
-    document.getElementById('shelf-prods-list').innerHTML = '<div style="text-align:center;padding:30px;color:#b09888;">لا توجد منتجات في هذا الرف</div>';
+    document.getElementById('shelf-prods-list').innerHTML = '<div style="text-align:center;padding:30px;color:#b09888;">'+t('no_products')+'</div>';
     return;
   }
   document.getElementById('shelf-prods-list').innerHTML = prods.map(p=>`
@@ -3950,7 +4162,7 @@ function openShelfProducts(sid, sname, scolor){
         <div class="prod-card-name">${p.name}</div>
         <div class="prod-card-price">${(+p.price).toFixed(3)} ر.ع</div>
       </div>
-      <div class="prod-card-qty">المخزون: ${p.qty} قطعة</div>
+      <div class="prod-card-qty">${t('stock')} ${p.qty}</div>
     </div>`).join('');
 }
 
@@ -3977,7 +4189,7 @@ function selectProd(pid, price, qty, name){
   show('shelf-pay-lbl'); show('shelf-pay-grid'); show('sh-sub-btn');
   document.getElementById('sh-amt').value = price.toFixed(3);
   document.getElementById('sh-qty').value = '1';
-  document.getElementById('sh-stock-lbl').textContent = qty > 0 ? ('متوفر: '+qty) : '⚠️ نفد المخزون';
+  document.getElementById('sh-stock-lbl').textContent = qty > 0 ? (t('available')+' '+qty) : t('out_of_stock');
   document.getElementById('sh-amt').scrollIntoView({behavior:'smooth',block:'center'});
 }
 
@@ -3995,11 +4207,11 @@ function selShelfPay(el){
 }
 
 async function submitShelfSale(){
-  if(!shelfSelProd){ showToast('⚠️ اختر منتجاً'); return; }
-  if(!shelfSelPay_){ showToast('⚠️ اختر طريقة الدفع'); return; }
+  if(!shelfSelProd){ showToast(t('toast_choose_product')); return; }
+  if(!shelfSelPay_){ showToast(t('toast_choose_pay')); return; }
   const qty = parseInt(document.getElementById('sh-qty').value)||1;
   const amt = parseFloat(document.getElementById('sh-amt').value);
-  if(!amt||amt<=0){ showToast('⚠️ السعر غير صحيح'); return; }
+  if(!amt||amt<=0){ showToast(t('toast_enter_price')); return; }
   const btn = document.getElementById('sh-sub-btn');
   btn.disabled=true; btn.textContent='⏳ جاري التسجيل...';
   try{
@@ -4007,15 +4219,15 @@ async function submitShelfSale(){
       method:'POST', headers:{'Content-Type':'application/json'},
       body:JSON.stringify({qty, payment_method:shelfSelPay_})
     });
-    if(!d.ok){ showToast('❌ فشل التسجيل'); btn.disabled=false; btn.textContent='✅ تسجيل البيعة'; return; }
+    if(!d.ok){ showToast(t('toast_error')); btn.disabled=false; btn.textContent=t('submit_sale'); return; }
     document.getElementById('shelf-done-txt').textContent = '✅ تم تسجيل المبيعة!';
     document.getElementById('shelf-done-sub').textContent = shelfSelProd.name+' × '+qty+' — '+(+d.total).toFixed(3)+' ر.ع — '+shelfSelPay_;
     document.getElementById('shelf-products-view').style.display='none';
     document.getElementById('shelf-list-view').style.display='none';
     document.getElementById('shelf-done').style.display='block';
     loadDaySummary(); loadCash();
-  }catch(e){ showToast('❌ خطأ في الاتصال'); }
-  btn.disabled=false; btn.textContent='✅ تسجيل البيعة';
+  }catch(e){ showToast(t('toast_conn_err')); }
+  btn.disabled=false; btn.textContent=t('submit_sale');
 }
 
 function resetShelf(){
@@ -4044,7 +4256,7 @@ async function loadWorkerOrders(){
   const el = document.getElementById('w-orders-list');
   if(!el) return;
   if(!list.length){
-    el.innerHTML='<div style="text-align:center;padding:40px;color:#b09888;font-size:15px;">✅ لا توجد طلبات معلقة</div>';
+    el.innerHTML='<div style="text-align:center;padding:40px;color:#b09888;font-size:15px;">'+t('no_orders')+'</div>';
     return;
   }
   el.innerHTML = list.map(o => {
@@ -4054,17 +4266,17 @@ async function loadWorkerOrders(){
     const priceHtml = o.price && parseFloat(o.price)>0
       ? `<div style="font-size:16px;font-weight:900;color:#5a8a6a;">💰 ${(+o.price).toFixed(3)} ر.ع</div>` : '';
     const phoneHtml = o.customer_phone
-      ? `<a href="tel:${o.customer_phone}" style="display:inline-block;margin-top:6px;background:#e8f5e9;padding:6px 12px;border-radius:10px;color:#5a8a6a;text-decoration:none;font-size:13px;font-weight:700;">📞 اتصال</a>` : '';
+      ? `<a href="tel:${o.customer_phone}" style="display:inline-block;margin-top:6px;background:#e8f5e9;padding:6px 12px;border-radius:10px;color:#5a8a6a;text-decoration:none;font-size:13px;font-weight:700;">${t('call_btn')}</a>` : '';
     return `<div style="background:#fff;border:2px solid #f9c8d0;border-radius:18px;overflow:hidden;">
       ${imgHtml}
       <div style="padding:14px;">
-        <div style="font-size:12px;color:#b09888;margin-bottom:4px;">طلب #${o.id} — 📅 ${o.date}</div>
+        <div style="font-size:12px;color:#b09888;margin-bottom:4px;">#${o.id} — 📅 ${o.date}</div>
         <div style="font-size:17px;font-weight:900;color:#3d2c24;">👤 ${o.customer_name}</div>
         <div style="font-size:14px;color:#7a6458;margin-top:4px;line-height:1.5;">${o.description}</div>
         ${priceHtml}
         ${o.notes ? `<div style="font-size:12px;color:#b09888;margin-top:4px;">📝 ${o.notes}</div>` : ''}
         ${phoneHtml}
-        <button onclick="workerDoneOrder(${o.id},this)" style="display:block;width:100%;margin-top:12px;padding:13px;background:linear-gradient(135deg,#7aab8a,#5a8a6a);color:#fff;border:none;border-radius:12px;font-family:'Tajawal',sans-serif;font-size:15px;font-weight:900;cursor:pointer;">✅ تم التنفيذ</button>
+        <button onclick="workerDoneOrder(${o.id},this)" style="display:block;width:100%;margin-top:12px;padding:13px;background:linear-gradient(135deg,#7aab8a,#5a8a6a);color:#fff;border:none;border-radius:12px;font-family:'Tajawal',sans-serif;font-size:15px;font-weight:900;cursor:pointer;">${t('done_order')}</button>
       </div>
     </div>`;
   }).join('');
@@ -4157,11 +4369,12 @@ function useCalcResult(){
   const v = parseFloat(calcCurrent_);
   if(isNaN(v)){ showToast('⚠️ لا يوجد ناتج'); return; }
   const activeAmt = document.querySelector('.screen.on #s-amt, .screen.on #b-amt, .screen.on #sh-amt');
-  if(activeAmt){ activeAmt.value = v.toFixed(3); showToast('✅ تم نقل الناتج'); }
+  if(activeAmt){ activeAmt.value = v.toFixed(3); showToast(t('toast_result_used')); }
   closeCalc();
 }
 
 // Init
+setLang(curLang);
 buildCatGrid();
 loadDaySummary();
 loadCash();
