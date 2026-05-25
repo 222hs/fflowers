@@ -197,50 +197,38 @@ header{
 .header-badge-btn.debt{background:rgba(232,121,138,0.15);color:var(--accent2);}
 .header-badge-btn:hover{transform:scale(1.05);}
 
-/* ── بطاقة التحليل الذكي ── */
-.insights-card{
+/* ── بطاقة ملخص الكاش اليومي ── */
+.cashday-card{
   margin:14px 0 0;border-radius:20px;overflow:hidden;
   border:1px solid var(--border);
   box-shadow:0 4px 20px var(--shadow);
+  background:var(--card);
   animation:fadeUp .6s ease both;
 }
-.insights-header{
-  background:linear-gradient(135deg,var(--accent),var(--accent2));
+.cashday-header{
+  background:linear-gradient(135deg,#d4a020,#a87000);
   padding:11px 16px;display:flex;align-items:center;gap:8px;
 }
-.insights-header-icon{font-size:18px;}
-.insights-header-title{font-size:13px;font-weight:800;color:#fff;letter-spacing:.5px;}
-.insights-header-badge{
-  margin-right:auto;font-size:10px;font-weight:700;
+.cashday-header-icon{font-size:18px;}
+.cashday-header-title{font-size:13px;font-weight:800;color:#fff;letter-spacing:.5px;flex:1;}
+.cashday-header-date{font-size:10px;font-weight:700;
   background:rgba(255,255,255,0.25);color:#fff;
-  padding:2px 8px;border-radius:20px;
+  padding:2px 8px;border-radius:20px;}
+.cashday-body{padding:14px 16px;}
+.cashday-bar-wrap{margin-bottom:12px;}
+.cashday-bar-label{display:flex;justify-content:space-between;font-size:12px;color:var(--text3);margin-bottom:4px;}
+.cashday-bar-label b{color:var(--text);font-size:13px;}
+.cashday-bar-track{height:10px;border-radius:8px;background:var(--bg2);overflow:hidden;}
+.cashday-bar-fill{height:100%;border-radius:8px;transition:width .7s ease;}
+.cashday-divider{border:none;border-top:1px solid var(--border);margin:12px 0;}
+.cashday-net{
+  display:flex;justify-content:space-between;align-items:center;
+  padding:10px 14px;border-radius:14px;
+  background:linear-gradient(135deg,#fff9e6,#fef3c7);
+  border:1.5px solid #f5c842;
 }
-.insights-sections{background:var(--card);}
-.insights-section{
-  padding:14px 16px;border-bottom:1px solid var(--border);
-}
-.insights-section:last-child{border-bottom:none;}
-.insights-section-label{
-  font-size:10px;font-weight:800;letter-spacing:2px;text-transform:uppercase;
-  color:var(--text3);margin-bottom:7px;display:flex;align-items:center;gap:5px;
-}
-.insights-section-label span{
-  background:var(--accent-glow);color:var(--accent2);
-  padding:2px 7px;border-radius:8px;
-}
-.insights-text{
-  font-size:14px;line-height:1.75;color:var(--text);font-weight:400;
-}
-.insights-loading{
-  padding:20px 16px;text-align:center;color:var(--text3);font-size:13px;
-}
-.insights-skeleton{
-  height:13px;background:linear-gradient(90deg,var(--border) 25%,var(--bg2) 50%,var(--border) 75%);
-  background-size:200% 100%;animation:skl-shine 1.2s infinite;border-radius:6px;margin:6px 0;
-}
-.insights-skeleton.w80{width:80%;}
-.insights-skeleton.w60{width:60%;}
-.insights-skeleton.w90{width:90%;}
+.cashday-net-lbl{font-size:13px;color:#7a6000;font-weight:700;}
+.cashday-net-val{font-size:22px;font-weight:900;color:#a87000;}
 
 /* Theme picker */
 .theme-btn{
@@ -914,25 +902,49 @@ input[type="date"]{width:100%;padding:10px 12px;border:1px solid var(--border);b
       <div class="kpi-sub"><span id="kNb" class="badge">—</span></div></div>
   </div>
 
-  <!-- ── بطاقة التحليل الذكي ── -->
-  <div class="insights-card" id="insightsCard">
-    <div class="insights-header">
-      <span class="insights-header-icon">🤖</span>
-      <span class="insights-header-title">تحليل اليوم والنصائح</span>
-      <span class="insights-header-badge" id="insightsBadge">جاري التحليل...</span>
+  <!-- ── بطاقة ملخص الكاش اليومي ── -->
+  <div class="cashday-card" id="cashdayCard">
+    <div class="cashday-header">
+      <span class="cashday-header-icon">💰</span>
+      <span class="cashday-header-title">ملخص الكاش اليومي</span>
+      <span class="cashday-header-date" id="cashdayDate">—</span>
     </div>
-    <div class="insights-sections" id="insightsSections">
-      <div class="insights-section">
-        <div class="insights-section-label"><span>📊 تحليل أداء اليوم</span></div>
-        <div class="insights-text" style="color:var(--text3);font-style:italic;">⏳ جاري تحليل مبيعات اليوم...</div>
+    <div class="cashday-body">
+      <!-- شريط الدخل -->
+      <div class="cashday-bar-wrap">
+        <div class="cashday-bar-label">
+          <span>📈 دخل اليوم</span>
+          <b id="cdIncome">0.000 ر.ع</b>
+        </div>
+        <div class="cashday-bar-track">
+          <div class="cashday-bar-fill" id="cdIncomeBar" style="width:0%;background:linear-gradient(90deg,#4ade80,#16a34a);"></div>
+        </div>
       </div>
-      <div class="insights-section">
-        <div class="insights-section-label"><span>💡 نصائح لزيادة المبيعات</span></div>
-        <div class="insights-text" style="color:var(--text3);font-style:italic;">⏳ جاري تحضير النصائح المخصصة...</div>
+      <!-- شريط المصاريف -->
+      <div class="cashday-bar-wrap">
+        <div class="cashday-bar-label">
+          <span>📉 مصاريف اليوم</span>
+          <b id="cdExpense">0.000 ر.ع</b>
+        </div>
+        <div class="cashday-bar-track">
+          <div class="cashday-bar-fill" id="cdExpenseBar" style="width:0%;background:linear-gradient(90deg,#f87171,#dc2626);"></div>
+        </div>
       </div>
-      <div class="insights-section">
-        <div class="insights-section-label"><span>🗓️ المناسبات القادمة في عُمان</span></div>
-        <div class="insights-text" style="color:var(--text3);font-style:italic;">⏳ جاري البحث عن المناسبات القريبة...</div>
+      <!-- شريط المشتريات -->
+      <div class="cashday-bar-wrap">
+        <div class="cashday-bar-label">
+          <span>🛒 مشتريات اليوم</span>
+          <b id="cdBuys">0.000 ر.ع</b>
+        </div>
+        <div class="cashday-bar-track">
+          <div class="cashday-bar-fill" id="cdBuysBar" style="width:0%;background:linear-gradient(90deg,#fb923c,#ea580c);"></div>
+        </div>
+      </div>
+      <hr class="cashday-divider">
+      <!-- الصافي -->
+      <div class="cashday-net">
+        <span class="cashday-net-lbl">🏆 صافي اليوم</span>
+        <span class="cashday-net-val" id="cdNet">0.000 ر.ع</span>
       </div>
     </div>
   </div>
@@ -1498,6 +1510,8 @@ function renderDayKPI(todaySales, todayBuys, allSales, allBuys){
   document.getElementById('dSc').textContent = todaySales.length+' '+t('operations');
   document.getElementById('dB').textContent = fmt(tb)+' '+cur;
   document.getElementById('dBc').textContent = todayBuys.length+' '+t('operations');
+  // تحديث بطاقة ملخص الكاش اليومي
+  renderCashDay(todaySales, todayBuys);
   // الرسم البياني يستخدم كل بيانات الشهر
   renderDayChart(allSales, allBuys);
 }
@@ -2485,56 +2499,52 @@ function toggleLang(){
 // Init language
 setLang(lang);
 
-/* ── بطاقة التحليل الذكي ── */
-function renderInsights(text, badge){
+/* ── بطاقة ملخص الكاش اليومي ── */
+function renderCashDay(todaySales, todayBuys){
   try{
-    const sec = document.getElementById('insightsSections');
-    if(!sec) return;
-    const parts = text.split('||');
-    const labels = [
-      {icon:'📊', title:'تحليل أداء اليوم'},
-      {icon:'💡', title:'نصائح لزيادة المبيعات'},
-      {icon:'🗓️', title:'المناسبات القادمة في عُمان'},
-    ];
-    let html = '';
-    parts.forEach((part, i)=>{
-      const lbl = labels[i] || {icon:'✨', title:'ملاحظات'};
-      html += '<div class="insights-section">'
-        + '<div class="insights-section-label"><span>' + lbl.icon + ' ' + lbl.title + '</span></div>'
-        + '<div class="insights-text">' + part.trim() + '</div>'
-        + '</div>';
-    });
-    sec.innerHTML = html;
-    const b = document.getElementById('insightsBadge');
-    if(b) b.textContent = badge || 'اليوم';
-  }catch(err){ console.error('renderInsights error:', err); }
-}
+    const income  = todaySales.reduce((a,e)=>a+e.amt, 0);
+    const buys    = todayBuys.filter(e=>e.type!=='expense').reduce((a,e)=>a+e.amt, 0);
+    const expense = todayBuys.filter(e=>e.type==='expense').reduce((a,e)=>a+e.amt, 0);
+    const net     = income - buys - expense;
+    const maxVal  = Math.max(income, buys + expense, 0.001);
 
-async function loadInsights(){
-  try{
-    const r = await fetch('/api/insights', {credentials:'include'});
-    if(r.status === 302 || r.status === 401 || r.redirected){
-      renderInsights('⚠️ انتهت جلسة الدخول||أعد تحميل الصفحة أو سجّل دخول من جديد||—', 'خطأ');
-      return;
+    const fmt = v => v.toFixed(3) + ' ر.ع';
+    const pct = v => Math.min(100, Math.round((v / maxVal) * 100)) + '%';
+
+    const set = (id, val) => { const el=document.getElementById(id); if(el) el.textContent=val; };
+    const setW = (id, w) => { const el=document.getElementById(id); if(el) el.style.width=w; };
+
+    set('cdIncome',  fmt(income));
+    set('cdExpense', fmt(expense));
+    set('cdBuys',    fmt(buys));
+    setW('cdIncomeBar',  pct(income));
+    setW('cdExpenseBar', pct(expense));
+    setW('cdBuysBar',    pct(buys));
+
+    const netEl = document.getElementById('cdNet');
+    if(netEl){
+      netEl.textContent = fmt(Math.abs(net));
+      netEl.style.color = net >= 0 ? '#16a34a' : '#dc2626';
+      netEl.textContent = (net < 0 ? '- ' : '') + fmt(Math.abs(net));
     }
-    if(!r.ok){
-      renderInsights('⚠️ خطأ في الخادم ('+r.status+')||تحقق من سجلات Render لمعرفة السبب||—', 'خطأ '+r.status);
-      return;
+    // التاريخ
+    const dateEl = document.getElementById('cashdayDate');
+    if(dateEl){
+      const d = new Date();
+      dateEl.textContent = d.toLocaleDateString('ar-OM', {weekday:'short', day:'numeric', month:'short'});
     }
-    const data = await r.json();
-    if(data && data.text){
-      const txt = data.text.indexOf('||') !== -1 ? data.text
-        : data.text + '||💡 حافظ على التواصل مع عملائك وقدّم عروضاً خاصة في المناسبات.||🗓️ راجع التقويم الرسمي لسلطنة عُمان للمناسبات القادمة.';
-      renderInsights(txt, data.fresh ? 'جديد ✨' : 'اليوم');
+    // لون صافي البطاقة
+    const wrap = document.querySelector('.cashday-net');
+    if(wrap){
+      if(net >= 0){
+        wrap.style.background = 'linear-gradient(135deg,#f0fdf4,#dcfce7)';
+        wrap.style.borderColor = '#86efac';
+      } else {
+        wrap.style.background = 'linear-gradient(135deg,#fff1f2,#ffe4e6)';
+        wrap.style.borderColor = '#fca5a5';
+      }
     }
-  }catch(e){
-    renderInsights(
-      '⚠️ تعذّر الاتصال بالخادم: ' + e.message
-      + '||💡 أضف مفتاح Groq أو Gemini مجاناً في إعدادات Render'
-      + '||🗓️ بعد إضافة المفتاح أعد تحميل الصفحة',
-      'خطأ'
-    );
-  }
+  }catch(e){ console.error('renderCashDay error:', e); }
 }
 
 /* ── حالة الذكاء الاصطناعي ── */
@@ -2922,7 +2932,7 @@ function initApp(){
   // كل استدعاء معزول حتى لا يمنع فشلُ واحد البقيةَ
   try{ load(); }catch(e){ console.error('load init failed', e); }
   try{ loadFlowerInvPage(); }catch(e){ console.error('loadFlowerInvPage failed', e); }
-  try{ loadInsights(); }catch(e){ console.error('loadInsights failed', e); }
+  // loadInsights removed — replaced by renderCashDay (called from renderDayKPI)
   try{ loadAiStatus(); }catch(e){ console.error('loadAiStatus failed', e); }
   try{ loadGoal(); }catch(e){ console.error('loadGoal failed', e); }
   try{ loadHeaderBadges(); }catch(e){}

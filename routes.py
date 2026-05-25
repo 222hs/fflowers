@@ -1648,6 +1648,47 @@ def api_del_debt(did):
 
 # ══════════════════════════════════════════════════════════════
 # ── Print Feed (للطباعة التلقائية من الماك) ──────────────────
+@app.route("/api/voice-order", methods=["POST"])
+def api_voice_order():
+    """
+    Endpoint للطلبات الصوتية من سيري / Shortcuts
+    POST JSON: { token, customer_name, customer_phone, description, price, notes }
+    """
+    d = request.json or {}
+    token    = d.get("token","")
+    expected = os.environ.get("VOICE_TOKEN","")
+    if not expected or token != expected:
+        return jsonify({"ok": False, "error": "unauthorized"}), 401
+    name = (d.get("customer_name") or "").strip()
+    desc = (d.get("description")   or "").strip()
+    if not name or not desc:
+        return jsonify({"ok": False, "error": "customer_name and description required"}), 400
+    date_val = datetime.now().strftime("%d/%m/%Y")
+    db_run(
+        "INSERT INTO orders (customer_name,customer_phone,description,price,notes,date,source) VALUES (?,?,?,?,?,?,?)",
+        (name,
+         (d.get("customer_phone") or "").strip(),
+         desc,
+         float(d.get("price") or 0),
+         (d.get("notes") or "").strip(),
+         date_val,
+         "siri")
+    )
+    # إشعار تيليغرام
+    try:
+        order_id = db_one("SELECT last_insert_rowid() as id")
+        oid = order_id["id"] if order_id else "?"
+        msg = (f"🎤 طلب صوتي جديد #{oid}\n"
+               f"👤 {name}\n"
+               f"📞 {d.get('customer_phone','—') or '—'}\n"
+               f"📝 {desc}\n"
+               + (f"💰 {float(d['price']):.3f} OMR\n" if d.get("price") and float(d.get("price",0))>0 else "")
+               + (f"📌 {d['notes']}\n" if d.get("notes") else ""))
+        send_telegram(msg)
+    except Exception as e:
+        print("voice-order telegram error:", e)
+    return jsonify({"ok": True, "message": "تم تسجيل الطلب بنجاح ✅"})
+
 @app.route("/api/print-feed")
 def api_print_feed():
     """Endpoint آمن بـ token للسكريبت على الماك"""

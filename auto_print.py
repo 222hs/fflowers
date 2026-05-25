@@ -12,18 +12,20 @@
   pip3 install requests
 """
 
-import requests, json, subprocess, os, time, tempfile
+import requests, json, subprocess, os, time, tempfile, base64
 from datetime import datetime
 
 # ══════════════════════════════════════
 # ⚙️  الإعدادات — عدّلها قبل التشغيل
 # ══════════════════════════════════════
-APP_URL       = "https://fairose.up.railway.app"   # رابط التطبيق
-PRINT_TOKEN   = "CHANGE_ME_123"                    # نفس PRINT_TOKEN في Railway
-PRINTER_NAME  = ""          # اسم الطابعة (فارغ = الافتراضية). مثال: "HP_LaserJet"
-CHECK_EVERY   = 30          # ثواني بين كل فحص
-PAPER_WIDTH   = "A4"        # A4 أو A5 أو "80mm" لطابعة حرارية
-LANGUAGE      = "tri"       # ar=عربي | en=English | bn=বাংলা | tri=الثلاثة معاً
+APP_URL          = "https://fairose.up.railway.app"   # رابط التطبيق
+PRINT_TOKEN      = "CHANGE_ME_123"                    # نفس PRINT_TOKEN في Railway
+PRINTER_NAME     = ""          # اسم الطابعة (فارغ = الافتراضية). مثال: "HP_LaserJet"
+CHECK_EVERY      = 30          # ثواني بين كل فحص
+PAPER_WIDTH      = "A4"        # A4 أو A5 أو "80mm" لطابعة حرارية
+LANGUAGE         = "tri"       # ar=عربي | en=English | bn=বাংলা | tri=الثلاثة معاً
+TELEGRAM_BOT_TOKEN = ""        # توكن البوت لتحميل صور الطلبات (اختياري)
+PRINT_ORDER_IMAGE  = True      # طباعة صورة الطلب إن وجدت
 # ══════════════════════════════════════
 
 PRINTED_FILE = os.path.expanduser("~/.fairuz_printed_ids.json")
@@ -120,8 +122,49 @@ def label_row(ar_key, value, lang):
         lbl = TR.get(lang, TR["ar"]).get(ar_key, ar_key)
     return lbl
 
+def fetch_order_image_b64(order):
+    """يحاول تحميل صورة الطلب ويعيدها كـ base64 data-URI، أو None"""
+    if not PRINT_ORDER_IMAGE:
+        return None
+    # محاولة 1: img_url مباشر
+    img_url = order.get("img_url") or ""
+    if img_url and img_url.startswith("http"):
+        try:
+            r = requests.get(img_url, timeout=15)
+            if r.status_code == 200:
+                ct = r.headers.get("Content-Type","image/jpeg").split(";")[0].strip()
+                b64 = base64.b64encode(r.content).decode()
+                return f"data:{ct};base64,{b64}"
+        except Exception as e:
+            print(f"  ⚠️  لم يمكن تحميل img_url: {e}")
+    # محاولة 2: img_file_id من تيليغرام
+    file_id = order.get("img_file_id") or ""
+    if file_id and TELEGRAM_BOT_TOKEN:
+        try:
+            api = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}"
+            r = requests.get(f"{api}/getFile", params={"file_id": file_id}, timeout=10)
+            path = r.json()["result"]["file_path"]
+            img_r = requests.get(f"https://api.telegram.org/file/bot{TELEGRAM_BOT_TOKEN}/{path}", timeout=20)
+            if img_r.status_code == 200:
+                ct = img_r.headers.get("Content-Type","image/jpeg").split(";")[0].strip()
+                b64 = base64.b64encode(img_r.content).decode()
+                return f"data:{ct};base64,{b64}"
+        except Exception as e:
+            print(f"  ⚠️  لم يمكن تحميل صورة تيليغرام: {e}")
+    return None
+
 def make_receipt_html(order):
     lang = LANGUAGE
+
+    # تحميل صورة الطلب
+    img_b64 = fetch_order_image_b64(order)
+    if img_b64:
+        img_html = f'''<div class="order-img-wrap">
+          <div class="order-img-lbl">📸 صورة الطلب</div>
+          <img class="order-img" src="{img_b64}" alt="order image">
+        </div>'''
+    else:
+        img_html = ""
 
     price_html = ""
     if order.get("price") and float(order.get("price", 0)) > 0:
@@ -136,8 +179,13 @@ def make_receipt_html(order):
         notes_lbl = TR.get(lang if lang != "tri" else "ar", TR["ar"]).get("notes","Notes")
         notes_html = f'<div class="notes">📝 {notes_lbl}: {order["notes"]}</div>'
 
-    source_key = "telegram" if order.get("source") == "telegram" else "web"
-    source_badge = TR.get(lang if lang != "tri" else "ar", TR["ar"]).get(source_key, "🌐")
+    src = order.get("source","")
+    if src == "telegram":
+        source_badge = "💬 تيليغرام"
+    elif src == "siri":
+        source_badge = "🎤 سيري"
+    else:
+        source_badge = "🌐 موقع"
 
     # اتجاه الصفحة
     page_dir = "rtl" if lang in ("ar","tri") else "ltr"
@@ -242,8 +290,32 @@ def make_receipt_html(order):
     margin-bottom: 6px;
     letter-spacing: 1px;
   }}
+  .order-img-wrap {{
+    margin: 12px 0;
+    text-align: center;
+    border: 1.5px solid #f9c8d0;
+    border-radius: 12px;
+    overflow: hidden;
+    background: #fdf8f2;
+    padding: 8px;
+  }}
+  .order-img-lbl {{
+    font-size: 10pt;
+    color: #c4566a;
+    font-weight: 700;
+    margin-bottom: 6px;
+  }}
+  .order-img {{
+    max-width: 100%;
+    max-height: 180mm;
+    border-radius: 8px;
+    object-fit: contain;
+    display: block;
+    margin: 0 auto;
+  }}
   @media print {{
     body {{ margin: 0; padding: 8mm; }}
+    .order-img {{ max-height: 160mm; }}
   }}
 </style>
 </head>
@@ -282,6 +354,8 @@ def make_receipt_html(order):
 {price_html}
 
 {notes_html}
+
+{img_html}
 
 <div class="footer">
   🕐 {lbl_printed}: {now}<br>
