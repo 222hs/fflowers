@@ -19,16 +19,45 @@ html,body{height:100%;overflow:hidden;font-family:'Tajawal',sans-serif;}
 }
 @keyframes kenBurns{from{transform:scale(1);}to{transform:scale(1.07);}}
 
-/* ── Approach animation (triggered by JS) ── */
+/* ── Walking approach animation ── */
 .bg-img.approaching{
-  animation:approachDoor 2.6s cubic-bezier(.15,.1,.25,1) forwards;
-  transform-origin:50% 55%; /* center of the door */
+  animation:walkToDoor 3.8s cubic-bezier(.22,.05,.18,1) forwards;
+  transform-origin:50% 55%;
 }
-@keyframes approachDoor{
-  0%  {transform:scale(1);    filter:brightness(1)   blur(0px);}
-  55% {transform:scale(1.6);  filter:brightness(1.08) blur(0px);}
-  80% {transform:scale(2.3);  filter:brightness(1.4) blur(0px);}
-  100%{transform:scale(3.2);  filter:brightness(2.2) blur(4px);}
+@keyframes walkToDoor{
+  /* Walking sway: translateX oscillates left/right like footsteps */
+  0%  {transform:scale(1)    translateX(0px);   filter:brightness(1);}
+  6%  {transform:scale(1.05) translateX(8px);   filter:brightness(1);}
+  13% {transform:scale(1.12) translateX(-7px);  filter:brightness(1);}
+  21% {transform:scale(1.21) translateX(8px);   filter:brightness(1);}
+  29% {transform:scale(1.33) translateX(-7px);  filter:brightness(1);}
+  37% {transform:scale(1.47) translateX(7px);   filter:brightness(1.02);}
+  45% {transform:scale(1.63) translateX(-6px);  filter:brightness(1.02);}
+  53% {transform:scale(1.82) translateX(5px);   filter:brightness(1.04);}
+  61% {transform:scale(2.03) translateX(-3px);  filter:brightness(1.06);}
+  /* Slowing near door — sway fades out */
+  70% {transform:scale(2.26) translateX(1px);   filter:brightness(1.1);}
+  78% {transform:scale(2.50) translateX(0px);   filter:brightness(1.2);}
+  /* At door — brightness builds */
+  86% {transform:scale(2.76) translateX(0px);   filter:brightness(1.45);}
+  93% {transform:scale(3.0)  translateX(0px);   filter:brightness(1.85);}
+  100%{transform:scale(3.3)  translateX(0px);   filter:brightness(2.6) blur(7px);}
+}
+
+/* ── Door glow (warm light through glass) ── */
+#doorGlow{
+  position:fixed;inset:0;z-index:6;
+  pointer-events:none;opacity:0;
+}
+#doorGlow.on{
+  animation:doorLight 1.3s ease-out forwards;
+}
+@keyframes doorLight{
+  0%  {opacity:0;  background:radial-gradient(ellipse 18% 26% at 50% 53%,rgba(255,230,160,.5) 0%,transparent 100%);}
+  25% {opacity:1;  background:radial-gradient(ellipse 40% 55% at 50% 53%,rgba(255,230,150,.75) 0%,transparent 80%);}
+  55% {opacity:1;  background:radial-gradient(ellipse 70% 85% at 50% 53%,rgba(255,225,140,.9) 0%,transparent 85%);}
+  80% {opacity:1;  background:radial-gradient(ellipse 100% 120% at 50% 53%,rgba(255,235,180,.95) 0%,transparent 90%);}
+  100%{opacity:.4; background:radial-gradient(ellipse 140% 160% at 50% 53%,rgba(255,255,255,1) 0%,transparent 95%);}
 }
 
 /* Dark overlay */
@@ -294,8 +323,8 @@ html,body{height:100%;overflow:hidden;font-family:'Tajawal',sans-serif;}
 <body>
 <div class="bg-img"></div>
 <div class="bg-overlay"></div>
+<div id="doorGlow"></div>
 <div class="petals" id="petals"></div>
-
 
 <!-- Enter button -->
 <div id="enterArea">
@@ -450,18 +479,27 @@ const SECTIONS=[
 
 // ── Animation sequence ──
 function startEntry(){
-  const seen=localStorage.getItem('fairose_entered');
-  if(seen){showSections();return;}
-  const bg=document.querySelector('.bg-img');
-  const flash=document.getElementById('flashEl');
+  const bg    = document.querySelector('.bg-img');
+  const flash = document.getElementById('flashEl');
+  const glow  = document.getElementById('doorGlow');
+
   document.getElementById('enterArea').classList.remove('show');
   bg.classList.add('approaching');
-  setTimeout(()=>{flash.classList.add('on');},2300);
+
+  // Door glow at ~72% of walk (warm light through glass)
+  setTimeout(()=>{ glow.classList.add('on'); }, 2700);
+
+  // White flash just before entering
+  setTimeout(()=>{ flash.classList.add('on'); }, 3500);
+
+  // Show sections, fade flash
   setTimeout(()=>{
     showSections();
-    setTimeout(()=>flash.classList.remove('on'),400);
-  },2700);
-  localStorage.setItem('fairose_entered','1');
+    setTimeout(()=>{
+      flash.classList.remove('on');
+      glow.classList.remove('on');
+    }, 450);
+  }, 3900);
 }
 
 function showSections(){
@@ -471,10 +509,12 @@ function showSections(){
 
 function backToShop(){
   document.getElementById('sectionsScreen').classList.remove('show');
-  const bg=document.querySelector('.bg-img');
+  const bg   = document.querySelector('.bg-img');
+  const glow = document.getElementById('doorGlow');
   bg.classList.remove('approaching');
-  void bg.offsetWidth; // reflow
-  setTimeout(()=>document.getElementById('enterArea').classList.add('show'),300);
+  glow.classList.remove('on');
+  void bg.offsetWidth;
+  setTimeout(()=>document.getElementById('enterArea').classList.add('show'), 350);
 }
 
 function openSection(s){
