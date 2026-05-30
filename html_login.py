@@ -36,9 +36,9 @@ html,body{height:100%;overflow:hidden;font-family:'Tajawal',sans-serif;}
   position:fixed;inset:0;z-index:1;
   background:linear-gradient(
     to bottom,
-    rgba(13,34,51,0.55) 0%,
-    rgba(13,34,51,0.4) 40%,
-    rgba(13,34,51,0.75) 100%
+    rgba(0,0,0,0.05) 0%,
+    rgba(0,0,0,0.0) 40%,
+    rgba(0,0,0,0.35) 100%
   );
 }
 
