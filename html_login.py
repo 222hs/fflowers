@@ -166,6 +166,69 @@ html,body{height:100%;overflow:hidden;font-family:'Tajawal',sans-serif;}
   box-shadow:0 6px 20px rgba(232,121,138,0.4);
 }
 .panel-worker .login-btn:hover{transform:translateY(-2px) scale(1.02);box-shadow:0 10px 28px rgba(232,121,138,0.5);}
+
+/* ── Lock FAB ── */
+#lockFab{
+  position:fixed;bottom:28px;left:20px;z-index:999;
+  width:52px;height:52px;border-radius:50%;border:none;
+  background:rgba(10,15,25,0.75);
+  backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);
+  border:1.5px solid rgba(255,255,255,0.18);
+  color:#fff;font-size:22px;cursor:pointer;
+  display:flex;align-items:center;justify-content:center;
+  box-shadow:0 6px 24px rgba(0,0,0,0.55);
+  transition:transform .25s cubic-bezier(.34,1.56,.64,1),
+             background .25s,border-color .25s;
+  touch-action:manipulation;
+  -webkit-tap-highlight-color:transparent;
+}
+#lockFab:hover{
+  background:rgba(20,30,50,0.92);
+  border-color:rgba(212,168,67,0.55);
+  transform:scale(1.1);
+}
+#lockFab:active{transform:scale(0.93);}
+
+/* ── Backdrop ── */
+#staffBd{
+  position:fixed;inset:0;z-index:1000;
+  background:rgba(0,0,0,0.52);
+  backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px);
+  opacity:0;pointer-events:none;
+  transition:opacity .28s;
+}
+#staffBd.open{opacity:1;pointer-events:all;}
+
+/* ── Bottom Sheet ── */
+#staffSheet{
+  position:fixed;bottom:0;left:0;right:0;z-index:1001;
+  background:rgba(8,14,24,0.97);
+  backdrop-filter:blur(40px) saturate(1.8);
+  -webkit-backdrop-filter:blur(40px) saturate(1.8);
+  border-radius:24px 24px 0 0;
+  border-top:1px solid rgba(255,255,255,0.09);
+  padding:0 16px max(20px,env(safe-area-inset-bottom));
+  transform:translateY(100%);
+  transition:transform .38s cubic-bezier(.32,1.2,.6,1);
+  box-shadow:0 -20px 60px rgba(0,0,0,0.6);
+}
+#staffSheet.open{transform:translateY(0);}
+.sheet-drag{
+  width:38px;height:4px;border-radius:2px;
+  background:rgba(255,255,255,0.16);
+  margin:12px auto 16px;
+}
+.sheet-title{
+  text-align:center;font-size:13px;font-weight:700;
+  color:rgba(255,255,255,0.45);letter-spacing:2px;
+  text-transform:uppercase;margin-bottom:16px;
+}
+/* make panels more compact inside sheet */
+#staffSheet .login-row{flex-wrap:nowrap;gap:10px;max-width:480px;margin:0 auto 8px;}
+#staffSheet .login-panel{min-width:0;flex:1;padding:20px 14px;}
+@media(max-width:380px){
+  #staffSheet .login-row{flex-direction:column;}
+}
 </style>
 </head>
 <body>
@@ -180,8 +243,20 @@ html,body{height:100%;overflow:hidden;font-family:'Tajawal',sans-serif;}
     <div class="shop-sub">FLOWERS & MORE</div>
   </div>
 
+</div>
+
+<!-- Lock FAB -->
+<button id="lockFab" type="button" aria-label="دخول الموظفين">🔐</button>
+
+<!-- Backdrop -->
+<div id="staffBd" onclick="closeSheet()"></div>
+
+<!-- Staff Sheet -->
+<div id="staffSheet">
+  <div class="sheet-drag"></div>
+  <div class="sheet-title">دخول فريق العمل</div>
   <div class="login-row">
-    <!-- Owner Panel -->
+    <!-- Owner -->
     <div class="login-panel panel-owner">
       <div class="panel-icon">👑</div>
       <div class="panel-title">المالك</div>
@@ -193,8 +268,7 @@ html,body{height:100%;overflow:hidden;font-family:'Tajawal',sans-serif;}
       </div>
       <button class="login-btn" onclick="goOwner()">دخول</button>
     </div>
-
-    <!-- Worker Panel -->
+    <!-- Worker -->
     <div class="login-panel panel-worker">
       <div class="panel-icon">🌸</div>
       <div class="panel-title">العامل</div>
@@ -281,6 +355,28 @@ async function goWorker(){
     btn.textContent='دخول';btn.disabled=false;
   }
 }
+
+// ── Sheet open/close ──
+function openSheet(){
+  document.getElementById('staffBd').classList.add('open');
+  document.getElementById('staffSheet').classList.add('open');
+}
+function closeSheet(){
+  document.getElementById('staffBd').classList.remove('open');
+  document.getElementById('staffSheet').classList.remove('open');
+}
+document.getElementById('lockFab').addEventListener('click', openSheet);
+document.addEventListener('keydown', e=>{ if(e.key==='Escape') closeSheet(); });
+
+// drag-down to close sheet
+(function(){
+  const sh=document.getElementById('staffSheet');
+  let y0=0;
+  sh.addEventListener('touchstart',e=>{y0=e.touches[0].clientY;},{passive:true});
+  sh.addEventListener('touchend',e=>{
+    if(e.changedTouches[0].clientY - y0 > 70) closeSheet();
+  },{passive:true});
+})();
 </script>
 </body>
 </html>"""
