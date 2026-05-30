@@ -765,6 +765,7 @@ input[type="date"]{width:100%;padding:10px 12px;border:1px solid var(--border);b
         </div>
         <button class="theme-btn" id="refreshBtn" onclick="refreshData()" title="تحديث البيانات">🔄</button>
         <button class="theme-btn" onclick="toggleThemePanel()" title="تغيير الثيم">🎨</button>
+        <button class="theme-btn" onclick="toggleBgPanel()" title="تغيير صورة المحل">🖼️</button>
         <button class="header-badge-btn" id="hdrOrders" onclick="switchTab('customers')" title="الطلبات قيد الانتظار" style="display:none;">
           📋 <span id="hdrOrdersCount">0</span>
         </button>
@@ -808,7 +809,7 @@ input[type="date"]{width:100%;padding:10px 12px;border:1px solid var(--border);b
   </div>
 
   <!-- Background Image Upload Section -->
-  <div class="theme-panel" id="bgPanel" style="display:none;margin-top:12px;">
+  <div class="theme-panel" id="bgPanel" style="margin-top:12px;">
     <h4>تغيير خلفية التطبيق</h4>
     <div style="padding:12px 0;">
       <input type="file" id="bgFileInput" accept="image/*" style="display:none;" onchange="uploadBackground(event)"/>
