@@ -2,7 +2,8 @@ from config import *
 from database import *
 from helpers import *
 from telegram_bot import *
-from html_pages import HTML_PAGE, WORKER_PAGE, LOGIN_PAGE
+from html_pages import HTML_PAGE, WORKER_PAGE
+from html_login import LOGIN_PAGE
 
 
 from functools import wraps
