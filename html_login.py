@@ -55,36 +55,6 @@ html,body{height:100%;overflow:hidden;font-family:'Tajawal',sans-serif;}
   100%{transform:translateY(105vh) translateX(60px) rotate(540deg);opacity:0;}
 }
 
-/* Login layout */
-.wrap{
-  position:relative;z-index:10;
-  min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px 16px;
-  gap:20px;
-}
-
-/* Brand header */
-.brand-header{text-align:center;}
-.logo{
-  width:70px;height:70px;margin:0 auto 14px;
-  background:linear-gradient(135deg,#d4a843,#b8891f);
-  border-radius:20px;display:flex;align-items:center;justify-content:center;
-  font-size:32px;
-  box-shadow:0 8px 32px rgba(212,168,67,0.5);
-  animation:logoFloat 4s ease-in-out infinite;
-}
-@keyframes logoFloat{0%,100%{transform:translateY(0);}50%{transform:translateY(-6px);}}
-.shop-name{
-  font-family:'Playfair Display',serif;
-  font-size:30px;font-weight:700;
-  color:#ffffff;
-  text-shadow:0 2px 20px rgba(0,0,0,0.3);
-  margin-bottom:4px;
-}
-.shop-sub{
-  font-size:11px;color:rgba(255,255,255,0.55);
-  letter-spacing:3px;text-transform:uppercase;
-}
-
 /* Two cards row */
 .login-row{
   display:flex;gap:14px;width:100%;max-width:700px;
@@ -326,14 +296,6 @@ html,body{height:100%;overflow:hidden;font-family:'Tajawal',sans-serif;}
 <div class="bg-overlay"></div>
 <div class="petals" id="petals"></div>
 
-<div class="wrap">
-  <div class="brand-header">
-    <div class="logo">🌹</div>
-    <div class="shop-name">FAIROSE</div>
-    <div class="shop-sub">FLOWERS & MORE</div>
-  </div>
-
-</div>
 
 <!-- Enter button -->
 <div id="enterArea">
