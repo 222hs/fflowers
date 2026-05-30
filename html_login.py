@@ -248,68 +248,61 @@ html,body{height:100%;overflow:hidden;font-family:'Tajawal',sans-serif;}
 }
 #flashEl.on{opacity:1;}
 
-/* ── Sections screen ── */
+/* ── Sections screen — shop interior ── */
 #sectionsScreen{
   position:fixed;inset:0;z-index:150;
-  background:linear-gradient(170deg,#100e09 0%,#0d0b07 55%,#0a080c 100%);
-  display:flex;flex-direction:column;
-  align-items:center;justify-content:center;
-  gap:0;padding:32px 20px;
+  background:#0b0805;
   opacity:0;pointer-events:none;
   transition:opacity .6s ease;
+  overflow:hidden;
 }
 #sectionsScreen.show{opacity:1;pointer-events:all;}
-.sec-eyebrow{
-  font-size:9px;color:rgba(255,255,255,.22);
-  letter-spacing:5px;text-transform:uppercase;
-  margin-bottom:10px;
-  opacity:0;transition:opacity .8s ease .15s;
+#shopSvg{
+  position:absolute;top:0;left:0;
+  width:100%;height:auto;
 }
-#sectionsScreen.show .sec-eyebrow{opacity:1;}
-.sec-title{
-  font-family:'Playfair Display',serif;font-size:26px;font-weight:700;
-  color:#e2c06a;letter-spacing:1px;text-align:center;
-  text-shadow:0 0 50px rgba(212,168,67,.45);
-  margin-bottom:32px;
-  opacity:0;transform:translateY(-10px);
-  transition:opacity .8s ease .05s, transform .9s cubic-bezier(.22,1,.36,1) .05s;
+.sec-header{
+  position:absolute;top:0;left:0;right:0;z-index:10;
+  text-align:center;padding:14px 60px 12px;pointer-events:none;
+  background:linear-gradient(to bottom,rgba(11,8,5,.92) 0%,rgba(11,8,5,0) 100%);
 }
-#sectionsScreen.show .sec-title{opacity:1;transform:none;}
-.sec-grid{
-  display:grid;grid-template-columns:1fr 1fr;
-  gap:14px;width:100%;max-width:360px;
+.sec-eyebrow-txt{
+  font-size:8px;color:rgba(255,255,255,.18);
+  letter-spacing:5px;text-transform:uppercase;margin-bottom:5px;
 }
-.sec-card{
-  border-radius:20px;padding:26px 14px 22px;
-  text-align:center;cursor:pointer;
-  border:1px solid rgba(255,255,255,.08);
-  background:rgba(255,255,255,.04);
-  backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);
-  box-shadow:0 8px 32px rgba(0,0,0,.35), inset 0 1px 0 rgba(255,255,255,.07);
-  will-change:transform;
-  touch-action:manipulation;-webkit-tap-highlight-color:transparent;
-  transition:transform .3s cubic-bezier(.34,1.4,.64,1),
-             background .3s, border-color .3s, box-shadow .3s;
+.sec-title-txt{
+  font-family:'Playfair Display',serif;font-size:21px;font-weight:700;
+  color:#e2c06a;letter-spacing:1px;
+  text-shadow:0 0 28px rgba(212,168,67,.45);
 }
-.sec-card:active{transform:scale(.93);}
-.sec-card:hover{
-  transform:scale(1.05) translateY(-3px);
-  background:rgba(255,255,255,.09);
-  box-shadow:0 16px 48px rgba(0,0,0,.5), inset 0 1px 0 rgba(255,255,255,.12);
-}
-.sec-emoji{font-size:34px;display:block;margin-bottom:12px;filter:drop-shadow(0 4px 12px rgba(0,0,0,.4));}
-.sec-label{font-size:14px;font-weight:900;color:#fff;letter-spacing:.5px;}
-.sec-sub{font-size:9px;color:rgba(255,255,255,.30);margin-top:5px;letter-spacing:2px;text-transform:uppercase;}
+/* SVG zone interaction */
+.svgZone{cursor:pointer;}
+.svgZone .zo{opacity:0;transition:opacity .32s ease;}
+.svgZone.tapped .zo{opacity:1;}
+/* Idle breathing glow per zone */
+#svgZone0{animation:bR 4s   ease-in-out       infinite;}
+#svgZone1{animation:bT 4.3s ease-in-out  .7s  infinite;}
+#svgZone2{animation:bP 3.9s ease-in-out  .3s  infinite;}
+#svgZone3{animation:bG 4.5s ease-in-out  1.1s infinite;}
+@keyframes bR{0%,100%{filter:brightness(1)   drop-shadow(0 0 8px rgba(224,80,110,.18));}50%{filter:brightness(1.08) drop-shadow(0 0 22px rgba(224,80,110,.6));}}
+@keyframes bT{0%,100%{filter:brightness(1)   drop-shadow(0 0 8px rgba(52,211,153,.16));}50%{filter:brightness(1.08) drop-shadow(0 0 20px rgba(52,211,153,.55));}}
+@keyframes bP{0%,100%{filter:brightness(1)   drop-shadow(0 0 8px rgba(147,51,234,.18));}50%{filter:brightness(1.08) drop-shadow(0 0 22px rgba(147,51,234,.6));}}
+@keyframes bG{0%,100%{filter:brightness(1)   drop-shadow(0 0 8px rgba(212,168,67,.18));}50%{filter:brightness(1.08) drop-shadow(0 0 22px rgba(212,168,67,.6));}}
+/* Tap burst */
+#svgZone0.tapped{animation:none;filter:brightness(1.6) drop-shadow(0 0 36px rgba(224,80,110,.98));}
+#svgZone1.tapped{animation:none;filter:brightness(1.6) drop-shadow(0 0 36px rgba(52,211,153,.98));}
+#svgZone2.tapped{animation:none;filter:brightness(1.6) drop-shadow(0 0 36px rgba(147,51,234,.98));}
+#svgZone3.tapped{animation:none;filter:brightness(1.6) drop-shadow(0 0 36px rgba(212,168,67,.98));}
 .sec-back{
-  position:fixed;top:20px;right:20px;
-  width:38px;height:38px;border-radius:50%;border:none;cursor:pointer;
-  background:rgba(255,255,255,.06);backdrop-filter:blur(12px);
-  color:rgba(255,255,255,.5);font-size:16px;
+  position:absolute;top:14px;right:16px;z-index:20;
+  width:36px;height:36px;border-radius:50%;border:none;cursor:pointer;
+  background:rgba(255,255,255,.07);backdrop-filter:blur(12px);
+  color:rgba(255,255,255,.5);font-size:15px;
   display:flex;align-items:center;justify-content:center;
-  border:1px solid rgba(255,255,255,.08);
+  border:1px solid rgba(255,255,255,.1);
   transition:all .3s;touch-action:manipulation;
 }
-.sec-back:hover{background:rgba(255,255,255,.14);color:#fff;border-color:rgba(255,255,255,.18);}
+.sec-back:hover{background:rgba(255,255,255,.14);color:#fff;}
 
 /* ── Lock FAB ── */
 #lockFab{
@@ -391,11 +384,216 @@ html,body{height:100%;overflow:hidden;font-family:'Tajawal',sans-serif;}
 <!-- Flash overlay -->
 <div id="flashEl"></div>
 
-<!-- Sections screen -->
+<!-- Sections screen — shop interior illustration -->
 <div id="sectionsScreen">
-  <div class="sec-eyebrow">FAIROSE FLOWERS</div>
-  <div class="sec-title">اختر قسماً</div>
-  <div class="sec-grid" id="secGrid"></div>
+  <svg id="shopSvg" viewBox="0 0 400 720" preserveAspectRatio="xMidYMin meet" xmlns="http://www.w3.org/2000/svg">
+    <defs>
+      <linearGradient id="wBg" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0%" stop-color="#1c1408"/><stop offset="100%" stop-color="#0e0a05"/>
+      </linearGradient>
+      <linearGradient id="fBg" x1=".5" y1="0" x2=".5" y2="1">
+        <stop offset="0%" stop-color="#231608"/><stop offset="100%" stop-color="#110a04"/>
+      </linearGradient>
+      <radialGradient id="sL" cx="27%" cy="4%" r="52%">
+        <stop offset="0%" stop-color="rgba(255,228,148,.2)"/><stop offset="100%" stop-color="rgba(0,0,0,0)"/>
+      </radialGradient>
+      <radialGradient id="sR" cx="73%" cy="4%" r="52%">
+        <stop offset="0%" stop-color="rgba(255,228,148,.2)"/><stop offset="100%" stop-color="rgba(0,0,0,0)"/>
+      </radialGradient>
+    </defs>
+    <!-- ── Room ── -->
+    <rect width="400" height="720" fill="#0b0805"/>
+    <rect x="0" y="0" width="400" height="254" fill="url(#wBg)"/>
+    <polygon points="0,254 400,254 400,720 0,720" fill="url(#fBg)"/>
+    <rect x="0" y="248" width="400" height="8" fill="#1e1408"/>
+    <!-- Ceiling lights + cones -->
+    <rect x="0" y="0" width="400" height="720" fill="url(#sL)"/>
+    <rect x="0" y="0" width="400" height="720" fill="url(#sR)"/>
+    <rect x="86" y="0" width="34" height="6" fill="#241808" rx="1"/>
+    <rect x="280" y="0" width="34" height="6" fill="#241808" rx="1"/>
+    <circle cx="103" cy="4" r="5" fill="#fff8e0" opacity=".92"/>
+    <circle cx="297" cy="4" r="5" fill="#fff8e0" opacity=".92"/>
+    <polygon points="103,9 62,254 144,254" fill="rgba(255,216,130,.055)"/>
+    <polygon points="297,9 256,254 338,254" fill="rgba(255,216,130,.055)"/>
+    <!-- Floor perspective lines -->
+    <line x1="0"   y1="720" x2="200" y2="254" stroke="#190e04" stroke-width="1.2"/>
+    <line x1="133" y1="720" x2="200" y2="254" stroke="#190e04" stroke-width=".8"/>
+    <line x1="267" y1="720" x2="200" y2="254" stroke="#190e04" stroke-width=".8"/>
+    <line x1="400" y1="720" x2="200" y2="254" stroke="#190e04" stroke-width="1.2"/>
+    <line x1="0"   y1="450" x2="400" y2="450" stroke="rgba(255,255,255,.022)" stroke-width="1"/>
+    <line x1="0"   y1="580" x2="400" y2="580" stroke="rgba(255,255,255,.022)" stroke-width="1"/>
+    <!-- Wall divider -->
+    <line x1="200" y1="0"   x2="200" y2="252" stroke="rgba(255,255,255,.07)" stroke-width="1"/>
+    <line x1="200" y1="262" x2="200" y2="720" stroke="rgba(255,255,255,.04)" stroke-width="1"/>
+
+    <!-- ══════════════════════════════════ -->
+    <!-- ZONE 0 — باقات  (back-left wall) -->
+    <!-- ══════════════════════════════════ -->
+    <g id="svgZone0" class="svgZone">
+      <rect x="3"  y="16" width="193" height="233" fill="#150f07" rx="2"/>
+      <rect x="3"  y="82" width="193" height="5"   fill="#2c1c0c" rx="1"/>
+      <rect x="3"  y="158" width="193" height="5"  fill="#2c1c0c" rx="1"/>
+      <rect x="3"  y="235" width="193" height="10" fill="#2c1c0c" rx="1"/>
+      <rect x="3"  y="16" width="5"   height="233" fill="rgba(0,0,0,.32)" rx="2"/>
+      <!-- Top shelf flowers -->
+      <rect x="29" y="70"  width="3" height="16" fill="#3a5e30" rx="1"/>
+      <circle cx="28" cy="57"  r="12" fill="#b43658"/>
+      <circle cx="34" cy="49"  r="9"  fill="#d05870" opacity=".9"/>
+      <circle cx="21" cy="52"  r="8"  fill="#c24468" opacity=".95"/>
+      <circle cx="35" cy="43"  r="5"  fill="#e888a2" opacity=".8"/>
+      <rect x="80" y="68"  width="3" height="18" fill="#3a5e30" rx="1"/>
+      <circle cx="79" cy="53"  r="13" fill="#df5e7c"/>
+      <circle cx="87" cy="44"  r="9"  fill="#f08aa6" opacity=".9"/>
+      <circle cx="71" cy="47"  r="9"  fill="#cf4c6a" opacity=".95"/>
+      <circle cx="88" cy="38"  r="6"  fill="#f0a0be" opacity=".8"/>
+      <rect x="148" y="70" width="3" height="16" fill="#3a5e30" rx="1"/>
+      <circle cx="147" cy="57" r="11" fill="#be4468"/>
+      <circle cx="154" cy="49" r="8"  fill="#de6e8e" opacity=".9"/>
+      <circle cx="140" cy="52" r="8"  fill="#ae3458" opacity=".95"/>
+      <!-- Middle shelf flowers -->
+      <rect x="26"  y="146" width="3" height="16" fill="#3a5e30" rx="1"/>
+      <circle cx="25"  cy="133" r="11" fill="#cc4c6e"/>
+      <circle cx="32"  cy="125" r="8"  fill="#e67898" opacity=".9"/>
+      <circle cx="18"  cy="128" r="8"  fill="#bc3c5e" opacity=".95"/>
+      <rect x="82"  y="145" width="3" height="17" fill="#3a5e30" rx="1"/>
+      <circle cx="81"  cy="131" r="12" fill="#e06082"/>
+      <circle cx="89"  cy="122" r="9"  fill="#f08eae" opacity=".9"/>
+      <circle cx="73"  cy="125" r="8"  fill="#d05072" opacity=".9"/>
+      <rect x="149" y="147" width="3" height="15" fill="#3a5e30" rx="1"/>
+      <circle cx="148" cy="134" r="10" fill="#b84062"/>
+      <circle cx="155" cy="127" r="7"  fill="#d87090" opacity=".9"/>
+      <!-- Label -->
+      <rect  x="3"  y="168" width="193" height="68" fill="rgba(0,0,0,.4)"/>
+      <text  x="99" y="202" text-anchor="middle" fill="rgba(255,255,255,.88)" font-family="Tajawal,sans-serif" font-size="18" font-weight="700">باقات</text>
+      <text  x="99" y="221" text-anchor="middle" fill="rgba(255,255,255,.25)" font-family="sans-serif" font-size="9" letter-spacing="3">BOUQUETS</text>
+      <!-- Active overlay -->
+      <rect x="3" y="16" width="193" height="233" fill="rgba(224,80,110,.13)" class="zo" rx="2"/>
+    </g>
+
+    <!-- ══════════════════════════════════════ -->
+    <!-- ZONE 2 — مجسمات  (back-right wall)   -->
+    <!-- ══════════════════════════════════════ -->
+    <g id="svgZone2" class="svgZone">
+      <rect x="204" y="16" width="193" height="233" fill="#150f07" rx="2"/>
+      <rect x="204" y="82"  width="193" height="5"  fill="#2c1c0c" rx="1"/>
+      <rect x="204" y="158" width="193" height="5"  fill="#2c1c0c" rx="1"/>
+      <rect x="204" y="235" width="193" height="10" fill="#2c1c0c" rx="1"/>
+      <rect x="392" y="16" width="5"   height="233" fill="rgba(0,0,0,.32)" rx="2"/>
+      <!-- Top shelf: geometric sculptures -->
+      <polygon points="258,26 278,76 238,76" fill="#7c3aed" opacity=".87"/>
+      <polygon points="258,26 278,76 268,51" fill="#9c5aed" opacity=".52"/>
+      <circle  cx="258" cy="24" r="6"  fill="#ddd6fe" opacity=".92"/>
+      <circle  cx="258" cy="24" r="2.5" fill="#fff"   opacity=".95"/>
+      <circle  cx="344" cy="50" r="18" fill="#6d28d9" opacity=".82"/>
+      <circle  cx="357" cy="40" r="12" fill="#9c5aed" opacity=".88"/>
+      <circle  cx="331" cy="42" r="11" fill="#7c3aed" opacity=".9"/>
+      <circle  cx="354" cy="62" r="7"  fill="#a78bfa" opacity=".75"/>
+      <circle  cx="325" cy="58" r="5"  fill="#c4b5fd" opacity=".8"/>
+      <!-- Middle shelf: abstract floral sculptures -->
+      <rect    x="230" y="116" width="32" height="40" fill="#3c2870" rx="2" opacity=".85"/>
+      <ellipse cx="246" cy="116" rx="16" ry="6"  fill="#5c3890" opacity=".9"/>
+      <polygon points="246,90 255,114 237,114" fill="#9333ea" opacity=".88"/>
+      <polygon points="246,90 262,108 230,108" fill="#7c3aed" opacity=".58"/>
+      <circle  cx="246" cy="87"  r="8"  fill="#e9d5ff" opacity=".95"/>
+      <circle  cx="246" cy="79"  r="4"  fill="#fff"    opacity=".8"/>
+      <rect    x="349" y="88"  width="20" height="62" fill="#4c1d95" rx="3" opacity=".88"/>
+      <ellipse cx="359" cy="88"  rx="17" ry="6"  fill="#6d28d9" opacity=".9"/>
+      <circle  cx="359" cy="78"  r="13" fill="#9333ea" opacity=".85"/>
+      <circle  cx="359" cy="63"  r="8"  fill="#c4b5fd" opacity=".9"/>
+      <circle  cx="359" cy="53"  r="4"  fill="#e9d5ff" opacity=".95"/>
+      <!-- Label -->
+      <rect  x="204" y="168" width="193" height="68" fill="rgba(0,0,0,.4)"/>
+      <text  x="300" y="202" text-anchor="middle" fill="rgba(255,255,255,.88)" font-family="Tajawal,sans-serif" font-size="17" font-weight="700">مجسمات 3D</text>
+      <text  x="300" y="221" text-anchor="middle" fill="rgba(255,255,255,.25)" font-family="sans-serif" font-size="9" letter-spacing="3">SCULPTURES</text>
+      <rect x="204" y="16" width="193" height="233" fill="rgba(147,51,234,.12)" class="zo" rx="2"/>
+    </g>
+
+    <!-- ══════════════════════════════════════ -->
+    <!-- ZONE 1 — استاندات  (floor left)       -->
+    <!-- ══════════════════════════════════════ -->
+    <g id="svgZone1" class="svgZone">
+      <rect x="0" y="262" width="200" height="458" fill="rgba(0,0,0,0)"/>
+      <!-- Stand 1 -->
+      <ellipse cx="68"  cy="668" rx="30" ry="10" fill="#1c1208"/>
+      <ellipse cx="68"  cy="664" rx="26" ry="8"  fill="#281a0c"/>
+      <rect    x="63"   y="490" width="10" height="177" fill="#382412" rx="2"/>
+      <ellipse cx="68"  cy="490" rx="36" ry="13" fill="#4c3418"/>
+      <ellipse cx="68"  cy="483" rx="33" ry="11" fill="#5e4624"/>
+      <circle  cx="56"  cy="462" r="16" fill="#4ade80" opacity=".88"/>
+      <circle  cx="72"  cy="452" r="13" fill="#86efac" opacity=".84"/>
+      <circle  cx="46"  cy="456" r="12" fill="#22c55e" opacity=".9"/>
+      <circle  cx="80"  cy="463" r="10" fill="#6ee7b7" opacity=".8"/>
+      <circle  cx="62"  cy="444" r="8"  fill="#bbf7d0" opacity=".85"/>
+      <ellipse cx="40"  cy="480" rx="11" ry="5"  fill="#15803d" opacity=".6" transform="rotate(-28,40,480)"/>
+      <ellipse cx="96"  cy="479" rx="11" ry="5"  fill="#15803d" opacity=".6" transform="rotate(28,96,479)"/>
+      <!-- Stand 2 (slightly back, right) -->
+      <ellipse cx="152" cy="646" rx="24" ry="8"  fill="#1c1208"/>
+      <ellipse cx="152" cy="642" rx="20" ry="6"  fill="#281a0c"/>
+      <rect    x="148"  y="500" width="8"  height="144" fill="#382412" rx="2"/>
+      <ellipse cx="152" cy="500" rx="28" ry="10" fill="#4c3418"/>
+      <ellipse cx="152" cy="494" rx="25" ry="9"  fill="#5e4624"/>
+      <circle  cx="142" cy="474" r="13" fill="#34d399" opacity=".88"/>
+      <circle  cx="156" cy="465" r="10" fill="#6ee7b7" opacity=".84"/>
+      <circle  cx="134" cy="468" r="9"  fill="#10b981" opacity=".9"/>
+      <circle  cx="163" cy="476" r="8"  fill="#a7f3d0" opacity=".8"/>
+      <!-- Ambient teal -->
+      <ellipse cx="100" cy="560" rx="90" ry="120" fill="rgba(52,211,153,.055)"/>
+      <!-- Label -->
+      <rect  x="14"  y="686" width="172" height="28" fill="rgba(0,0,0,.62)" rx="14"/>
+      <text  x="100" y="704" text-anchor="middle" fill="rgba(255,255,255,.88)" font-family="Tajawal,sans-serif" font-size="15" font-weight="700">استاندات</text>
+      <rect x="0" y="262" width="200" height="458" fill="rgba(52,211,153,.08)" class="zo"/>
+    </g>
+
+    <!-- ══════════════════════════════════════ -->
+    <!-- ZONE 3 — شرايط  (floor right)         -->
+    <!-- ══════════════════════════════════════ -->
+    <g id="svgZone3" class="svgZone">
+      <rect x="200" y="262" width="200" height="458" fill="rgba(0,0,0,0)"/>
+      <!-- Ribbon rack frame -->
+      <rect x="222" y="330" width="5"   height="318" fill="#382412" rx="2"/>
+      <rect x="373" y="330" width="5"   height="318" fill="#382412" rx="2"/>
+      <rect x="220" y="330" width="160" height="6"   fill="#4a3018" rx="2"/>
+      <rect x="220" y="420" width="160" height="6"   fill="#4a3018" rx="2"/>
+      <rect x="220" y="510" width="160" height="6"   fill="#4a3018" rx="2"/>
+      <rect x="220" y="600" width="160" height="6"   fill="#4a3018" rx="2"/>
+      <!-- Ribbon rolls — bar 1 (y≈333) -->
+      <ellipse cx="248" cy="336" rx="16" ry="8"  fill="#d4a843"/><ellipse cx="248" cy="336" rx="10" ry="5" fill="#b88520"/><ellipse cx="248" cy="336" rx="4" ry="2" fill="#0b0805"/>
+      <ellipse cx="285" cy="335" rx="14" ry="7"  fill="#e06888"/><ellipse cx="285" cy="335" rx="9"  ry="4" fill="#c4526a"/><ellipse cx="285" cy="335" rx="3" ry="2" fill="#0b0805"/>
+      <ellipse cx="320" cy="334" rx="13" ry="7"  fill="#60a5fa"/><ellipse cx="320" cy="334" rx="8"  ry="4" fill="#3b82f6"/><ellipse cx="320" cy="334" rx="3" ry="2" fill="#0b0805"/>
+      <ellipse cx="353" cy="334" rx="12" ry="6"  fill="#c084fc"/><ellipse cx="353" cy="334" rx="7"  ry="3" fill="#9333ea"/><ellipse cx="353" cy="334" rx="3" ry="2" fill="#0b0805"/>
+      <!-- Hanging strands bar1→bar2 -->
+      <path d="M245,340 Q241,383 247,420" stroke="#e8c040" stroke-width="1.5" fill="none" opacity=".52"/>
+      <path d="M256,341 Q260,382 254,419" stroke="#c89820" stroke-width="1.5" fill="none" opacity=".52"/>
+      <path d="M282,339 Q278,381 284,419" stroke="#e86880" stroke-width="1.5" fill="none" opacity=".52"/>
+      <path d="M292,338 Q296,380 290,418" stroke="#c4526a" stroke-width="1.5" fill="none" opacity=".52"/>
+      <path d="M318,337 Q314,380 320,418" stroke="#60a5fa" stroke-width="1.5" fill="none" opacity=".52"/>
+      <!-- Ribbon rolls — bar 2 (y≈423) -->
+      <ellipse cx="236" cy="426" rx="15" ry="7"  fill="#fbbf24"/><ellipse cx="236" cy="426" rx="9" ry="4"  fill="#d97706"/><ellipse cx="236" cy="426" rx="4" ry="2" fill="#0b0805"/>
+      <ellipse cx="270" cy="425" rx="16" ry="7"  fill="#d4a843"/><ellipse cx="270" cy="425" rx="10" ry="4" fill="#b88520"/><ellipse cx="270" cy="425" rx="4" ry="2" fill="#0b0805"/>
+      <ellipse cx="307" cy="424" rx="13" ry="7"  fill="#fb923c"/><ellipse cx="307" cy="424" rx="8"  ry="4" fill="#ea7218"/><ellipse cx="307" cy="424" rx="3" ry="2" fill="#0b0805"/>
+      <ellipse cx="342" cy="424" rx="12" ry="6"  fill="#e06888"/><ellipse cx="342" cy="424" rx="7"  ry="3" fill="#c4526a"/><ellipse cx="342" cy="424" rx="3" ry="2" fill="#0b0805"/>
+      <!-- Strands bar2→bar3 -->
+      <path d="M233,430 Q229,472 235,510" stroke="#fbbf24" stroke-width="1.5" fill="none" opacity=".5"/>
+      <path d="M268,429 Q272,471 266,509" stroke="#d4a843" stroke-width="1.5" fill="none" opacity=".5"/>
+      <path d="M304,428 Q300,470 306,509" stroke="#fb923c" stroke-width="1.5" fill="none" opacity=".5"/>
+      <!-- Ribbon rolls — bar 3 (y≈513) -->
+      <ellipse cx="245" cy="516" rx="14" ry="7"  fill="#a78bfa"/><ellipse cx="245" cy="516" rx="8"  ry="4" fill="#7c3aed"/><ellipse cx="245" cy="516" rx="3" ry="2" fill="#0b0805"/>
+      <ellipse cx="280" cy="515" rx="15" ry="7"  fill="#d4a843"/><ellipse cx="280" cy="515" rx="9"  ry="4" fill="#b88520"/><ellipse cx="280" cy="515" rx="4" ry="2" fill="#0b0805"/>
+      <ellipse cx="315" cy="515" rx="13" ry="6"  fill="#f472b6"/><ellipse cx="315" cy="515" rx="7"  ry="3" fill="#ec4899"/><ellipse cx="315" cy="515" rx="3" ry="2" fill="#0b0805"/>
+      <ellipse cx="348" cy="514" rx="12" ry="6"  fill="#60a5fa"/><ellipse cx="348" cy="514" rx="7"  ry="3" fill="#3b82f6"/><ellipse cx="348" cy="514" rx="3" ry="2" fill="#0b0805"/>
+      <!-- Ambient gold glow -->
+      <ellipse cx="300" cy="520" rx="95" ry="130" fill="rgba(212,168,67,.055)"/>
+      <!-- Label -->
+      <rect  x="214" y="686" width="172" height="28" fill="rgba(0,0,0,.62)" rx="14"/>
+      <text  x="300" y="704" text-anchor="middle" fill="rgba(255,255,255,.88)" font-family="Tajawal,sans-serif" font-size="15" font-weight="700">شرايط</text>
+      <rect x="200" y="262" width="200" height="458" fill="rgba(212,168,67,.08)" class="zo"/>
+    </g>
+
+  </svg>
+  <div class="sec-header">
+    <div class="sec-eyebrow-txt">FAIROSE FLOWERS</div>
+    <div class="sec-title-txt">اختر قسماً</div>
+  </div>
   <button class="sec-back" onclick="backToShop()">←</button>
 </div>
 
@@ -518,20 +716,16 @@ const SECTIONS=[
   {id:'sharayit',label:'شرايط',      sub:'Ribbons',     emoji:'🎀', color:'rgba(253,230,138,.18)'},
 ];
 
-// ── Build section grid ──
-(function(){
-  const grid=document.getElementById('secGrid');
-  SECTIONS.forEach((s,i)=>{
-    const el=document.createElement('div');
-    el.className='sec-card';
-    el.style.cssText+=`border-color:${s.color.replace('.18','.35')};background:${s.color};opacity:0;transform:translateY(32px) scale(0.92);`;
-    el.innerHTML=`<span class="sec-emoji">${s.emoji}</span>
-      <div class="sec-label">${s.label}</div>
-      <div class="sec-sub">${s.sub}</div>`;
-    el.addEventListener('click',()=>openSection(s));
-    grid.appendChild(el);
+// ── SVG zone interactions ──
+SECTIONS.forEach((s,i)=>{
+  const zone=document.getElementById('svgZone'+i);
+  if(!zone) return;
+  zone.addEventListener('click',()=>{
+    document.querySelectorAll('.svgZone').forEach(z=>z.classList.remove('tapped'));
+    zone.classList.add('tapped');
+    setTimeout(()=>{ zone.classList.remove('tapped'); openSection(s); }, 380);
   });
-})();
+});
 
 // ── Cinematic entry sequence ──
 function startEntry(){
@@ -565,14 +759,6 @@ function startEntry(){
 function showSections(){
   document.getElementById('enterArea').classList.remove('show');
   document.getElementById('sectionsScreen').classList.add('show');
-  // Stagger card entrance
-  document.querySelectorAll('.sec-card').forEach((c,i)=>{
-    setTimeout(()=>{
-      c.style.transition='opacity .55s ease, transform .65s cubic-bezier(.34,1.4,.64,1)';
-      c.style.opacity='1';
-      c.style.transform='none';
-    }, 200 + i*110);
-  });
 }
 
 function backToShop(){
@@ -582,12 +768,8 @@ function backToShop(){
   document.getElementById('doorGlow').classList.remove('on');
   bg.classList.remove('approaching');
   vig.classList.remove('show');
-  // Reset cards for next entry
-  document.querySelectorAll('.sec-card').forEach(c=>{
-    c.style.transition='none';
-    c.style.opacity='0';
-    c.style.transform='translateY(32px) scale(0.92)';
-  });
+  // Reset SVG zone tap states
+  document.querySelectorAll('.svgZone').forEach(z=>z.classList.remove('tapped'));
   void bg.offsetWidth;
   setTimeout(()=>document.getElementById('enterArea').classList.add('show'), 400);
 }
