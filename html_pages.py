@@ -12,17 +12,25 @@ HTML_PAGE = """<!DOCTYPE html>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
 <style>
 /* ══════════════════════════════════════════
-   THEMES
+   GARDEN ATELIER · فيروز فلورز
+   Premium flower-shop redesign
 ══════════════════════════════════════════ */
 :root, [data-theme="rose"] {
-  --bg:#fdf8f2;--bg2:#f5ede0;--card:rgba(255,255,255,0.75);
-  --border:rgba(232,121,138,0.2);--border2:rgba(255,255,255,0.9);
-  --text:#3d2c24;--text2:#7a6458;--text3:#b09888;
-  --accent:#e8798a;--accent2:#c4566a;--accent-glow:rgba(232,121,138,0.25);
-  --green:#7aab8a;--green2:#5a8a6a;--gold:#d4a557;
-  --glass:rgba(255,255,255,0.6);--shadow:rgba(107,76,59,0.12);
-  --nav-bg:rgba(253,248,242,0.92);
-  --orb1:#fce4ec;--orb2:#e8f5e9;--orb3:#fff8e1;
+  /* Garden Atelier palette */
+  --cream:#fdf6ee;--cream2:#f7edd8;
+  --blush:#e8a0b0;--rose:#c4566a;--rose-deep:#9b3a52;
+  --grn:#6a9b7a;--grn-light:#a8c5b0;
+  --gld:#c8914a;--gld-light:#e8c07a;
+
+  /* Mapped to the existing token names the JS/themes rely on */
+  --bg:#fdf6ee;--bg2:#f7edd8;--card:#ffffff;
+  --border:rgba(196,86,106,0.16);--border2:rgba(255,255,255,0.9);
+  --text:#2d1f1a;--text2:#6b4c40;--text3:#b09888;
+  --accent:#c4566a;--accent2:#9b3a52;--accent-glow:rgba(196,86,106,0.22);
+  --green:#6a9b7a;--green2:#4f7d61;--gold:#c8914a;
+  --glass:#ffffff;--shadow:rgba(100,50,40,0.12);
+  --nav-bg:#ffffff;
+  --orb1:rgba(232,160,176,0.30);--orb2:rgba(168,197,176,0.28);--orb3:rgba(232,192,122,0.26);
 }
 [data-theme="bloom"] {
   --bg1:#fff5f7;--bg2:#ffeef2;--nav-bg:rgba(255,240,245,0.92);
@@ -94,10 +102,18 @@ HTML_PAGE = """<!DOCTYPE html>
 *,*::before,*::after{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
 html{scroll-behavior:smooth;-webkit-text-size-adjust:100%;}
 body{font-family:'Tajawal',sans-serif;background:var(--bg);color:var(--text);
-  min-height:100vh;overflow-x:hidden;transition:background .4s,color .4s;}
+  min-height:100vh;overflow-x:hidden;transition:background .4s,color .4s;
+  /* very subtle floral dot pattern */
+  background-image:
+    radial-gradient(circle at 18% 22%, rgba(196,86,106,0.05) 0 2px, transparent 3px),
+    radial-gradient(circle at 68% 12%, rgba(106,155,122,0.05) 0 2px, transparent 3px),
+    radial-gradient(circle at 42% 64%, rgba(200,145,74,0.045) 0 2px, transparent 3px),
+    radial-gradient(circle at 88% 78%, rgba(196,86,106,0.045) 0 2px, transparent 3px);
+  background-size:240px 240px,300px 300px,280px 280px,320px 320px;
+  background-attachment:fixed;}
 
 .bg-scene{position:fixed;inset:0;z-index:0;pointer-events:none;overflow:hidden;}
-.orb{position:absolute;border-radius:50%;filter:blur(70px);opacity:0.7;animation:drift 18s ease-in-out infinite alternate;}
+.orb{position:absolute;border-radius:50%;filter:blur(80px);opacity:0.55;animation:drift 18s ease-in-out infinite alternate;}
 .orb1{width:400px;height:400px;background:var(--orb1);top:-10%;right:-5%;animation-delay:0s;}
 .orb2{width:350px;height:350px;background:var(--orb2);bottom:0;left:-8%;animation-delay:-8s;}
 .orb3{width:250px;height:250px;background:var(--orb3);top:45%;left:35%;animation-delay:-15s;}
@@ -106,53 +122,57 @@ body{font-family:'Tajawal',sans-serif;background:var(--bg);color:var(--text);
 #app{position:relative;z-index:1;min-height:100vh;display:flex;flex-direction:column;}
 
 /* ══════════════════════════════════════════
-   HEADER — إطار مستقل فاخر
+   HEADER — رأس فاخر بتدرّج وردي
 ══════════════════════════════════════════ */
 header{
   position:sticky;top:0;z-index:100;
-  padding:10px 12px 0;
+  padding:0;
   background:var(--bg);
   transition:background .4s;
 }
 .header-frame{
-  background:linear-gradient(135deg,var(--accent2) 0%,var(--accent) 50%,var(--gold) 100%);
-  border-radius:20px;
-  padding:2px;
-  box-shadow:0 6px 28px var(--accent-glow), 0 2px 8px var(--shadow);
-  animation:glow 4s ease-in-out infinite;
+  background:transparent;
+  border-radius:0;
+  padding:0;
+  box-shadow:none;
+  animation:none;
 }
 .header-inner{
-  background:var(--nav-bg);
-  backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px);
-  border-radius:18px;
+  background:
+    radial-gradient(120% 120% at 0% 0%, rgba(255,255,255,0.10), transparent 55%),
+    linear-gradient(135deg,#9b3a52 0%,#b8475f 48%,#c4566a 100%);
+  backdrop-filter:none;-webkit-backdrop-filter:none;
+  border-radius:0 0 26px 26px;
   overflow:hidden;
+  box-shadow:0 10px 30px rgba(155,58,82,0.30);
 }
 /* الصف العلوي — اسم المحل */
 .header-brand-row{
   display:flex;align-items:center;justify-content:space-between;
-  padding:10px 14px 8px;gap:6px;
-  border-bottom:1px solid var(--border);
+  padding:14px 16px 10px;gap:6px;
+  border-bottom:1px solid rgba(255,255,255,0.14);
 }
 .header-corner{display:flex;align-items:center;gap:5px;flex-shrink:0;min-width:50px;}
 .header-corner-r{display:flex;align-items:center;gap:6px;flex-shrink:0;min-width:50px;justify-content:flex-end;}
-.brand-center{display:flex;align-items:center;gap:8px;flex:1;justify-content:center;}
+.brand-center{display:flex;align-items:center;gap:10px;flex:1;justify-content:center;}
 .emblem{
-  width:34px;height:34px;
-  background:linear-gradient(135deg,var(--accent),var(--accent2));
-  border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:17px;
-  box-shadow:0 3px 10px var(--accent-glow);flex-shrink:0;
+  width:40px;height:40px;
+  background:linear-gradient(135deg,rgba(255,255,255,0.28),rgba(255,255,255,0.10));
+  border:1px solid rgba(255,255,255,0.30);
+  border-radius:14px;display:flex;align-items:center;justify-content:center;font-size:20px;
+  box-shadow:0 4px 14px rgba(0,0,0,0.18);flex-shrink:0;
   position:relative;overflow:hidden;
 }
 .emblem::after{
   content:'';position:absolute;inset:0;
-  background:linear-gradient(135deg,rgba(255,255,255,0.3),transparent);
+  background:linear-gradient(135deg,rgba(255,255,255,0.30),transparent 60%);
   border-radius:inherit;
 }
 @keyframes glow{0%,100%{box-shadow:0 6px 28px var(--accent-glow),0 2px 8px var(--shadow);}
   50%{box-shadow:0 6px 36px var(--accent-glow),0 0 50px var(--accent-glow),0 2px 8px var(--shadow);}}
 .brand-titles{display:flex;flex-direction:column;align-items:center;}
-.bname{font-family:'Playfair Display',serif;font-size:17px;font-weight:700;color:var(--accent2);line-height:1.2;letter-spacing:.3px;}
-.bsub{font-size:9px;color:var(--text3);letter-spacing:1.5px;font-weight:600;text-transform:uppercase;}
+.bname{font-family:'Playfair Display',serif;font-size:20px;font-weight:700;color:#fff;line-height:1.2;letter-spacing:.3px;text-shadow:0 1px 6px rgba(0,0,0,0.18);}
+.bsub{font-size:9px;color:rgba(255,255,255,0.65);letter-spacing:2px;font-weight:600;text-transform:uppercase;margin-top:2px;}
 /* مؤشرات حالة الـ AI */
 .ai-dots{display:flex;gap:5px;align-items:center;}
 .ai-dot{
@@ -175,39 +195,40 @@ header{
 /* الصف الثاني — الأدوات */
 .header-tools-row{
   display:flex;align-items:center;justify-content:space-between;
-  padding:7px 14px;gap:6px;
+  padding:9px 14px 11px;gap:6px;
 }
 .brand{display:none;}
 .brand-text{display:none;}
 .header-top{display:none;}
 .header-actions{display:contents;}
 .theme-btn{
-  width:30px;height:30px;border-radius:50%;border:1px solid var(--border);
+  width:32px;height:32px;border-radius:50%;border:1px solid rgba(255,255,255,0.22);
   cursor:pointer;font-size:14px;display:flex;align-items:center;justify-content:center;
-  background:var(--glass);transition:.2s;flex-shrink:0;
+  background:rgba(255,255,255,0.15);color:#fff;transition:.2s;flex-shrink:0;
 }
-.theme-btn:hover{transform:scale(1.1);}
+.theme-btn:hover{transform:scale(1.1);background:rgba(255,255,255,0.28);}
 .header-badge-btn{
-  height:28px;padding:0 9px;border-radius:14px;border:none;
-  background:rgba(245,200,66,0.18);color:#a07010;
+  height:28px;padding:0 11px;border-radius:14px;border:none;
+  background:linear-gradient(135deg,#e8c07a,#c8914a);color:#3a2606;
   font-family:'Tajawal',sans-serif;font-size:12px;font-weight:800;
   cursor:pointer;display:flex;align-items:center;gap:4px;
+  box-shadow:0 2px 8px rgba(0,0,0,0.18);
   transition:.2s;flex-shrink:0;
 }
-.header-badge-btn.debt{background:rgba(232,121,138,0.15);color:var(--accent2);}
+.header-badge-btn.debt{background:linear-gradient(135deg,#ff6b81,#e8455f);color:#fff;}
 .header-badge-btn:hover{transform:scale(1.05);}
 
 /* ── بطاقة ملخص الكاش اليومي ── */
 .cashday-card{
   margin:14px 0 0;border-radius:20px;overflow:hidden;
   border:1px solid var(--border);
-  box-shadow:0 4px 20px var(--shadow);
+  box-shadow:0 4px 24px var(--shadow);
   background:var(--card);
   animation:fadeUp .6s ease both;
 }
 .cashday-header{
-  background:linear-gradient(135deg,#d4a020,#a87000);
-  padding:11px 16px;display:flex;align-items:center;gap:8px;
+  background:linear-gradient(135deg,#c8914a,#a06e2a);
+  padding:13px 16px;display:flex;align-items:center;gap:8px;
 }
 .cashday-header-icon{font-size:18px;}
 .cashday-header-title{font-size:13px;font-weight:800;color:#fff;letter-spacing:.5px;flex:1;}
