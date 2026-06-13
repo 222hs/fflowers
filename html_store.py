@@ -8,7 +8,7 @@ STORE_PAGE = """<!DOCTYPE html>
   <title>فيروز فلورز</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;900&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Almarai:wght@300;400;700;800&family=Playfair+Display:ital,wght@0,700;1,700&display=swap" rel="stylesheet">
   <style>
     *, *::before, *::after {
       box-sizing: border-box;
@@ -37,7 +37,7 @@ STORE_PAGE = """<!DOCTYPE html>
     }
 
     body {
-      font-family: 'Cairo', sans-serif;
+      font-family: 'Almarai', sans-serif;
       background: var(--bg);
       color: var(--text);
       min-height: 100vh;
@@ -204,7 +204,7 @@ STORE_PAGE = """<!DOCTYPE html>
       border: none;
       border-radius: 8px;
       padding: 9px 20px;
-      font-family: 'Cairo', sans-serif;
+      font-family: 'Almarai', sans-serif;
       font-size: 13px;
       font-weight: 600;
       cursor: pointer;
@@ -312,7 +312,7 @@ STORE_PAGE = """<!DOCTYPE html>
       color: var(--text-sec);
       border-radius: 20px;
       padding: 7px 16px;
-      font-family: 'Cairo', sans-serif;
+      font-family: 'Almarai', sans-serif;
       font-size: 12px;
       font-weight: 600;
       cursor: pointer;
@@ -447,7 +447,7 @@ STORE_PAGE = """<!DOCTYPE html>
       border: none;
       border-radius: 20px;
       padding: 5px 12px;
-      font-family: 'Cairo', sans-serif;
+      font-family: 'Almarai', sans-serif;
       font-size: 11px;
       font-weight: 600;
       cursor: pointer;
@@ -714,7 +714,7 @@ STORE_PAGE = """<!DOCTYPE html>
       border-radius: 10px;
       color: var(--text);
       padding: 12px 14px;
-      font-family: 'Cairo', sans-serif;
+      font-family: 'Almarai', sans-serif;
       font-size: 14px;
       outline: none;
       transition: border-color 0.2s, background 0.2s;
@@ -749,7 +749,7 @@ STORE_PAGE = """<!DOCTYPE html>
       border: 1.5px solid var(--border);
       background: var(--section-bg);
       color: var(--text-sec);
-      font-family: 'Cairo', sans-serif;
+      font-family: 'Almarai', sans-serif;
       font-size: 13px;
       font-weight: 500;
       padding: 10px;
@@ -787,7 +787,7 @@ STORE_PAGE = """<!DOCTYPE html>
       border: none;
       border-radius: 12px;
       padding: 14px;
-      font-family: 'Cairo', sans-serif;
+      font-family: 'Almarai', sans-serif;
       font-size: 15px;
       font-weight: 700;
       cursor: pointer;
@@ -869,7 +869,7 @@ STORE_PAGE = """<!DOCTYPE html>
       background: white;
       border: 1.5px solid var(--primary);
       color: var(--primary);
-      font-family: 'Cairo', sans-serif;
+      font-family: 'Almarai', sans-serif;
       font-size: 14px;
       font-weight: 600;
       padding: 12px 32px;
@@ -996,32 +996,44 @@ STORE_PAGE = """<!DOCTYPE html>
     <div class="occasions-scroll" role="list">
       <div class="occasion-card" role="listitem" tabindex="0"
            onclick="filterCat('زواج')" onkeydown="if(event.key==='Enter')filterCat('زواج')" aria-label="زواج">
-        <div class="occasion-circle">💍</div>
+        <div class="occasion-circle" style="background:linear-gradient(135deg,#fce4ec,#f8bbd0);">
+          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#c2185b" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="M9 12l2 2 4-4"/></svg>
+        </div>
         <span class="occasion-label">زواج</span>
       </div>
       <div class="occasion-card" role="listitem" tabindex="0"
            onclick="filterCat('عيد ميلاد')" onkeydown="if(event.key==='Enter')filterCat('عيد ميلاد')" aria-label="عيد ميلاد">
-        <div class="occasion-circle">🎂</div>
+        <div class="occasion-circle" style="background:linear-gradient(135deg,#fff8e1,#ffe082);">
+          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#f9a825" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/><path d="M12 3v2M8 5l1.5 1.5M16 5l-1.5 1.5"/></svg>
+        </div>
         <span class="occasion-label">عيد ميلاد</span>
       </div>
       <div class="occasion-card" role="listitem" tabindex="0"
            onclick="filterCat('تخرج')" onkeydown="if(event.key==='Enter')filterCat('تخرج')" aria-label="تخرج">
-        <div class="occasion-circle">🎓</div>
+        <div class="occasion-circle" style="background:linear-gradient(135deg,#e8f5e9,#a5d6a7);">
+          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#2e7d32" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c3 3 9 3 12 0v-5"/></svg>
+        </div>
         <span class="occasion-label">تخرج</span>
       </div>
       <div class="occasion-card" role="listitem" tabindex="0"
            onclick="filterCat('هدية')" onkeydown="if(event.key==='Enter')filterCat('هدية')" aria-label="هدية">
-        <div class="occasion-circle">🌹</div>
+        <div class="occasion-circle" style="background:linear-gradient(135deg,#fce4ec,#ef9a9a);">
+          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#c62828" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 12 20 22 4 22 4 12"/><rect x="2" y="7" width="20" height="5"/><path d="M12 22V7M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7zM12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z"/></svg>
+        </div>
         <span class="occasion-label">هدية</span>
       </div>
       <div class="occasion-card" role="listitem" tabindex="0"
            onclick="filterCat('افتتاح')" onkeydown="if(event.key==='Enter')filterCat('افتتاح')" aria-label="افتتاح">
-        <div class="occasion-circle">🎉</div>
+        <div class="occasion-circle" style="background:linear-gradient(135deg,#e3f2fd,#90caf9);">
+          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#1565c0" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
+        </div>
         <span class="occasion-label">افتتاح</span>
       </div>
       <div class="occasion-card" role="listitem" tabindex="0"
            onclick="filterCat('all')" onkeydown="if(event.key==='Enter')filterCat('all')" aria-label="تخص">
-        <div class="occasion-circle">💐</div>
+        <div class="occasion-circle" style="background:linear-gradient(135deg,#f3e5f5,#ce93d8);">
+          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#6a1b9a" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22c0 0-8-4.5-8-11.8A8 8 0 0 1 12 2a8 8 0 0 1 8 8.2c0 7.3-8 11.8-8 11.8z"/><circle cx="12" cy="10" r="3"/></svg>
+        </div>
         <span class="occasion-label">تخص</span>
       </div>
     </div>
@@ -1039,7 +1051,7 @@ STORE_PAGE = """<!DOCTYPE html>
       <button class="cat-pill"        data-cat="شرايط"    role="tab" aria-selected="false" onclick="filterCat('شرايط')">🎀 شرايط</button>
     </div>
 
-    <p class="products-section-title">🌸 منتجاتنا</p>
+    <p class="products-section-title">منتجاتنا</p>
 
     <div class="products-grid" id="productsGrid" aria-live="polite" aria-label="قائمة المنتجات">
       <!-- JS populated -->
@@ -1049,15 +1061,21 @@ STORE_PAGE = """<!DOCTYPE html>
   <!-- ══ 6. TRUST BADGES ══ -->
   <section class="trust-section" aria-label="مميزاتنا">
     <div class="trust-item">
-      <div class="trust-circle">🚗</div>
+      <div class="trust-circle" style="background:linear-gradient(135deg,#e3f2fd,#bbdefb);">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#1565c0" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="3" width="15" height="13" rx="2"/><path d="M16 8h4l3 3v5h-7V8z"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg>
+      </div>
       <span class="trust-label">توصيل سريع</span>
     </div>
     <div class="trust-item">
-      <div class="trust-circle">🌸</div>
+      <div class="trust-circle" style="background:linear-gradient(135deg,#fce4ec,#f48fb1);">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#c2185b" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s-8-4.5-8-11.8A8 8 0 0 1 12 2a8 8 0 0 1 8 8.2c0 7.3-8 11.8-8 11.8z"/><path d="M12 11a2 2 0 1 0 0-4 2 2 0 0 0 0 4z"/><path d="M8 14s1-1 4-1 4 1 4 1"/></svg>
+      </div>
       <span class="trust-label">ورود طازجة</span>
     </div>
     <div class="trust-item">
-      <div class="trust-circle">💬</div>
+      <div class="trust-circle" style="background:linear-gradient(135deg,#e8f5e9,#a5d6a7);">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#2e7d32" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+      </div>
       <span class="trust-label">دعم فوري</span>
     </div>
   </section>
