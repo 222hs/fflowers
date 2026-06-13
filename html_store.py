@@ -1240,25 +1240,20 @@ STORE_PAGE = """<!DOCTYPE html>
           '</div>';
         return;
       }
+      // Store products globally so onclick can reference by index
+      window._storeProducts = products;
       g.innerHTML = products.map(function(p, idx) {
-        var safe     = JSON.stringify(p).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
         var priceStr = p.price ? formatPrice(p.price) + ' ر.ع' : null;
-        var imgTag   = p.img
-          ? '<img src="' + esc(p.img) + '" alt="' + esc(p.name) + '" loading="lazy"' +
-            ' onerror="this.style.display=\'none\';this.nextElementSibling.style.display=\'flex\'">'
+        var imgHtml  = p.img
+          ? '<img src="' + esc(p.img) + '" alt="' + esc(p.name) + '" loading="lazy">'
           : '';
-        var placeholderStyle = p.img ? 'display:none;' : '';
-        var badge    = (idx < 2) ? '<span class="card-new-badge" aria-label="منتج جديد">جديد</span>' : '';
+        var badge    = (idx < 2) ? '<span class="card-new-badge">جديد</span>' : '';
         var priceHtml = priceStr
           ? '<span class="card-price">' + esc(priceStr) + '</span>'
           : '<span class="card-price-on-request">السعر عند الطلب</span>';
-        return '<article class="prod-card" role="button" tabindex="0"' +
-          ' onclick="openOrderSheet(\'' + safe + '\')"' +
-          ' onkeydown="if(event.key===\'Enter\')openOrderSheet(\'' + safe + '\')"' +
-          ' aria-label="' + esc(p.name) + '">' +
+        return '<article class="prod-card" data-idx="' + idx + '">' +
           '<div class="card-img-wrap">' +
-            imgTag +
-            '<div class="card-img-placeholder" style="' + placeholderStyle + '" aria-hidden="true">🌸</div>' +
+            (p.img ? imgHtml : '<div class="card-img-placeholder">🌸</div>') +
             badge +
           '</div>' +
           '<div class="card-body">' +
@@ -1266,11 +1261,18 @@ STORE_PAGE = """<!DOCTYPE html>
             '<p class="card-category">' + esc(p.category || '') + '</p>' +
             '<div class="card-price-row">' +
               priceHtml +
-              '<button class="card-order-btn" tabindex="-1" aria-hidden="true">اطلب</button>' +
+              '<button class="card-order-btn">اطلب</button>' +
             '</div>' +
           '</div>' +
         '</article>';
       }).join('');
+      // Attach click handlers via event delegation
+      g.querySelectorAll('.prod-card').forEach(function(card) {
+        card.addEventListener('click', function() {
+          var idx = parseInt(this.dataset.idx);
+          openOrderSheet(window._storeProducts[idx]);
+        });
+      });
     }
 
     function renderError() {
