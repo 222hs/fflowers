@@ -727,6 +727,88 @@ def webhook():
 
     if "photo" in msg:
         file_id=msg["photo"][-1]["file_id"]; caption=msg.get("caption","").strip()
+
+        # ── إضافة منتج للمتجر: "باقات | 8.500" ──
+        STORE_CATS = ["باقات","استاندات","مجسمات","شرايط"]
+        detected_cat = next((c for c in STORE_CATS if c in caption), None)
+        price_match = re.search(r'(\d+(?:[.,]\d+)?)', caption)
+        if detected_cat and price_match:
+            tg(chat, "🌸 جاري إضافة المنتج للمتجر...")
+            try:
+                prod_price = float(price_match.group(1).replace(',', '.'))
+                # تحميل الصورة وحفظها
+                r_file = requests.get(
+                    f"https://api.telegram.org/bot{BOT_TOKEN}/getFile",
+                    params={"file_id": file_id}, timeout=10).json()
+                fp = r_file.get("result",{}).get("file_path","")
+                img_bytes = requests.get(
+                    f"https://api.telegram.org/file/bot{BOT_TOKEN}/{fp}", timeout=15).content
+                import uuid, os as _os
+                _os.makedirs("static/products", exist_ok=True)
+                fname = f"product_{uuid.uuid4().hex[:10]}.jpg"
+                img_path = f"static/products/{fname}"
+                with open(img_path, "wb") as f:
+                    f.write(img_bytes)
+                img_url = f"/static/products/{fname}"
+                # توليد اسم ووصف بالذكاء الاصطناعي
+                prod_name = detected_cat  # اسم افتراضي
+                prod_desc = ""
+                if GROQ_KEY or OPENROUTER_KEY or GEMINI_KEY:
+                    import base64
+                    b64 = base64.b64encode(img_bytes).decode()
+                    ai_prompt = [
+                        {"role":"user","content":[
+                            {"type":"text","text":f"أنت مساعد لمحل ورد. انظر لهذه الصورة وأعطني JSON فقط:\n{{\"name\":\"اسم المنتج بالعربي (مثال: باقة ورد حمراء فاخرة)\",\"description\":\"وصف قصير جذاب للمنتج 10-15 كلمة\"}}\nالفئة: {detected_cat}\nلا تكتب أي شيء غير JSON."},
+                            {"type":"image_url","image_url":{"url":f"data:image/jpeg;base64,{b64}"}}
+                        ]}
+                    ]
+                    try:
+                        if GROQ_KEY:
+                            r_ai = requests.post("https://api.groq.com/openai/v1/chat/completions",
+                                headers={"Authorization":f"Bearer {GROQ_KEY}"},
+                                json={"model":"meta-llama/llama-4-scout-17b-16e-instruct","messages":ai_prompt,"max_tokens":150,"temperature":0.3},
+                                timeout=20).json()
+                            ai_text = r_ai["choices"][0]["message"]["content"].strip()
+                        elif OPENROUTER_KEY:
+                            r_ai = requests.post("https://openrouter.ai/api/v1/chat/completions",
+                                headers={"Authorization":f"Bearer {OPENROUTER_KEY}"},
+                                json={"model":"google/gemini-2.0-flash-001","messages":ai_prompt,"max_tokens":150},
+                                timeout=20).json()
+                            ai_text = r_ai["choices"][0]["message"]["content"].strip()
+                        elif GEMINI_KEY:
+                            r_ai = requests.post(
+                                f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={GEMINI_KEY}",
+                                json={"contents":[{"parts":[
+                                    {"text":f"أنت مساعد لمحل ورد. انظر لهذه الصورة وأعطني JSON فقط:\n{{\"name\":\"اسم المنتج بالعربي\",\"description\":\"وصف قصير جذاب 10-15 كلمة\"}}\nالفئة: {detected_cat}"},
+                                    {"inline_data":{"mime_type":"image/jpeg","data":b64}}
+                                ]}]},
+                                timeout=20).json()
+                            ai_text = r_ai["candidates"][0]["content"]["parts"][0]["text"].strip()
+                        # استخراج JSON
+                        import json as _json
+                        json_m = re.search(r'\{[^}]+\}', ai_text, re.DOTALL)
+                        if json_m:
+                            parsed = _json.loads(json_m.group())
+                            prod_name = parsed.get("name", detected_cat) or detected_cat
+                            prod_desc = parsed.get("description", "") or ""
+                    except Exception as e:
+                        prod_name = detected_cat
+                # حفظ المنتج في قاعدة البيانات
+                db_run(
+                    "INSERT INTO store_products (name,description,price,category,img) VALUES (?,?,?,?,?)",
+                    (prod_name, prod_desc, prod_price, detected_cat, img_url)
+                )
+                tg(chat,
+                    f"✅ <b>تم إضافة المنتج للمتجر!</b>\n\n"
+                    f"🌸 <b>{prod_name}</b>\n"
+                    f"📂 الفئة: {detected_cat}\n"
+                    f"💰 السعر: {prod_price:,.3f} ر.ع\n"
+                    f"📝 {prod_desc}\n\n"
+                    f"يظهر الآن في المتجر تلقائياً 🛍️")
+            except Exception as e:
+                tg(chat, f"⚠️ حدث خطأ أثناء الإضافة: {str(e)[:100]}")
+            return "ok"
+
         # ── طلب عميل جديد ──
         caption_is_order = any(w in caption for w in ["طلب","order","طلبية","اوردر","زبون","عميل"])
         if caption_is_order:
