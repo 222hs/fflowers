@@ -758,7 +758,15 @@ def webhook():
                     b64 = base64.b64encode(img_bytes).decode()
                     ai_prompt = [
                         {"role":"user","content":[
-                            {"type":"text","text":f"أنت مساعد لمحل ورد. انظر لهذه الصورة وأعطني JSON فقط:\n{{\"name\":\"اسم المنتج بالعربي (مثال: باقة ورد حمراء فاخرة)\",\"description\":\"وصف قصير جذاب للمنتج 10-15 كلمة\"}}\nالفئة: {detected_cat}\nلا تكتب أي شيء غير JSON."},
+                            {"type":"text","text":f"""أنت كاتب إعلاني محترف لمحل ورد راقٍ اسمه "فيروز فلورز".
+انظر لهذه الصورة وأعطني JSON فقط بهذا الشكل:
+{{
+  "name": "اسم المنتج بالعربي (مثال: باقة ورد حمراء ملكية)",
+  "description": "نص تسويقي جميل ومفصّل من 3-4 جمل يصف المنتج بأسلوب راقٍ ويبرز جماله وتميّزه ومناسباته"
+}}
+الفئة: {detected_cat}
+اجعل الوصف شاعرياً وجذاباً يشجّع العميل على الشراء.
+لا تكتب أي شيء خارج JSON."""},
                             {"type":"image_url","image_url":{"url":f"data:image/jpeg;base64,{b64}"}}
                         ]}
                     ]
@@ -766,13 +774,13 @@ def webhook():
                         if GROQ_KEY:
                             r_ai = requests.post("https://api.groq.com/openai/v1/chat/completions",
                                 headers={"Authorization":f"Bearer {GROQ_KEY}"},
-                                json={"model":"meta-llama/llama-4-scout-17b-16e-instruct","messages":ai_prompt,"max_tokens":150,"temperature":0.3},
+                                json={"model":"meta-llama/llama-4-scout-17b-16e-instruct","messages":ai_prompt,"max_tokens":400,"temperature":0.7},
                                 timeout=20).json()
                             ai_text = r_ai["choices"][0]["message"]["content"].strip()
                         elif OPENROUTER_KEY:
                             r_ai = requests.post("https://openrouter.ai/api/v1/chat/completions",
                                 headers={"Authorization":f"Bearer {OPENROUTER_KEY}"},
-                                json={"model":"google/gemini-2.0-flash-001","messages":ai_prompt,"max_tokens":150},
+                                json={"model":"google/gemini-2.0-flash-001","messages":ai_prompt,"max_tokens":400},
                                 timeout=20).json()
                             ai_text = r_ai["choices"][0]["message"]["content"].strip()
                         elif GEMINI_KEY:
@@ -802,9 +810,11 @@ def webhook():
                     f"✅ <b>تم إضافة المنتج للمتجر!</b>\n\n"
                     f"🌸 <b>{prod_name}</b>\n"
                     f"📂 الفئة: {detected_cat}\n"
-                    f"💰 السعر: {prod_price:,.3f} ر.ع\n"
-                    f"📝 {prod_desc}\n\n"
-                    f"يظهر الآن في المتجر تلقائياً 🛍️")
+                    f"💰 السعر: {prod_price:,.3f} ر.ع\n\n"
+                    f"📝 <b>الوصف:</b>\n{prod_desc}\n\n"
+                    f"——\n"
+                    f"يظهر الآن في المتجر تلقائياً 🛍️\n"
+                    f"لتعديله: افتح لوحة الإدارة ← تبويبة المتجر")
             except Exception as e:
                 tg(chat, f"⚠️ حدث خطأ أثناء الإضافة: {str(e)[:100]}")
             return "ok"
