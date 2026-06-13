@@ -4,6 +4,7 @@ from helpers import *
 from telegram_bot import *
 from html_pages import HTML_PAGE, WORKER_PAGE
 from html_login import LOGIN_PAGE
+from html_store import STORE_PAGE
 
 
 from functools import wraps
@@ -111,8 +112,143 @@ def worker_index():
     return Response(WORKER_PAGE, mimetype="text/html")
 
 @app.route("/")
+def index():
+    return Response(STORE_PAGE, mimetype="text/html")
+
+@app.route("/admin")
 @auth
-def index(): return Response(HTML_PAGE, mimetype="text/html")
+def admin_index(): return Response(HTML_PAGE, mimetype="text/html")
+
+# ── Store API ─────────────────────────────────────────────────
+
+@app.route("/api/store/products")
+def store_products_list():
+    cat = request.args.get("category", "all")
+    if cat == "all":
+        rows = db_get("SELECT * FROM store_products WHERE available=1 ORDER BY sort_order,id")
+    else:
+        rows = db_get("SELECT * FROM store_products WHERE available=1 AND category=? ORDER BY sort_order,id", (cat,))
+    return jsonify(rows)
+
+@app.route("/api/store/order", methods=["POST"])
+def store_place_order():
+    d = request.json or {}
+    name = (d.get("customer_name") or "").strip()
+    phone = (d.get("customer_phone") or "").strip()
+    product_name = (d.get("product_name") or "").strip()
+    product_id = d.get("product_id")
+    delivery_type = d.get("delivery_type", "pickup")
+    address = (d.get("address") or "").strip()
+    notes = (d.get("notes") or "").strip()
+    if not name or not phone:
+        return jsonify({"ok": False, "error": "الاسم والهاتف مطلوبان"}), 400
+    from datetime import timezone
+    oman_offset = timedelta(hours=4)
+    now_oman = datetime.now(timezone.utc) + oman_offset
+    date_str = now_oman.strftime("%d/%m/%Y")
+    # Get product price
+    price = 0
+    if product_id:
+        p = db_one("SELECT price FROM store_products WHERE id=?", (product_id,))
+        if p: price = p["price"]
+    db_run(
+        "INSERT INTO orders (customer_name,customer_phone,description,price,status,notes,date,source,product_id,delivery_type,address) VALUES (?,?,?,?,'pending',?,?,'store',?,?,?)",
+        (name, phone, product_name, price, notes, date_str, product_id, delivery_type, address)
+    )
+    # Telegram notification
+    delivery_label = "🚗 توصيل" if delivery_type == "delivery" else "🏪 استلام من المحل"
+    addr_line = f"\n📍 العنوان: {address}" if address else ""
+    notes_line = f"\n📝 ملاحظات: {notes}" if notes else ""
+    msg = (
+        f"🌸 <b>طلب جديد من المتجر!</b>\n\n"
+        f"👤 {name}\n"
+        f"📞 {phone}\n"
+        f"🛍️ {product_name}\n"
+        f"💰 {price:,.3f} ر.ع\n"
+        f"{delivery_label}{addr_line}{notes_line}"
+    )
+    chat_id = os.environ.get("OWNER_CHAT_ID", "")
+    if BOT_TOKEN and chat_id:
+        try:
+            requests.post(f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage",
+                json={"chat_id": int(chat_id), "text": msg, "parse_mode": "HTML"}, timeout=10)
+        except: pass
+    return jsonify({"ok": True})
+
+# ── Admin Store Management ────────────────────────────────────
+
+@app.route("/api/admin/store/products", methods=["GET"])
+@auth
+def admin_store_products():
+    rows = db_get("SELECT * FROM store_products ORDER BY category,sort_order,id")
+    return jsonify(rows)
+
+@app.route("/api/admin/store/products", methods=["POST"])
+@auth
+def admin_store_add_product():
+    d = request.json or {}
+    name = (d.get("name") or "").strip()
+    if not name:
+        return jsonify({"ok": False, "error": "الاسم مطلوب"}), 400
+    price = float(d.get("price") or 0)
+    category = d.get("category", "باقات")
+    description = (d.get("description") or "").strip()
+    img = (d.get("img") or "").strip()
+    db_run(
+        "INSERT INTO store_products (name,description,price,category,img) VALUES (?,?,?,?,?)",
+        (name, description, price, category, img)
+    )
+    return jsonify({"ok": True})
+
+@app.route("/api/admin/store/products/<int:pid>", methods=["PUT"])
+@auth
+def admin_store_edit_product(pid):
+    d = request.json or {}
+    name = (d.get("name") or "").strip()
+    price = float(d.get("price") or 0)
+    category = d.get("category", "باقات")
+    description = (d.get("description") or "").strip()
+    img = (d.get("img") or "").strip()
+    available = 1 if d.get("available", True) else 0
+    db_run(
+        "UPDATE store_products SET name=?,description=?,price=?,category=?,img=?,available=? WHERE id=?",
+        (name, description, price, category, img, available, pid)
+    )
+    return jsonify({"ok": True})
+
+@app.route("/api/admin/store/products/<int:pid>", methods=["DELETE"])
+@auth
+def admin_store_delete_product(pid):
+    db_run("DELETE FROM store_products WHERE id=?", (pid,))
+    return jsonify({"ok": True})
+
+@app.route("/api/admin/store/products/<int:pid>/image", methods=["POST"])
+@auth
+def admin_store_upload_image(pid):
+    if "file" not in request.files:
+        return jsonify({"ok": False, "error": "لا يوجد ملف"}), 400
+    f = request.files["file"]
+    import uuid, os
+    ext = os.path.splitext(f.filename)[1] or ".jpg"
+    fname = f"product_{pid}_{uuid.uuid4().hex[:8]}{ext}"
+    os.makedirs("static/products", exist_ok=True)
+    f.save(f"static/products/{fname}")
+    url = f"/static/products/{fname}"
+    db_run("UPDATE store_products SET img=? WHERE id=?", (url, pid))
+    return jsonify({"ok": True, "url": url})
+
+@app.route("/api/admin/orders", methods=["GET"])
+@auth
+def admin_orders_list():
+    rows = db_get("SELECT * FROM orders WHERE source='store' ORDER BY id DESC LIMIT 100")
+    return jsonify(rows)
+
+@app.route("/api/admin/orders/<int:oid>/status", methods=["POST"])
+@auth
+def admin_order_status(oid):
+    status = (request.json or {}).get("status", "pending")
+    db_run("UPDATE orders SET status=? WHERE id=?", (status, oid))
+    return jsonify({"ok": True})
 
 @app.route("/debug")
 def debug():

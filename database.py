@@ -241,6 +241,36 @@ def init_db():
                 conn5=sqlite3.connect(DB_PATH); conn5.execute(sql); conn5.commit(); conn5.close()
             except: pass
 
+    # Store products table
+    store_products_sql = """CREATE TABLE IF NOT EXISTS store_products (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL,
+        description TEXT DEFAULT '',
+        price REAL NOT NULL DEFAULT 0,
+        category TEXT DEFAULT 'باقات',
+        img TEXT DEFAULT '',
+        available INTEGER DEFAULT 1,
+        sort_order INTEGER DEFAULT 0,
+        created TEXT DEFAULT (datetime('now')))"""
+    store_migrations = [
+        "ALTER TABLE orders ADD COLUMN product_id INTEGER",
+        "ALTER TABLE orders ADD COLUMN delivery_type TEXT DEFAULT 'pickup'",
+        "ALTER TABLE orders ADD COLUMN address TEXT",
+    ]
+    if USE_TURSO:
+        turso_run(store_products_sql)
+        for sql in store_migrations:
+            try: turso_run(sql)
+            except: pass
+    else:
+        try:
+            conn6=sqlite3.connect(DB_PATH); conn6.execute(store_products_sql); conn6.commit(); conn6.close()
+        except: pass
+        for sql in store_migrations:
+            try:
+                conn6=sqlite3.connect(DB_PATH); conn6.execute(sql); conn6.commit(); conn6.close()
+            except: pass
+
     # Expenses table
     fixed_sqls = [
         """CREATE TABLE IF NOT EXISTS expenses (
