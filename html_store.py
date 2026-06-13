@@ -8,7 +8,7 @@ STORE_PAGE = """<!DOCTYPE html>
   <title>فيروز فلورز</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@300;400;500;700&family=Playfair+Display:wght@400;600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;0,700;1,400;1,600&family=Tajawal:wght@300;400;500;700&display=swap" rel="stylesheet">
   <style>
     *, *::before, *::after {
       box-sizing: border-box;
@@ -17,61 +17,142 @@ STORE_PAGE = """<!DOCTYPE html>
     }
 
     :root {
-      --bg-primary: #0d1a18;
-      --bg-card: #111f1d;
-      --bg-card-hover: #162422;
-      --bg-input: #0a1614;
-      --bg-sheet: #0f1d1b;
-      --gold: #c8914a;
-      --gold-light: #e0a85e;
-      --gold-dark: #a87238;
-      --gold-gradient: linear-gradient(135deg, #c8914a 0%, #e0a85e 50%, #c8914a 100%);
-      --text-white: #f5f0e8;
-      --text-muted: #8a9e9b;
-      --text-dark: #0d1a18;
-      --border-subtle: rgba(200, 145, 74, 0.15);
-      --border-gold: rgba(200, 145, 74, 0.5);
-      --overlay: rgba(0, 0, 0, 0.65);
-      --radius-sm: 8px;
-      --radius-md: 14px;
-      --radius-lg: 20px;
-      --radius-pill: 50px;
-      --shadow-card: 0 4px 24px rgba(0, 0, 0, 0.4);
-      --shadow-gold: 0 2px 16px rgba(200, 145, 74, 0.2);
-      --transition: 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+      --bg:        #0c0c0c;
+      --surface:   #141414;
+      --surface2:  #1a1a1a;
+      --border:    rgba(212,175,55,0.15);
+      --border-b:  rgba(212,175,55,0.4);
+      --gold:      #d4af37;
+      --gold-l:    #f0d060;
+      --text:      #f5f0e8;
+      --muted:     #8a8070;
+      --dim:       #4a4540;
     }
 
     html {
-      background: var(--bg-primary);
+      background: var(--bg);
       scroll-behavior: smooth;
     }
 
     body {
       font-family: 'Tajawal', sans-serif;
-      background: var(--bg-primary);
-      color: var(--text-white);
+      background: var(--bg);
+      color: var(--text);
       min-height: 100vh;
-      max-width: 430px;
+      max-width: 480px;
       margin: 0 auto;
-      position: relative;
       overflow-x: hidden;
+      position: relative;
     }
 
-    /* ═══════════════════════════════
-       HERO SECTION
-    ═══════════════════════════════ */
+    /* ─────────────────────────────────────────
+       1. TOP NAV
+    ───────────────────────────────────────── */
+    .topnav {
+      position: fixed;
+      top: 0;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 100%;
+      max-width: 480px;
+      height: 60px;
+      background: #0c0c0c;
+      border-bottom: 1px solid rgba(212,175,55,0.2);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 18px;
+      z-index: 50;
+    }
+
+    .nav-bag {
+      position: relative;
+      width: 36px;
+      height: 36px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      -webkit-tap-highlight-color: transparent;
+      background: none;
+      border: none;
+      color: var(--muted);
+    }
+
+    .nav-bag svg {
+      width: 22px;
+      height: 22px;
+      stroke: var(--muted);
+      fill: none;
+      stroke-width: 1.6;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+
+    .bag-count {
+      position: absolute;
+      top: 2px;
+      left: 2px;
+      background: var(--gold);
+      color: #0c0c0c;
+      font-family: 'Tajawal', sans-serif;
+      font-size: 9px;
+      font-weight: 700;
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      line-height: 1;
+    }
+
+    .nav-logo {
+      font-family: 'Playfair Display', serif;
+      font-style: italic;
+      font-size: 20px;
+      color: var(--gold);
+      letter-spacing: 0.01em;
+      user-select: none;
+    }
+
+    .nav-ig {
+      width: 36px;
+      height: 36px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--muted);
+      text-decoration: none;
+      -webkit-tap-highlight-color: transparent;
+      transition: color 0.2s;
+    }
+
+    .nav-ig:hover { color: var(--gold); }
+
+    .nav-ig svg {
+      width: 20px;
+      height: 20px;
+      stroke: currentColor;
+      fill: none;
+      stroke-width: 1.6;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+
+    /* ─────────────────────────────────────────
+       2. HERO
+    ───────────────────────────────────────── */
     .hero {
       position: relative;
       width: 100%;
-      height: 50vh;
-      min-height: 280px;
+      height: 100svh;
       background-image: url('/background.jpg');
       background-size: cover;
       background-position: center;
       background-repeat: no-repeat;
       display: flex;
       align-items: flex-end;
-      justify-content: center;
       overflow: hidden;
     }
 
@@ -81,10 +162,10 @@ STORE_PAGE = """<!DOCTYPE html>
       inset: 0;
       background: linear-gradient(
         to bottom,
-        rgba(13, 26, 24, 0.1) 0%,
-        rgba(13, 26, 24, 0.3) 40%,
-        rgba(13, 26, 24, 0.85) 75%,
-        rgba(13, 26, 24, 1) 100%
+        rgba(12,12,12,0.3) 0%,
+        rgba(12,12,12,0.0) 40%,
+        rgba(12,12,12,0.85) 80%,
+        rgba(12,12,12,1) 100%
       );
       z-index: 1;
     }
@@ -92,236 +173,304 @@ STORE_PAGE = """<!DOCTYPE html>
     .hero-content {
       position: relative;
       z-index: 2;
-      text-align: center;
-      padding: 0 24px 32px;
+      padding: 28px;
       width: 100%;
     }
 
-    .hero-title {
-      font-family: 'Playfair Display', serif;
-      font-size: clamp(2rem, 8vw, 2.8rem);
-      font-weight: 700;
+    .hero-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      font-family: 'Tajawal', sans-serif;
+      font-size: 11px;
+      font-weight: 500;
       color: var(--gold);
-      letter-spacing: 0.02em;
+      border: 1px solid var(--gold);
+      border-radius: 50px;
+      padding: 4px 12px;
+      margin-bottom: 14px;
+      letter-spacing: 0.5px;
+    }
+
+    .hero-heading {
+      font-family: 'Playfair Display', serif;
+      font-size: 36px;
+      font-weight: 700;
+      color: var(--text);
       line-height: 1.2;
-      text-shadow: 0 2px 20px rgba(200, 145, 74, 0.4);
+      white-space: pre-line;
       margin-bottom: 8px;
     }
 
-    .hero-tagline {
+    .hero-sub {
       font-family: 'Tajawal', sans-serif;
-      font-size: 1rem;
-      font-weight: 300;
-      color: rgba(245, 240, 232, 0.85);
-      letter-spacing: 0.05em;
+      font-size: 13px;
+      color: var(--muted);
+      margin-top: 8px;
+      letter-spacing: 0.3px;
     }
 
-    /* ═══════════════════════════════
-       CATEGORY TABS
-    ═══════════════════════════════ */
-    .category-section {
-      padding: 20px 0 12px;
-      background: var(--bg-primary);
-      position: sticky;
-      top: 0;
-      z-index: 10;
-      border-bottom: 1px solid var(--border-subtle);
-    }
-
-    .category-scroll {
-      display: flex;
-      gap: 8px;
-      padding: 0 16px;
-      overflow-x: auto;
-      scrollbar-width: none;
-      -ms-overflow-style: none;
-      flex-direction: row-reverse;
-    }
-
-    .category-scroll::-webkit-scrollbar {
-      display: none;
-    }
-
-    .cat-tab {
-      flex-shrink: 0;
-      padding: 8px 18px;
-      border-radius: var(--radius-pill);
+    .hero-cta {
+      display: inline-block;
+      margin-top: 16px;
+      border: 1px solid var(--gold);
+      color: var(--gold);
+      background: transparent;
+      padding: 10px 24px;
+      border-radius: 4px;
       font-family: 'Tajawal', sans-serif;
-      font-size: 0.875rem;
+      font-size: 13px;
       font-weight: 500;
       cursor: pointer;
-      border: 1.5px solid var(--gold);
-      background: transparent;
-      color: var(--gold);
-      transition: var(--transition);
-      white-space: nowrap;
-      user-select: none;
+      text-decoration: none;
+      transition: background 0.2s, color 0.2s;
       -webkit-tap-highlight-color: transparent;
     }
 
-    .cat-tab:active {
-      transform: scale(0.96);
+    .hero-cta:hover,
+    .hero-cta:active {
+      background: rgba(212,175,55,0.1);
     }
 
-    .cat-tab.active {
-      background: var(--gold-gradient);
-      color: var(--text-dark);
+    /* ─────────────────────────────────────────
+       3. CATEGORY FILTER BAR
+    ───────────────────────────────────────── */
+    .filter-bar {
+      position: sticky;
+      top: 60px;
+      z-index: 40;
+      background: #0c0c0c;
+      border-bottom: 1px solid rgba(212,175,55,0.12);
+      height: 48px;
+      display: flex;
+      align-items: center;
+      padding: 0 16px;
+    }
+
+    .filter-scroll {
+      display: flex;
+      flex-direction: row;
+      align-items: center;
+      gap: 8px;
+      overflow-x: auto;
+      scrollbar-width: none;
+      -ms-overflow-style: none;
+      width: 100%;
+      padding-bottom: 0;
+    }
+
+    .filter-scroll::-webkit-scrollbar {
+      display: none;
+    }
+
+    .filter-pill {
+      flex-shrink: 0;
+      border: 1px solid rgba(212,175,55,0.25);
+      color: var(--muted);
+      background: transparent;
+      border-radius: 4px;
+      padding: 5px 14px;
+      font-family: 'Tajawal', sans-serif;
+      font-size: 12px;
+      font-weight: 400;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: background 0.2s, color 0.2s, border-color 0.2s;
+      -webkit-tap-highlight-color: transparent;
+      user-select: none;
+    }
+
+    .filter-pill.active {
+      background: var(--gold);
+      color: #0c0c0c;
       font-weight: 700;
       border-color: transparent;
-      box-shadow: var(--shadow-gold);
     }
 
-    /* ═══════════════════════════════
-       PRODUCTS GRID
-    ═══════════════════════════════ */
-    .products-section {
-      padding: 16px;
+    .filter-pill:not(.active):hover {
+      border-color: rgba(212,175,55,0.5);
+      color: var(--text);
+    }
+
+    /* ─────────────────────────────────────────
+       4. PRODUCTS SECTION
+    ───────────────────────────────────────── */
+    #productsSection {
+      padding: 20px 16px 100px;
+    }
+
+    .section-label {
+      text-align: center;
+      font-family: 'Tajawal', sans-serif;
+      font-size: 11px;
+      letter-spacing: 3px;
+      color: var(--dim);
+      margin-bottom: 18px;
+      user-select: none;
     }
 
     .products-grid {
       display: grid;
       grid-template-columns: 1fr 1fr;
-      gap: 12px;
+      gap: 16px;
     }
 
     /* Product Card */
-    .product-card {
-      background: var(--bg-card);
-      border-radius: var(--radius-md);
+    .prod-card {
+      background: var(--surface);
+      border: 1px solid rgba(212,175,55,0.12);
+      border-radius: 2px;
       overflow: hidden;
-      box-shadow: var(--shadow-card);
-      border: 1px solid var(--border-subtle);
-      transition: var(--transition);
       cursor: pointer;
+      transition: border-color 0.3s, transform 0.2s;
       -webkit-tap-highlight-color: transparent;
+      display: flex;
+      flex-direction: column;
     }
 
-    .product-card:active {
-      transform: scale(0.98);
+    .prod-card:hover {
+      border-color: rgba(212,175,55,0.5);
+      transform: translateY(-2px);
     }
 
-    .card-image-wrap {
+    .prod-card:active {
+      transform: translateY(0px) scale(0.985);
+    }
+
+    .card-img-wrap {
       position: relative;
-      aspect-ratio: 1 / 1;
+      aspect-ratio: 3/4;
       overflow: hidden;
+      background: linear-gradient(135deg, #1a1512, #2a1f15);
+      display: flex;
+      align-items: center;
+      justify-content: center;
     }
 
-    .card-image-wrap img {
+    .card-img-wrap img {
       width: 100%;
       height: 100%;
       object-fit: cover;
       display: block;
-      transition: transform 0.4s ease;
     }
 
-    .product-card:hover .card-image-wrap img {
-      transform: scale(1.04);
+    .card-img-placeholder {
+      font-size: 40px;
+      line-height: 1;
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: rgba(212,175,55,0.25);
     }
 
     .card-badge {
       position: absolute;
-      top: 8px;
-      right: 8px;
-      background: rgba(13, 26, 24, 0.82);
-      backdrop-filter: blur(6px);
-      -webkit-backdrop-filter: blur(6px);
+      top: 10px;
+      right: 10px;
+      font-size: 10px;
+      background: rgba(12,12,12,0.8);
       color: var(--gold);
-      font-size: 0.65rem;
-      font-weight: 700;
+      border: 1px solid rgba(212,175,55,0.4);
       padding: 3px 8px;
-      border-radius: var(--radius-pill);
-      border: 1px solid var(--border-gold);
-      white-space: nowrap;
+      border-radius: 2px;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      font-family: 'Tajawal', sans-serif;
+      font-weight: 500;
+      backdrop-filter: blur(4px);
+      -webkit-backdrop-filter: blur(4px);
     }
 
     .card-body {
-      padding: 10px 10px 12px;
+      padding: 12px;
+      display: flex;
+      flex-direction: column;
+      flex: 1;
     }
 
     .card-name {
-      font-size: 0.825rem;
-      font-weight: 700;
-      color: var(--text-white);
+      font-family: 'Playfair Display', serif;
+      font-size: 14px;
+      font-weight: 400;
+      color: var(--text);
+      line-height: 1.3;
       margin-bottom: 6px;
-      line-height: 1.4;
-      display: -webkit-box;
-      -webkit-line-clamp: 2;
-      -webkit-box-orient: vertical;
-      overflow: hidden;
     }
 
     .card-price {
       font-family: 'Playfair Display', serif;
-      font-size: 0.95rem;
-      font-weight: 600;
-      color: var(--gold);
-      margin-bottom: 10px;
-      display: flex;
-      align-items: baseline;
-      gap: 3px;
-    }
-
-    .card-price .currency {
-      font-family: 'Tajawal', sans-serif;
-      font-size: 0.7rem;
-      font-weight: 500;
-      opacity: 0.8;
-    }
-
-    .card-btn {
-      width: 100%;
-      padding: 8px 0;
-      background: var(--gold-gradient);
-      color: var(--text-dark);
-      font-family: 'Tajawal', sans-serif;
-      font-size: 0.8rem;
+      font-size: 16px;
       font-weight: 700;
-      border: none;
-      border-radius: var(--radius-sm);
+      color: var(--gold);
+      margin-bottom: 0;
+    }
+
+    .card-order {
+      display: block;
+      margin-top: 8px;
+      font-family: 'Tajawal', sans-serif;
+      font-size: 11px;
+      color: var(--muted);
+      letter-spacing: 1px;
+      text-decoration: none;
       cursor: pointer;
-      transition: var(--transition);
-      letter-spacing: 0.02em;
-      -webkit-tap-highlight-color: transparent;
+      background: none;
+      border: none;
+      padding: 0;
+      text-align: right;
+      width: 100%;
     }
 
-    .card-btn:active {
-      transform: scale(0.97);
-      filter: brightness(0.9);
-    }
-
-    /* Skeleton Loading */
-    .skeleton-card {
-      background: var(--bg-card);
-      border-radius: var(--radius-md);
+    /* Skeleton */
+    .skel-card {
+      background: var(--surface);
+      border: 1px solid rgba(212,175,55,0.08);
+      border-radius: 2px;
       overflow: hidden;
-      border: 1px solid var(--border-subtle);
     }
 
-    .skeleton-img {
-      aspect-ratio: 1 / 1;
-      background: linear-gradient(90deg, #152220 25%, #1c302d 50%, #152220 75%);
-      background-size: 200% 100%;
-      animation: shimmer 1.5s infinite;
+    .skel-img {
+      aspect-ratio: 3/4;
+      background: #1a1a1a;
+      position: relative;
+      overflow: hidden;
     }
 
-    .skeleton-body {
-      padding: 10px;
+    .skel-body {
+      padding: 12px;
     }
 
-    .skeleton-line {
+    .skel-line {
       height: 12px;
-      border-radius: 6px;
-      background: linear-gradient(90deg, #152220 25%, #1c302d 50%, #152220 75%);
-      background-size: 200% 100%;
-      animation: shimmer 1.5s infinite;
+      border-radius: 2px;
+      background: #1a1a1a;
       margin-bottom: 8px;
+      position: relative;
+      overflow: hidden;
     }
 
-    .skeleton-line.short { width: 60%; }
-    .skeleton-line.btn { height: 30px; border-radius: var(--radius-sm); margin-bottom: 0; }
+    .skel-line.w60 { width: 60%; }
+    .skel-line.w40 { width: 40%; }
+
+    .skel-img::after,
+    .skel-line::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(
+        90deg,
+        transparent 0%,
+        rgba(212,175,55,0.06) 50%,
+        transparent 100%
+      );
+      background-size: 200% 100%;
+      animation: shimmer 1.6s ease-in-out infinite;
+    }
 
     @keyframes shimmer {
-      0% { background-position: 200% 0; }
+      0%   { background-position: 200% 0; }
       100% { background-position: -200% 0; }
     }
 
@@ -330,120 +479,117 @@ STORE_PAGE = """<!DOCTYPE html>
       grid-column: 1 / -1;
       text-align: center;
       padding: 60px 20px;
-      color: var(--text-muted);
     }
 
-    .empty-state .empty-icon {
-      font-size: 3rem;
-      margin-bottom: 12px;
+    .empty-icon {
       display: block;
+      font-size: 32px;
+      margin-bottom: 12px;
+      opacity: 0.4;
     }
 
-    .empty-state p {
-      font-size: 0.95rem;
-      line-height: 1.6;
+    .empty-text {
+      font-family: 'Tajawal', sans-serif;
+      font-size: 14px;
+      color: var(--dim);
     }
 
-    /* ═══════════════════════════════
-       OVERLAY
-    ═══════════════════════════════ */
-    .overlay {
+    /* ─────────────────────────────────────────
+       5. BOTTOM SHEET OVERLAY
+    ───────────────────────────────────────── */
+    .sheet-overlay {
       position: fixed;
       inset: 0;
-      background: var(--overlay);
-      backdrop-filter: blur(3px);
-      -webkit-backdrop-filter: blur(3px);
+      background: rgba(0,0,0,0.85);
       z-index: 100;
       opacity: 0;
       pointer-events: none;
-      transition: opacity var(--transition);
+      transition: opacity 0.3s ease;
     }
 
-    .overlay.visible {
+    .sheet-overlay.open {
       opacity: 1;
       pointer-events: all;
     }
 
-    /* ═══════════════════════════════
-       ORDER BOTTOM SHEET
-    ═══════════════════════════════ */
+    /* ─────────────────────────────────────────
+       5. ORDER BOTTOM SHEET
+    ───────────────────────────────────────── */
     .order-sheet {
       position: fixed;
       bottom: 0;
       left: 50%;
       transform: translateX(-50%) translateY(100%);
       width: 100%;
-      max-width: 430px;
-      background: var(--bg-sheet);
-      border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+      max-width: 480px;
+      background: var(--surface);
+      border-top: 1px solid rgba(212,175,55,0.3);
+      border-radius: 16px 16px 0 0;
       z-index: 101;
-      transition: transform 0.35s cubic-bezier(0.32, 0.72, 0, 1);
       max-height: 92vh;
       overflow-y: auto;
       scrollbar-width: none;
-      padding-bottom: calc(20px + env(safe-area-inset-bottom, 0px));
-      border-top: 1px solid var(--border-gold);
+      -ms-overflow-style: none;
+      padding-bottom: env(safe-area-inset-bottom, 0px);
+      transition: transform 0.38s cubic-bezier(0.32,0.72,0,1);
     }
 
-    .order-sheet::-webkit-scrollbar {
-      display: none;
-    }
+    .order-sheet::-webkit-scrollbar { display: none; }
 
     .order-sheet.open {
       transform: translateX(-50%) translateY(0);
     }
 
-    .sheet-handle {
+    .sheet-drag {
       width: 40px;
-      height: 4px;
-      background: var(--border-gold);
+      height: 3px;
+      background: rgba(212,175,55,0.35);
       border-radius: 2px;
       margin: 12px auto 0;
     }
 
-    .sheet-header {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding: 16px 20px 12px;
-      border-bottom: 1px solid var(--border-subtle);
-    }
-
-    .sheet-title {
-      font-size: 0.8rem;
-      color: var(--text-muted);
-      font-weight: 400;
-    }
-
-    .sheet-product-name {
-      font-family: 'Playfair Display', serif;
-      font-size: 1.1rem;
-      font-weight: 600;
-      color: var(--gold);
-      margin-top: 2px;
-      max-width: 240px;
+    .sheet-top {
+      position: relative;
+      padding: 16px 20px 0;
+      margin-bottom: 4px;
     }
 
     .sheet-close {
-      width: 34px;
-      height: 34px;
-      border-radius: 50%;
-      background: rgba(200, 145, 74, 0.1);
-      border: 1px solid var(--border-gold);
-      color: var(--gold);
-      font-size: 1.1rem;
-      display: flex;
-      align-items: center;
-      justify-content: center;
+      position: absolute;
+      top: 12px;
+      left: 20px;
+      background: none;
+      border: none;
+      color: var(--dim);
+      font-size: 18px;
       cursor: pointer;
-      flex-shrink: 0;
-      transition: var(--transition);
       -webkit-tap-highlight-color: transparent;
+      line-height: 1;
+      padding: 4px;
     }
 
-    .sheet-close:active {
-      background: rgba(200, 145, 74, 0.2);
-      transform: scale(0.93);
+    .sheet-close:hover { color: var(--muted); }
+
+    .sheet-prod-name {
+      font-family: 'Playfair Display', serif;
+      font-size: 16px;
+      font-weight: 600;
+      color: var(--gold);
+      padding: 0 20px;
+      margin-bottom: 4px;
+    }
+
+    .sheet-prod-price {
+      font-family: 'Tajawal', sans-serif;
+      font-size: 13px;
+      color: var(--muted);
+      padding: 0 20px;
+      margin-bottom: 16px;
+    }
+
+    .sheet-divider {
+      height: 1px;
+      background: rgba(212,175,55,0.1);
     }
 
     .sheet-form {
@@ -453,200 +599,237 @@ STORE_PAGE = """<!DOCTYPE html>
       gap: 16px;
     }
 
-    .form-group {
-      display: flex;
-      flex-direction: column;
-      gap: 6px;
-    }
-
     .form-label {
-      font-size: 0.8rem;
-      font-weight: 600;
-      color: var(--text-muted);
-      letter-spacing: 0.03em;
-    }
-
-    .form-label .required {
-      color: var(--gold);
-      margin-right: 2px;
+      font-family: 'Tajawal', sans-serif;
+      font-size: 11px;
+      color: var(--muted);
+      display: block;
+      margin-bottom: 6px;
+      letter-spacing: 0.5px;
     }
 
     .form-input,
     .form-textarea {
       width: 100%;
-      background: var(--bg-input);
-      border: 1.5px solid var(--border-subtle);
-      border-radius: var(--radius-sm);
-      color: var(--text-white);
+      background: #0c0c0c;
+      border: 1px solid rgba(212,175,55,0.2);
+      border-radius: 2px;
+      color: var(--text);
+      padding: 12px 14px;
       font-family: 'Tajawal', sans-serif;
-      font-size: 0.95rem;
-      padding: 11px 14px;
+      font-size: 14px;
       outline: none;
-      transition: border-color var(--transition), box-shadow var(--transition);
+      transition: border-color 0.2s;
       -webkit-appearance: none;
-    }
-
-    .form-input::placeholder,
-    .form-textarea::placeholder {
-      color: var(--text-muted);
-      opacity: 0.6;
     }
 
     .form-input:focus,
     .form-textarea:focus {
       border-color: var(--gold);
-      box-shadow: 0 0 0 3px rgba(200, 145, 74, 0.12);
+    }
+
+    .form-input::placeholder,
+    .form-textarea::placeholder {
+      color: var(--dim);
+      opacity: 0.9;
     }
 
     .form-textarea {
       resize: none;
-      height: 80px;
+      rows: 2;
+      height: 72px;
       line-height: 1.5;
     }
 
-    /* Delivery Toggle */
-    .delivery-toggle {
+    /* Delivery toggle */
+    .delivery-row {
       display: grid;
       grid-template-columns: 1fr 1fr;
       gap: 8px;
     }
 
-    .delivery-btn {
-      padding: 10px 8px;
-      border-radius: var(--radius-sm);
-      border: 1.5px solid var(--border-gold);
+    .dlv-btn {
+      border: 1px solid rgba(212,175,55,0.2);
       background: transparent;
-      color: var(--text-muted);
+      color: var(--muted);
       font-family: 'Tajawal', sans-serif;
-      font-size: 0.875rem;
-      font-weight: 600;
+      font-size: 13px;
+      font-weight: 500;
+      padding: 10px;
+      border-radius: 2px;
       cursor: pointer;
-      transition: var(--transition);
       text-align: center;
+      transition: border-color 0.2s, background 0.2s, color 0.2s;
       -webkit-tap-highlight-color: transparent;
     }
 
-    .delivery-btn.active {
-      background: rgba(200, 145, 74, 0.12);
+    .dlv-btn.active {
       border-color: var(--gold);
+      background: rgba(212,175,55,0.08);
       color: var(--gold);
     }
 
-    .delivery-btn:active {
-      transform: scale(0.97);
-    }
-
-    .address-group {
+    /* Address slide-down */
+    .addr-wrap {
       overflow: hidden;
       max-height: 0;
       opacity: 0;
-      transition: max-height 0.3s ease, opacity 0.3s ease;
+      transition: max-height 0.3s ease, opacity 0.25s ease;
     }
 
-    .address-group.visible {
-      max-height: 120px;
+    .addr-wrap.show {
+      max-height: 100px;
       opacity: 1;
     }
 
     .submit-btn {
       width: 100%;
-      padding: 14px;
-      background: var(--gold-gradient);
-      color: var(--text-dark);
-      font-family: 'Tajawal', sans-serif;
-      font-size: 1rem;
-      font-weight: 700;
+      background: var(--gold);
+      color: #0c0c0c;
       border: none;
-      border-radius: var(--radius-md);
+      border-radius: 2px;
+      padding: 14px;
+      font-family: 'Tajawal', sans-serif;
+      font-size: 15px;
+      font-weight: 700;
+      letter-spacing: 0.5px;
       cursor: pointer;
-      letter-spacing: 0.02em;
-      transition: var(--transition);
-      box-shadow: var(--shadow-gold);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      transition: opacity 0.2s, filter 0.2s;
       -webkit-tap-highlight-color: transparent;
-      margin-top: 4px;
-    }
-
-    .submit-btn:active {
-      transform: scale(0.98);
-      filter: brightness(0.92);
     }
 
     .submit-btn:disabled {
-      opacity: 0.6;
+      opacity: 0.55;
       cursor: not-allowed;
     }
 
-    /* ═══════════════════════════════
-       SUCCESS TOAST
-    ═══════════════════════════════ */
-    .toast {
-      position: fixed;
-      top: calc(16px + env(safe-area-inset-top, 0px));
-      left: 50%;
-      transform: translateX(-50%) translateY(-120%);
-      z-index: 200;
-      background: #1a3d2b;
-      border: 1px solid #2d6b47;
-      color: #7edd9f;
-      padding: 12px 20px;
-      border-radius: var(--radius-pill);
-      font-family: 'Tajawal', sans-serif;
-      font-size: 0.9rem;
-      font-weight: 600;
-      white-space: nowrap;
-      box-shadow: 0 4px 24px rgba(0, 0, 0, 0.4);
-      transition: transform 0.4s cubic-bezier(0.32, 0.72, 0, 1);
-      pointer-events: none;
+    .submit-btn:not(:disabled):active {
+      filter: brightness(0.9);
     }
 
-    .toast.show {
-      transform: translateX(-50%) translateY(0);
+    .btn-spinner {
+      width: 16px;
+      height: 16px;
+      border: 2px solid rgba(0,0,0,0.25);
+      border-top-color: #0c0c0c;
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+      display: none;
     }
 
-    /* ═══════════════════════════════
-       FOOTER
-    ═══════════════════════════════ */
-    .footer {
+    .submit-btn.loading .btn-spinner { display: block; }
+    .submit-btn.loading .btn-text { opacity: 0.7; }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    /* ─────────────────────────────────────────
+       6. SUCCESS STATE (replaces sheet content)
+    ───────────────────────────────────────── */
+    .success-view {
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 48px 32px;
       text-align: center;
-      padding: 32px 20px calc(24px + env(safe-area-inset-bottom, 0px));
-      border-top: 1px solid var(--border-subtle);
-      margin-top: 24px;
     }
 
-    .footer-text {
-      font-size: 0.75rem;
-      color: var(--text-muted);
-      opacity: 0.6;
+    .success-view.show {
+      display: flex;
+    }
+
+    .success-check {
+      width: 64px;
+      height: 64px;
+      border-radius: 50%;
+      border: 2px solid var(--gold);
+      background: rgba(212,175,55,0.08);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 28px;
+      color: var(--gold);
+      margin-bottom: 20px;
+    }
+
+    .success-title {
       font-family: 'Playfair Display', serif;
-      letter-spacing: 0.05em;
+      font-size: 22px;
+      color: var(--gold);
+      margin-bottom: 10px;
+    }
+
+    .success-sub {
+      font-family: 'Tajawal', sans-serif;
+      font-size: 13px;
+      color: var(--muted);
+      line-height: 1.6;
+      margin-bottom: 28px;
+    }
+
+    .success-close-btn {
+      border: 1px solid var(--gold);
+      background: transparent;
+      color: var(--gold);
+      font-family: 'Tajawal', sans-serif;
+      font-size: 14px;
+      font-weight: 500;
+      padding: 12px 32px;
+      border-radius: 2px;
+      cursor: pointer;
+      -webkit-tap-highlight-color: transparent;
+      transition: background 0.2s;
+    }
+
+    .success-close-btn:hover {
+      background: rgba(212,175,55,0.08);
+    }
+
+    /* ─────────────────────────────────────────
+       7. FOOTER
+    ───────────────────────────────────────── */
+    .footer {
+      padding: 40px 20px 20px;
+      text-align: center;
+      position: relative;
+    }
+
+    .footer-logo {
+      font-family: 'Playfair Display', serif;
+      font-style: italic;
+      font-size: 14px;
+      color: var(--dim);
+      display: block;
+      margin-bottom: 6px;
+    }
+
+    .footer-en {
+      font-family: 'Tajawal', sans-serif;
+      font-size: 10px;
+      color: #2a2520;
+      display: block;
     }
 
     .footer-admin {
-      display: inline-block;
-      margin-top: 8px;
-      font-size: 0.7rem;
-      color: transparent;
-      text-decoration: none;
-      opacity: 0.08;
-      transition: opacity 0.2s;
-      user-select: none;
-    }
-
-    .footer-admin:hover {
-      opacity: 0.3;
-    }
-
-    /* ═══════════════════════════════
-       UTILITIES
-    ═══════════════════════════════ */
-    .visually-hidden {
       position: absolute;
-      width: 1px;
-      height: 1px;
-      overflow: hidden;
-      clip: rect(0, 0, 0, 0);
+      bottom: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      opacity: 0.05;
+      text-decoration: none;
+      font-size: 14px;
+      color: var(--text);
     }
 
+    /* ─────────────────────────────────────────
+       REDUCED MOTION
+    ───────────────────────────────────────── */
     @media (prefers-reduced-motion: reduce) {
       *, *::before, *::after {
         animation-duration: 0.01ms !important;
@@ -657,303 +840,330 @@ STORE_PAGE = """<!DOCTYPE html>
 </head>
 <body>
 
-  <!-- ═══ HERO ═══ -->
-  <section class="hero" role="banner">
+  <!-- ══ 1. TOP NAV ══ -->
+  <nav class="topnav" role="navigation" aria-label="شريط التنقل">
+    <button class="nav-bag" id="bagBtn" aria-label="السلة">
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z"/>
+        <line x1="3" y1="6" x2="21" y2="6"/>
+        <path d="M16 10a4 4 0 01-8 0"/>
+      </svg>
+      <span class="bag-count" id="bagCount" aria-live="polite">0</span>
+    </button>
+
+    <span class="nav-logo" aria-label="فيروز فلورز">فيروز فلورز</span>
+
+    <a class="nav-ig" href="#" aria-label="انستغرام" rel="noopener noreferrer">
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <rect x="2" y="2" width="20" height="20" rx="5" ry="5"/>
+        <path d="M16 11.37A4 4 0 1112.63 8 4 4 0 0116 11.37z"/>
+        <line x1="17.5" y1="6.5" x2="17.51" y2="6.5"/>
+      </svg>
+    </a>
+  </nav>
+
+  <!-- ══ 2. HERO ══ -->
+  <section class="hero" role="banner" aria-label="قسم الترحيب">
     <div class="hero-content">
-      <h1 class="hero-title">فيروز فلورز</h1>
-      <p class="hero-tagline">أجمل الورود لأجمل اللحظات</p>
+      <div class="hero-pill">🌸 محل ورد عُماني</div>
+      <h1 class="hero-heading">أجمل الورود
+لأجمل اللحظات</h1>
+      <p class="hero-sub">باقات · استاندات · مجسمات · شرايط</p>
+      <a class="hero-cta" href="#productsSection" onclick="document.getElementById('productsSection').scrollIntoView({behavior:'smooth'}); return false;">
+        تصفح المنتجات ↓
+      </a>
     </div>
   </section>
 
-  <!-- ═══ CATEGORY TABS ═══ -->
-  <nav class="category-section" aria-label="تصفية المنتجات">
-    <div class="category-scroll" role="tablist">
-      <button class="cat-tab active" role="tab" aria-selected="true"  onclick="filterCategory('all')"       data-cat="all">الكل</button>
-      <button class="cat-tab"        role="tab" aria-selected="false" onclick="filterCategory('باقات')"     data-cat="باقات">باقات</button>
-      <button class="cat-tab"        role="tab" aria-selected="false" onclick="filterCategory('استاندات')"  data-cat="استاندات">استاندات</button>
-      <button class="cat-tab"        role="tab" aria-selected="false" onclick="filterCategory('مجسمات')"    data-cat="مجسمات">مجسمات</button>
-      <button class="cat-tab"        role="tab" aria-selected="false" onclick="filterCategory('شرايط')"     data-cat="شرايط">شرايط</button>
+  <!-- ══ 3. CATEGORY FILTER BAR ══ -->
+  <div class="filter-bar" role="navigation" aria-label="تصفية الفئات">
+    <div class="filter-scroll" id="filterScroll">
+      <button class="filter-pill active" data-cat="all"       onclick="filterCat('all')">الكل</button>
+      <button class="filter-pill"        data-cat="باقات"     onclick="filterCat('باقات')">💐 باقات</button>
+      <button class="filter-pill"        data-cat="استاندات"  onclick="filterCat('استاندات')">🌹 استاندات</button>
+      <button class="filter-pill"        data-cat="مجسمات"    onclick="filterCat('مجسمات')">🌸 مجسمات</button>
+      <button class="filter-pill"        data-cat="شرايط"     onclick="filterCat('شرايط')">🎀 شرايط</button>
     </div>
-  </nav>
+  </div>
 
-  <!-- ═══ PRODUCTS ═══ -->
-  <main class="products-section" id="products-section">
-    <div class="products-grid" id="products-grid" aria-live="polite" aria-label="قائمة المنتجات">
-      <!-- Populated by JS -->
+  <!-- ══ 4. PRODUCTS SECTION ══ -->
+  <main id="productsSection">
+    <div class="section-label" aria-hidden="true">— المنتجات —</div>
+    <div class="products-grid" id="productsGrid" aria-live="polite" aria-label="المنتجات">
+      <!-- JS populated -->
     </div>
   </main>
 
-  <!-- ═══ FOOTER ═══ -->
+  <!-- ══ 7. FOOTER ══ -->
   <footer class="footer">
-    <p class="footer-text">© فيروز فلورز</p>
-    <a href="/admin" class="footer-admin" tabindex="-1" aria-hidden="true">🔐</a>
+    <span class="footer-logo">فيروز فلورز</span>
+    <span class="footer-en">Fairuz Flowers &amp; More</span>
+    <a class="footer-admin" href="/admin" tabindex="-1" aria-hidden="true">🔐</a>
   </footer>
 
-  <!-- ═══ OVERLAY ═══ -->
-  <div class="overlay" id="overlay" onclick="closeSheet()" role="presentation"></div>
+  <!-- ══ OVERLAY ══ -->
+  <div class="sheet-overlay" id="sheetOverlay" onclick="closeOrderSheet()"></div>
 
-  <!-- ═══ ORDER BOTTOM SHEET ═══ -->
-  <div class="order-sheet" id="orderSheet" role="dialog" aria-modal="true" aria-labelledby="sheetProductName">
-    <div class="sheet-handle" role="presentation"></div>
+  <!-- ══ 5. ORDER BOTTOM SHEET ══ -->
+  <div class="order-sheet" id="orderSheet" role="dialog" aria-modal="true" aria-label="نموذج الطلب">
+    <div class="sheet-drag"></div>
 
-    <div class="sheet-header">
-      <div>
-        <p class="sheet-title">طلب منتج</p>
-        <p class="sheet-product-name" id="sheetProductName">—</p>
+    <!-- Normal form content -->
+    <div id="sheetFormContent">
+      <div class="sheet-top">
+        <button class="sheet-close" onclick="closeOrderSheet()" aria-label="إغلاق">✕</button>
       </div>
-      <button class="sheet-close" onclick="closeSheet()" aria-label="إغلاق">✕</button>
+      <p class="sheet-prod-name" id="sheetName">—</p>
+      <p class="sheet-prod-price" id="sheetPrice"></p>
+      <div class="sheet-divider"></div>
+
+      <form class="sheet-form" id="orderForm" onsubmit="return false;" novalidate>
+
+        <div>
+          <label class="form-label" for="f-name">الاسم الكريم *</label>
+          <input class="form-input" id="f-name" type="text" autocomplete="name" placeholder="اسمك الكريم" required>
+        </div>
+
+        <div>
+          <label class="form-label" for="f-phone">رقم الهاتف *</label>
+          <input class="form-input" id="f-phone" type="tel" dir="ltr" autocomplete="tel" placeholder="+968 9XXX XXXX" required>
+        </div>
+
+        <div>
+          <span class="form-label">طريقة الاستلام</span>
+          <div class="delivery-row">
+            <button type="button" class="dlv-btn active" id="dlvDelivery" onclick="setDelivery('delivery')">🚗&nbsp; توصيل</button>
+            <button type="button" class="dlv-btn"        id="dlvPickup"   onclick="setDelivery('pickup')">🏪&nbsp; استلام من المحل</button>
+          </div>
+        </div>
+
+        <div class="addr-wrap show" id="addrWrap">
+          <label class="form-label" for="f-address">العنوان</label>
+          <textarea class="form-textarea" id="f-address" placeholder="المنطقة، الشارع، رقم المنزل..." rows="2"></textarea>
+        </div>
+
+        <div>
+          <label class="form-label" for="f-notes">ملاحظات إضافية <span style="opacity:0.5">(اختياري)</span></label>
+          <textarea class="form-textarea" id="f-notes" placeholder="أي تفاصيل إضافية..." rows="2"></textarea>
+        </div>
+
+        <button type="button" class="submit-btn" id="submitBtn" onclick="submitOrder()">
+          <span class="btn-spinner" id="btnSpinner"></span>
+          <span class="btn-text">تأكيد الطلب</span>
+        </button>
+
+      </form>
     </div>
 
-    <form class="sheet-form" id="orderForm" onsubmit="submitOrder(event)" novalidate>
-
-      <div class="form-group">
-        <label class="form-label" for="customerName">
-          <span class="required">*</span> الاسم
-        </label>
-        <input
-          class="form-input"
-          id="customerName"
-          type="text"
-          placeholder="اكتب اسمك الكريم"
-          autocomplete="name"
-          required
-        >
-      </div>
-
-      <div class="form-group">
-        <label class="form-label" for="customerPhone">
-          <span class="required">*</span> رقم الهاتف
-        </label>
-        <input
-          class="form-input"
-          id="customerPhone"
-          type="tel"
-          dir="ltr"
-          placeholder="+968 XXXX XXXX"
-          autocomplete="tel"
-          required
-        >
-      </div>
-
-      <div class="form-group">
-        <p class="form-label">نوع الاستلام</p>
-        <div class="delivery-toggle">
-          <button type="button" class="delivery-btn active" id="btnDelivery"  onclick="setDelivery('delivery')">🚗 توصيل</button>
-          <button type="button" class="delivery-btn"        id="btnPickup"    onclick="setDelivery('pickup')">🏪 من المحل</button>
-        </div>
-      </div>
-
-      <div class="address-group visible" id="addressGroup">
-        <div class="form-group">
-          <label class="form-label" for="addressField">العنوان</label>
-          <textarea
-            class="form-textarea"
-            id="addressField"
-            placeholder="المنطقة، الشارع، رقم المبنى..."
-          ></textarea>
-        </div>
-      </div>
-
-      <div class="form-group">
-        <label class="form-label" for="notesField">ملاحظات <span style="opacity:0.5;font-weight:400;">(اختياري)</span></label>
-        <textarea
-          class="form-textarea"
-          id="notesField"
-          placeholder="أي تفاصيل إضافية..."
-        ></textarea>
-      </div>
-
-      <button type="submit" class="submit-btn" id="submitBtn">تأكيد الطلب 🌸</button>
-
-    </form>
-  </div>
-
-  <!-- ═══ SUCCESS TOAST ═══ -->
-  <div class="toast" id="successToast" role="alert" aria-live="assertive">
-    ✅ تم استلام طلبك! سنتواصل معك قريباً
+    <!-- 6. Success State -->
+    <div class="success-view" id="successView">
+      <div class="success-check">✓</div>
+      <h2 class="success-title">شكراً لك! 🌸</h2>
+      <p class="success-sub">تم استلام طلبك وسنتواصل معك قريباً</p>
+      <button class="success-close-btn" onclick="closeOrderSheet()">متابعة التصفح</button>
+    </div>
   </div>
 
   <script>
-    // ══════════════════════════════════════════
+    // ────────────────────────────────────────
     // STATE
-    // ══════════════════════════════════════════
+    // ────────────────────────────────────────
     let currentCategory = 'all';
     let selectedProduct = null;
-    let deliveryType    = 'delivery';
+    let deliveryMode    = 'delivery';
+    let orderCount      = 0;
 
-    // ══════════════════════════════════════════
-    // PRODUCTS
-    // ══════════════════════════════════════════
-    function showSkeletons() {
-      const grid = document.getElementById('products-grid');
-      grid.innerHTML = Array.from({ length: 4 }, () => `
-        <div class="skeleton-card" aria-hidden="true">
-          <div class="skeleton-img"></div>
-          <div class="skeleton-body">
-            <div class="skeleton-line"></div>
-            <div class="skeleton-line short"></div>
-            <div class="skeleton-line btn"></div>
+    // ────────────────────────────────────────
+    // CATEGORY FILTER
+    // ────────────────────────────────────────
+    function filterCat(cat) {
+      if (currentCategory === cat) return;
+      currentCategory = cat;
+      document.querySelectorAll('.filter-pill').forEach(el => {
+        const isActive = el.dataset.cat === cat;
+        el.classList.toggle('active', isActive);
+        el.setAttribute('aria-pressed', String(isActive));
+      });
+      loadProducts(cat);
+    }
+
+    // ────────────────────────────────────────
+    // LOAD PRODUCTS
+    // ────────────────────────────────────────
+    async function loadProducts(category) {
+      renderSkeletons();
+      try {
+        const qs  = (!category || category === 'all') ? '' : '?category=' + encodeURIComponent(category);
+        const res = await fetch('/api/store/products' + qs);
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        const data = await res.json();
+        const list = Array.isArray(data) ? data : (data.products || []);
+        renderProducts(list);
+      } catch (err) {
+        console.error('loadProducts:', err);
+        renderError();
+      }
+    }
+
+    // ────────────────────────────────────────
+    // RENDER HELPERS
+    // ────────────────────────────────────────
+    function renderSkeletons() {
+      const g = document.getElementById('productsGrid');
+      g.innerHTML = [0,1,2,3].map(() => `
+        <div class="skel-card" aria-hidden="true">
+          <div class="skel-img"></div>
+          <div class="skel-body">
+            <div class="skel-line"></div>
+            <div class="skel-line w60"></div>
+            <div class="skel-line w40"></div>
           </div>
         </div>
       `).join('');
     }
 
     function renderProducts(products) {
-      const grid = document.getElementById('products-grid');
-      if (!products || products.length === 0) {
-        grid.innerHTML = `
+      const g = document.getElementById('productsGrid');
+      if (!products.length) {
+        g.innerHTML = `
           <div class="empty-state">
             <span class="empty-icon">🌸</span>
-            <p>لا توجد منتجات في هذه الفئة حالياً 🌸</p>
-          </div>
-        `;
+            <p class="empty-text">لا توجد منتجات في هذه الفئة</p>
+          </div>`;
         return;
       }
-      grid.innerHTML = products.map(p => `
-        <article class="product-card" onclick="openOrder(${JSON.stringify(p).replace(/"/g, '&quot;')})" role="button" tabindex="0" aria-label="${p.name}">
-          <div class="card-image-wrap">
-            <img
-              src="${p.image || '/placeholder.jpg'}"
-              alt="${p.name}"
-              loading="lazy"
-              onerror="this.src='/placeholder.jpg'"
-            >
-            ${p.category ? `<span class="card-badge">${p.category}</span>` : ''}
-          </div>
-          <div class="card-body">
-            <p class="card-name">${p.name}</p>
-            <div class="card-price">
-              <span>${formatPrice(p.price)}</span>
-              <span class="currency">ر.ع</span>
+      g.innerHTML = products.map(p => {
+        const safe    = JSON.stringify(p).replace(/'/g, "\\'");
+        const priceStr = p.price ? formatPrice(p.price) + ' ر.ع' : 'السعر عند الطلب';
+        const imgTag  = p.img
+          ? `<img src="${esc(p.img)}" alt="${esc(p.name)}" loading="lazy" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">`
+          : '';
+        const placeholderStyle = p.img ? 'display:none;' : '';
+        const badge   = p.category ? `<span class="card-badge">${esc(p.category)}</span>` : '';
+        return `
+          <article class="prod-card" role="button" tabindex="0"
+            onclick="openOrderSheet(${safe})"
+            onkeydown="if(event.key==='Enter')openOrderSheet(${safe})"
+            aria-label="${esc(p.name)}">
+            <div class="card-img-wrap">
+              ${imgTag}
+              <div class="card-img-placeholder" style="${placeholderStyle}" aria-hidden="true">🌸</div>
+              ${badge}
             </div>
-            <button class="card-btn" onclick="event.stopPropagation(); openOrder(${JSON.stringify(p).replace(/"/g, '&quot;')})">
-              اطلب الآن
-            </button>
-          </div>
-        </article>
-      `).join('');
+            <div class="card-body">
+              <p class="card-name">${esc(p.name)}</p>
+              <p class="card-price">${priceStr}</p>
+              <span class="card-order" aria-hidden="true">اطلب الآن →</span>
+            </div>
+          </article>`;
+      }).join('');
+    }
+
+    function renderError() {
+      document.getElementById('productsGrid').innerHTML = `
+        <div class="empty-state">
+          <span class="empty-icon" style="opacity:0.3">⚠️</span>
+          <p class="empty-text">تعذّر تحميل المنتجات، يرجى المحاولة لاحقاً</p>
+        </div>`;
     }
 
     function formatPrice(price) {
-      if (price == null) return '—';
       const n = parseFloat(price);
       if (isNaN(n)) return price;
       return n.toFixed(3);
     }
 
-    async function loadProducts(category = 'all') {
-      showSkeletons();
-      try {
-        const url = '/api/store/products' + (category && category !== 'all' ? '?category=' + encodeURIComponent(category) : '');
-        const res  = await fetch(url);
-        if (!res.ok) throw new Error('HTTP ' + res.status);
-        const data = await res.json();
-        renderProducts(Array.isArray(data) ? data : data.products || []);
-      } catch (err) {
-        console.error('Failed to load products:', err);
-        const grid = document.getElementById('products-grid');
-        grid.innerHTML = `
-          <div class="empty-state">
-            <span class="empty-icon">⚠️</span>
-            <p>تعذّر تحميل المنتجات. يرجى المحاولة مجدداً.</p>
-          </div>
-        `;
-      }
+    function esc(str) {
+      if (!str) return '';
+      return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
     }
 
-    // ══════════════════════════════════════════
-    // CATEGORY FILTER
-    // ══════════════════════════════════════════
-    function filterCategory(cat) {
-      if (currentCategory === cat) return;
-      currentCategory = cat;
-
-      document.querySelectorAll('.cat-tab').forEach(btn => {
-        const isActive = btn.dataset.cat === cat;
-        btn.classList.toggle('active', isActive);
-        btn.setAttribute('aria-selected', isActive);
-      });
-
-      loadProducts(cat);
-    }
-
-    // ══════════════════════════════════════════
-    // BOTTOM SHEET
-    // ══════════════════════════════════════════
-    function openOrder(product) {
+    // ────────────────────────────────────────
+    // ORDER SHEET OPEN / CLOSE
+    // ────────────────────────────────────────
+    function openOrderSheet(product) {
       selectedProduct = product;
 
-      document.getElementById('sheetProductName').textContent = product.name || '—';
-      document.getElementById('customerName').value   = '';
-      document.getElementById('customerPhone').value  = '';
-      document.getElementById('addressField').value   = '';
-      document.getElementById('notesField').value     = '';
+      // Reset success state
+      document.getElementById('sheetFormContent').style.display = '';
+      document.getElementById('successView').classList.remove('show');
 
-      // Reset delivery type
+      // Populate product info
+      document.getElementById('sheetName').textContent  = product.name  || '—';
+      const priceStr = product.price ? formatPrice(product.price) + ' ر.ع' : 'السعر عند الطلب';
+      document.getElementById('sheetPrice').textContent = priceStr;
+
+      // Reset form
+      document.getElementById('f-name').value    = '';
+      document.getElementById('f-phone').value   = '';
+      document.getElementById('f-address').value = '';
+      document.getElementById('f-notes').value   = '';
       setDelivery('delivery');
+      resetSubmitBtn();
 
-      document.getElementById('overlay').classList.add('visible');
+      document.getElementById('sheetOverlay').classList.add('open');
       document.getElementById('orderSheet').classList.add('open');
       document.body.style.overflow = 'hidden';
 
-      // Focus first field after animation
-      setTimeout(() => document.getElementById('customerName').focus(), 360);
+      setTimeout(() => document.getElementById('f-name').focus(), 380);
     }
 
-    function closeSheet() {
-      document.getElementById('overlay').classList.remove('visible');
+    function closeOrderSheet() {
+      document.getElementById('sheetOverlay').classList.remove('open');
       document.getElementById('orderSheet').classList.remove('open');
       document.body.style.overflow = '';
       selectedProduct = null;
     }
 
-    // Keyboard: close on Escape
+    // Escape key
     document.addEventListener('keydown', e => {
-      if (e.key === 'Escape') closeSheet();
+      if (e.key === 'Escape') closeOrderSheet();
     });
 
-    // ══════════════════════════════════════════
+    // ────────────────────────────────────────
     // DELIVERY TOGGLE
-    // ══════════════════════════════════════════
-    function setDelivery(type) {
-      deliveryType = type;
-      document.getElementById('btnDelivery').classList.toggle('active', type === 'delivery');
-      document.getElementById('btnPickup').classList.toggle('active',   type === 'pickup');
-      document.getElementById('addressGroup').classList.toggle('visible', type === 'delivery');
+    // ────────────────────────────────────────
+    function setDelivery(mode) {
+      deliveryMode = mode;
+      document.getElementById('dlvDelivery').classList.toggle('active', mode === 'delivery');
+      document.getElementById('dlvPickup').classList.toggle('active',   mode === 'pickup');
+      document.getElementById('addrWrap').classList.toggle('show', mode === 'delivery');
     }
 
-    // ══════════════════════════════════════════
+    // ────────────────────────────────────────
     // SUBMIT ORDER
-    // ══════════════════════════════════════════
-    async function submitOrder(event) {
-      event.preventDefault();
-
-      const name  = document.getElementById('customerName').value.trim();
-      const phone = document.getElementById('customerPhone').value.trim();
+    // ────────────────────────────────────────
+    async function submitOrder() {
+      const name  = document.getElementById('f-name').value.trim();
+      const phone = document.getElementById('f-phone').value.trim();
 
       if (!name) {
-        document.getElementById('customerName').focus();
-        shakInput('customerName');
+        pulse('f-name');
+        document.getElementById('f-name').focus();
         return;
       }
       if (!phone) {
-        document.getElementById('customerPhone').focus();
-        shakInput('customerPhone');
+        pulse('f-phone');
+        document.getElementById('f-phone').focus();
         return;
       }
 
       const btn = document.getElementById('submitBtn');
-      btn.disabled    = true;
-      btn.textContent = 'جاري الإرسال...';
+      btn.disabled = true;
+      btn.classList.add('loading');
 
       const payload = {
         product_id:     selectedProduct?.id     || null,
         product_name:   selectedProduct?.name   || '',
         customer_name:  name,
         customer_phone: phone,
-        delivery_type:  deliveryType,
-        address:        deliveryType === 'delivery' ? document.getElementById('addressField').value.trim() : '',
-        notes:          document.getElementById('notesField').value.trim(),
+        delivery_type:  deliveryMode,
+        address:        deliveryMode === 'delivery' ? document.getElementById('f-address').value.trim() : '',
+        notes:          document.getElementById('f-notes').value.trim(),
       };
 
       try {
@@ -964,88 +1174,52 @@ STORE_PAGE = """<!DOCTYPE html>
         });
         if (!res.ok) throw new Error('HTTP ' + res.status);
 
-        closeSheet();
-        showToast();
+        showSuccess();
+        orderCount++;
+        document.getElementById('bagCount').textContent = orderCount;
       } catch (err) {
-        console.error('Order failed:', err);
-        btn.disabled    = false;
-        btn.textContent = 'تأكيد الطلب 🌸';
-        showErrorToast();
+        console.error('submitOrder:', err);
+        resetSubmitBtn();
+        pulse('submitBtn');
       }
     }
 
-    function shakInput(id) {
+    function resetSubmitBtn() {
+      const btn = document.getElementById('submitBtn');
+      btn.disabled = false;
+      btn.classList.remove('loading');
+    }
+
+    function pulse(id) {
       const el = document.getElementById(id);
-      el.style.borderColor = '#e05555';
-      el.style.animation = 'none';
-      requestAnimationFrame(() => {
-        el.style.animation = 'shake 0.35s ease';
-      });
-      setTimeout(() => {
-        el.style.borderColor = '';
-        el.style.animation   = '';
-      }, 800);
+      if (!el) return;
+      el.style.transition = 'border-color 0.2s';
+      el.style.borderColor = 'rgba(220,80,80,0.8)';
+      el.animate
+        ? el.animate([
+            {transform: 'translateX(0)'},
+            {transform: 'translateX(-5px)'},
+            {transform: 'translateX(5px)'},
+            {transform: 'translateX(-3px)'},
+            {transform: 'translateX(0)'},
+          ], { duration: 300, easing: 'ease' })
+        : null;
+      setTimeout(() => { el.style.borderColor = ''; }, 900);
     }
 
-    // ══════════════════════════════════════════
-    // TOAST
-    // ══════════════════════════════════════════
-    let toastTimer = null;
-
-    function showToast(message) {
-      const toast = document.getElementById('successToast');
-      if (message) toast.textContent = message;
-      else toast.textContent = '✅ تم استلام طلبك! سنتواصل معك قريباً';
-      toast.classList.add('show');
-      clearTimeout(toastTimer);
-      toastTimer = setTimeout(() => toast.classList.remove('show'), 4000);
+    // ────────────────────────────────────────
+    // SUCCESS STATE
+    // ────────────────────────────────────────
+    function showSuccess() {
+      document.getElementById('sheetFormContent').style.display = 'none';
+      document.getElementById('successView').classList.add('show');
+      // Scroll sheet to top
+      document.getElementById('orderSheet').scrollTop = 0;
     }
 
-    function showErrorToast() {
-      const toast = document.getElementById('successToast');
-      toast.textContent = '❌ حدث خطأ. يرجى المحاولة مجدداً.';
-      toast.style.background   = '#3d1a1a';
-      toast.style.borderColor  = '#6b2d2d';
-      toast.style.color        = '#dd7e7e';
-      toast.classList.add('show');
-      clearTimeout(toastTimer);
-      toastTimer = setTimeout(() => {
-        toast.classList.remove('show');
-        toast.style.background  = '';
-        toast.style.borderColor = '';
-        toast.style.color       = '';
-      }, 4000);
-    }
-
-    // ══════════════════════════════════════════
-    // SHAKE KEYFRAMES (injected once)
-    // ══════════════════════════════════════════
-    (function injectShakeAnim() {
-      const style = document.createElement('style');
-      style.textContent = `
-        @keyframes shake {
-          0%,100% { transform: translateX(0); }
-          20%      { transform: translateX(-6px); }
-          40%      { transform: translateX(6px); }
-          60%      { transform: translateX(-4px); }
-          80%      { transform: translateX(4px); }
-        }
-      `;
-      document.head.appendChild(style);
-    })();
-
-    // ══════════════════════════════════════════
-    // KEYBOARD: card accessible via Enter
-    // ══════════════════════════════════════════
-    document.getElementById('products-grid').addEventListener('keydown', e => {
-      if (e.key === 'Enter' && e.target.classList.contains('product-card')) {
-        e.target.click();
-      }
-    });
-
-    // ══════════════════════════════════════════
+    // ────────────────────────────────────────
     // INIT
-    // ══════════════════════════════════════════
+    // ────────────────────────────────────────
     loadProducts('all');
   </script>
 </body>
