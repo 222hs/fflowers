@@ -1127,10 +1127,7 @@ STORE_PAGE = """<!DOCTYPE html>
 
     <!-- Center: Brand -->
     <a class="header-center-logo" href="#" aria-label="فيروز فلورز">
-      <span class="header-brand-name">
-        فيروز فلورز
-        <span class="brand-flower">🌸</span>
-      </span>
+      <span class="header-brand-name">فيروز فلورز</span>
       <span class="header-brand-sub">flower boutique</span>
     </a>
 
