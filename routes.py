@@ -245,6 +245,18 @@ def admin_store_delete_product(pid):
     db_run("DELETE FROM store_products WHERE id=?", (pid,))
     return jsonify({"ok": True})
 
+@app.route("/api/admin/store/products/delete_broken", methods=["POST"])
+@auth
+def admin_store_delete_broken():
+    rows = db_get("SELECT id, img FROM store_products")
+    deleted = 0
+    for r in rows:
+        img = r.get("img") or ""
+        if not img.startswith("/api/store/img/"):
+            db_run("DELETE FROM store_products WHERE id=?", (r["id"],))
+            deleted += 1
+    return jsonify({"ok": True, "deleted": deleted})
+
 @app.route("/api/admin/store/products/<int:pid>/image", methods=["POST"])
 @auth
 def admin_store_upload_image(pid):

@@ -1163,7 +1163,10 @@ input[type="date"]{width:100%;padding:10px 12px;border:1px solid var(--border);b
   <!-- Products management -->
   <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
     <div style="font-size:14px;font-weight:700;color:var(--text);">🌸 المنتجات</div>
-    <button onclick="openAddProductModal()" style="background:var(--accent);color:#fff;border:none;border-radius:10px;padding:8px 14px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;">+ إضافة منتج</button>
+    <div style="display:flex;gap:8px;">
+      <button onclick="deleteBrokenProducts()" style="background:#ef444422;color:#ef4444;border:1px solid #ef4444;border-radius:10px;padding:8px 12px;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit;">🗑️ حذف المكسورة</button>
+      <button onclick="openAddProductModal()" style="background:var(--accent);color:#fff;border:none;border-radius:10px;padding:8px 14px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;">+ إضافة منتج</button>
+    </div>
   </div>
   <div id="storeProductsList">
     <div style="text-align:center;padding:30px;color:var(--text2);font-size:13px;">جار التحميل...</div>
@@ -5184,6 +5187,14 @@ function deleteProduct(id, name) {
 function loadStoreData() {
   loadStoreOrders();
   loadStoreProducts();
+}
+
+function deleteBrokenProducts() {
+  if (!confirm('حذف جميع المنتجات التي صورها مكسورة (ليست من تلغرام)؟')) return;
+  fetch('/api/admin/store/products/delete_broken', {method:'POST'})
+    .then(r=>r.json())
+    .then(d=>{ alert('تم حذف ' + (d.deleted||0) + ' منتج'); loadStoreProducts(); })
+    .catch(()=>alert('خطأ'));
 }
 </script>
 </body>
