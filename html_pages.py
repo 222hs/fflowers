@@ -5102,12 +5102,13 @@ function setOrderStatus(id, status) {
 }
 
 function loadStoreProducts() {
+  const el = document.getElementById('storeProductsList');
+  if (el) el.innerHTML = '<div style="text-align:center;padding:24px;color:var(--text2);font-size:13px;">جار التحميل...</div>';
   fetch('/api/admin/store/products')
-    .then(r=>r.json())
+    .then(r=>{ if(!r.ok) throw new Error('HTTP '+r.status); return r.json(); })
     .then(products=>{
-      const el = document.getElementById('storeProductsList');
       if (!el) return;
-      if (!products.length) {
+      if (!products || !products.length) {
         el.innerHTML = '<div style="text-align:center;padding:24px;color:var(--text2);font-size:13px;">لا توجد منتجات — أضف أول منتج 🌸</div>';
         return;
       }
@@ -5126,7 +5127,9 @@ function loadStoreProducts() {
             <button onclick="deleteProduct(${p.id},'${p.name.replace(/'/g,"\\'")}')" style="padding:6px 12px;background:#ef444422;color:#ef4444;border:1px solid #ef4444;border-radius:8px;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit;">حذف</button>
           </div>
         </div>`).join('');
-    }).catch(()=>{});
+    }).catch(err=>{
+      if (el) el.innerHTML = '<div style="text-align:center;padding:24px;color:#ef4444;font-size:13px;">⚠️ خطأ في تحميل المنتجات: ' + err.message + '</div>';
+    });
 }
 
 function openAddProductModal() {

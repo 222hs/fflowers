@@ -203,8 +203,11 @@ def store_place_order():
 @app.route("/api/admin/store/products", methods=["GET"])
 @auth
 def admin_store_products():
-    rows = db_get("SELECT * FROM store_products ORDER BY category,sort_order,id")
-    return jsonify(rows)
+    try:
+        rows = db_get("SELECT * FROM store_products ORDER BY category,sort_order,id")
+        return jsonify(rows)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 @app.route("/api/admin/store/products", methods=["POST"])
 @auth
