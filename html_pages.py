@@ -3084,6 +3084,144 @@ if(document.readyState === 'loading'){
 } else {
   initApp();
 }
+
+// ── Store Management ──────────────────────────────────────────
+
+function loadStoreOrders() {
+  fetch('/api/admin/orders')
+    .then(r=>r.json())
+    .then(orders=>{
+      const el = document.getElementById('storeOrdersList');
+      if (!el) return;
+      if (!orders.length) {
+        el.innerHTML = '<div style="text-align:center;padding:24px;color:var(--text2);font-size:13px;">لا توجد طلبات بعد 🌸</div>';
+        return;
+      }
+      const statusLabel = {pending:'⏳ جديد', confirmed:'✅ مقبول', done:'🎉 مكتمل', cancelled:'❌ ملغي'};
+      const statusColor = {pending:'#f59e0b', confirmed:'#10b981', done:'#6366f1', cancelled:'#ef4444'};
+      el.innerHTML = orders.map(o=>`
+        <div style="background:var(--card);border:1px solid var(--border);border-radius:14px;padding:14px;margin-bottom:10px;">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px;">
+            <div>
+              <div style="font-size:14px;font-weight:700;color:var(--text);">${o.customer_name}</div>
+              <div style="font-size:12px;color:var(--text2);">📞 ${o.customer_phone||'—'}</div>
+            </div>
+            <span style="font-size:11px;font-weight:700;color:${statusColor[o.status]||'#888'};background:${statusColor[o.status]||'#888'}22;padding:4px 10px;border-radius:20px;">${statusLabel[o.status]||o.status}</span>
+          </div>
+          <div style="font-size:13px;color:var(--text);margin-bottom:6px;">🛍️ ${o.description||'—'}</div>
+          ${o.delivery_type==='delivery'?`<div style="font-size:12px;color:var(--text2);">🚗 توصيل${o.address?' — '+o.address:''}</div>`:'<div style="font-size:12px;color:var(--text2);">🏪 استلام من المحل</div>'}
+          ${o.notes?`<div style="font-size:12px;color:var(--text2);margin-top:4px;">📝 ${o.notes}</div>`:''}
+          <div style="font-size:12px;color:var(--text3);margin-top:6px;">📅 ${o.date}</div>
+          <div style="display:flex;gap:8px;margin-top:10px;">
+            <button onclick="setOrderStatus(${o.id},'confirmed')" style="flex:1;padding:8px;background:#10b98122;color:#10b981;border:1px solid #10b981;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;">✅ قبول</button>
+            <button onclick="setOrderStatus(${o.id},'done')" style="flex:1;padding:8px;background:#6366f122;color:#6366f1;border:1px solid #6366f1;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;">🎉 مكتمل</button>
+            <button onclick="setOrderStatus(${o.id},'cancelled')" style="flex:1;padding:8px;background:#ef444422;color:#ef4444;border:1px solid #ef4444;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;">❌ رفض</button>
+          </div>
+        </div>`).join('');
+    }).catch(()=>{});
+}
+
+function setOrderStatus(id, status) {
+  fetch(`/api/admin/orders/${id}/status`, {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({status})})
+    .then(()=>loadStoreOrders());
+}
+
+function loadStoreProducts() {
+  const el = document.getElementById('storeProductsList');
+  if (el) el.innerHTML = '<div style="text-align:center;padding:24px;color:var(--text2);font-size:13px;">جار التحميل...</div>';
+  fetch('/api/admin/store/products')
+    .then(r=>{ if(!r.ok) throw new Error('HTTP '+r.status); return r.json(); })
+    .then(products=>{
+      if (!el) return;
+      if (!products || !products.length) {
+        el.innerHTML = '<div style="text-align:center;padding:24px;color:var(--text2);font-size:13px;">لا توجد منتجات — أضف أول منتج 🌸</div>';
+        return;
+      }
+      el.innerHTML = products.map(p=>`
+        <div style="background:var(--card);border:1px solid var(--border);border-radius:14px;padding:12px;margin-bottom:8px;display:flex;align-items:center;gap:12px;">
+          <div style="width:56px;height:56px;border-radius:10px;overflow:hidden;background:var(--bg2);flex-shrink:0;">
+            ${p.img?`<img src="${p.img}" style="width:100%;height:100%;object-fit:cover;">`:'<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-size:24px;">🌸</div>'}
+          </div>
+          <div style="flex:1;min-width:0;">
+            <div style="font-size:13px;font-weight:700;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${p.name}</div>
+            <div style="font-size:11px;color:var(--text2);">${p.category} · ${p.price?p.price.toFixed(3)+' ر.ع':'مجاني'}</div>
+            <div style="font-size:11px;color:${p.available?'#10b981':'#ef4444'};margin-top:2px;">${p.available?'● متاح':'● مخفي'}</div>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:6px;">
+            <button onclick="openEditProductModal(${JSON.stringify(p).replace(/"/g,'&quot;')})" style="padding:6px 12px;background:var(--accent);color:#fff;border:none;border-radius:8px;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit;">تعديل</button>
+            <button onclick="deleteProduct(${p.id},'${p.name.replace(/'/g,"\\'")}')" style="padding:6px 12px;background:#ef444422;color:#ef4444;border:1px solid #ef4444;border-radius:8px;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit;">حذف</button>
+          </div>
+        </div>`).join('');
+    }).catch(err=>{
+      if (el) el.innerHTML = '<div style="text-align:center;padding:24px;color:#ef4444;font-size:13px;">⚠️ خطأ: ' + err.message + '</div>';
+    });
+}
+
+function openAddProductModal() {
+  document.getElementById('productModalTitle').textContent = 'إضافة منتج';
+  document.getElementById('pmId').value = '';
+  document.getElementById('pmName').value = '';
+  document.getElementById('pmCategory').value = 'باقات';
+  document.getElementById('pmPrice').value = '';
+  document.getElementById('pmDesc').value = '';
+  document.getElementById('pmImg').value = '';
+  document.getElementById('pmAvailable').checked = true;
+  document.getElementById('productModal').style.display = 'flex';
+}
+
+function openEditProductModal(p) {
+  document.getElementById('productModalTitle').textContent = 'تعديل منتج';
+  document.getElementById('pmId').value = p.id;
+  document.getElementById('pmName').value = p.name || '';
+  document.getElementById('pmCategory').value = p.category || 'باقات';
+  document.getElementById('pmPrice').value = p.price || '';
+  document.getElementById('pmDesc').value = p.description || '';
+  document.getElementById('pmImg').value = p.img || '';
+  document.getElementById('pmAvailable').checked = !!p.available;
+  document.getElementById('productModal').style.display = 'flex';
+}
+
+function closeProductModal() {
+  document.getElementById('productModal').style.display = 'none';
+}
+
+function saveProduct() {
+  const id = document.getElementById('pmId').value;
+  const body = {
+    name: document.getElementById('pmName').value.trim(),
+    category: document.getElementById('pmCategory').value,
+    price: parseFloat(document.getElementById('pmPrice').value) || 0,
+    description: document.getElementById('pmDesc').value.trim(),
+    img: document.getElementById('pmImg').value.trim(),
+    available: document.getElementById('pmAvailable').checked,
+  };
+  if (!body.name) { alert('اسم المنتج مطلوب'); return; }
+  const url = id ? `/api/admin/store/products/${id}` : '/api/admin/store/products';
+  const method = id ? 'PUT' : 'POST';
+  fetch(url, {method, headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)})
+    .then(r=>r.json())
+    .then(d=>{ if(d.ok){ closeProductModal(); loadStoreProducts(); } })
+    .catch(()=>{});
+}
+
+function deleteProduct(id, name) {
+  if (!confirm(`حذف "${name}"؟`)) return;
+  fetch(`/api/admin/store/products/${id}`, {method:'DELETE'})
+    .then(()=>loadStoreProducts());
+}
+
+function loadStoreData() {
+  loadStoreOrders();
+  loadStoreProducts();
+}
+
+function deleteBrokenProducts() {
+  if (!confirm('حذف جميع المنتجات التي صورها مكسورة (ليست من تلغرام)؟')) return;
+  fetch('/api/admin/store/products/delete_broken', {method:'POST'})
+    .then(r=>r.json())
+    .then(d=>{ alert('تم حذف ' + (d.deleted||0) + ' منتج'); loadStoreProducts(); })
+    .catch(()=>alert('خطأ'));
+}
 </script>
 </body>
 </html>"""
@@ -5060,145 +5198,6 @@ document.addEventListener('DOMContentLoaded', function(){
   }
 });
 
-// ── Store Management ──────────────────────────────────────────
-
-function loadStoreOrders() {
-  fetch('/api/admin/orders')
-    .then(r=>r.json())
-    .then(orders=>{
-      const el = document.getElementById('storeOrdersList');
-      if (!el) return;
-      if (!orders.length) {
-        el.innerHTML = '<div style="text-align:center;padding:24px;color:var(--text2);font-size:13px;">لا توجد طلبات بعد 🌸</div>';
-        return;
-      }
-      const statusLabel = {pending:'⏳ جديد', confirmed:'✅ مقبول', done:'🎉 مكتمل', cancelled:'❌ ملغي'};
-      const statusColor = {pending:'#f59e0b', confirmed:'#10b981', done:'#6366f1', cancelled:'#ef4444'};
-      el.innerHTML = orders.map(o=>`
-        <div style="background:var(--card);border:1px solid var(--border);border-radius:14px;padding:14px;margin-bottom:10px;">
-          <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px;">
-            <div>
-              <div style="font-size:14px;font-weight:700;color:var(--text);">${o.customer_name}</div>
-              <div style="font-size:12px;color:var(--text2);">📞 ${o.customer_phone||'—'}</div>
-            </div>
-            <span style="font-size:11px;font-weight:700;color:${statusColor[o.status]||'#888'};background:${statusColor[o.status]||'#888'}22;padding:4px 10px;border-radius:20px;">${statusLabel[o.status]||o.status}</span>
-          </div>
-          <div style="font-size:13px;color:var(--text);margin-bottom:6px;">🛍️ ${o.description||'—'}</div>
-          ${o.delivery_type==='delivery'?`<div style="font-size:12px;color:var(--text2);">🚗 توصيل${o.address?' — '+o.address:''}</div>`:'<div style="font-size:12px;color:var(--text2);">🏪 استلام من المحل</div>'}
-          ${o.notes?`<div style="font-size:12px;color:var(--text2);margin-top:4px;">📝 ${o.notes}</div>`:''}
-          <div style="font-size:12px;color:var(--text3);margin-top:6px;">📅 ${o.date}</div>
-          <div style="display:flex;gap:8px;margin-top:10px;">
-            <button onclick="setOrderStatus(${o.id},'confirmed')" style="flex:1;padding:8px;background:#10b98122;color:#10b981;border:1px solid #10b981;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;">✅ قبول</button>
-            <button onclick="setOrderStatus(${o.id},'done')" style="flex:1;padding:8px;background:#6366f122;color:#6366f1;border:1px solid #6366f1;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;">🎉 مكتمل</button>
-            <button onclick="setOrderStatus(${o.id},'cancelled')" style="flex:1;padding:8px;background:#ef444422;color:#ef4444;border:1px solid #ef4444;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;">❌ رفض</button>
-          </div>
-        </div>`).join('');
-    }).catch(()=>{});
-}
-
-function setOrderStatus(id, status) {
-  fetch(`/api/admin/orders/${id}/status`, {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({status})})
-    .then(()=>loadStoreOrders());
-}
-
-function loadStoreProducts() {
-  const el = document.getElementById('storeProductsList');
-  if (el) el.innerHTML = '<div style="text-align:center;padding:24px;color:var(--text2);font-size:13px;">جار التحميل...</div>';
-  fetch('/api/admin/store/products')
-    .then(r=>{ if(!r.ok) throw new Error('HTTP '+r.status); return r.json(); })
-    .then(products=>{
-      if (!el) return;
-      if (!products || !products.length) {
-        el.innerHTML = '<div style="text-align:center;padding:24px;color:var(--text2);font-size:13px;">لا توجد منتجات — أضف أول منتج 🌸</div>';
-        return;
-      }
-      el.innerHTML = products.map(p=>`
-        <div style="background:var(--card);border:1px solid var(--border);border-radius:14px;padding:12px;margin-bottom:8px;display:flex;align-items:center;gap:12px;">
-          <div style="width:56px;height:56px;border-radius:10px;overflow:hidden;background:var(--bg2);flex-shrink:0;">
-            ${p.img?`<img src="${p.img}" style="width:100%;height:100%;object-fit:cover;">`:'<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-size:24px;">🌸</div>'}
-          </div>
-          <div style="flex:1;min-width:0;">
-            <div style="font-size:13px;font-weight:700;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${p.name}</div>
-            <div style="font-size:11px;color:var(--text2);">${p.category} · ${p.price?p.price.toFixed(3)+' ر.ع':'مجاني'}</div>
-            <div style="font-size:11px;color:${p.available?'#10b981':'#ef4444'};margin-top:2px;">${p.available?'● متاح':'● مخفي'}</div>
-          </div>
-          <div style="display:flex;flex-direction:column;gap:6px;">
-            <button onclick="openEditProductModal(${JSON.stringify(p).replace(/"/g,'&quot;')})" style="padding:6px 12px;background:var(--accent);color:#fff;border:none;border-radius:8px;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit;">تعديل</button>
-            <button onclick="deleteProduct(${p.id},'${p.name.replace(/'/g,"\\'")}')" style="padding:6px 12px;background:#ef444422;color:#ef4444;border:1px solid #ef4444;border-radius:8px;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit;">حذف</button>
-          </div>
-        </div>`).join('');
-    }).catch(err=>{
-      if (el) el.innerHTML = '<div style="text-align:center;padding:24px;color:#ef4444;font-size:13px;">⚠️ خطأ في تحميل المنتجات: ' + err.message + '</div>';
-    });
-}
-
-function openAddProductModal() {
-  document.getElementById('productModalTitle').textContent = 'إضافة منتج';
-  document.getElementById('pmId').value = '';
-  document.getElementById('pmName').value = '';
-  document.getElementById('pmCategory').value = 'باقات';
-  document.getElementById('pmPrice').value = '';
-  document.getElementById('pmDesc').value = '';
-  document.getElementById('pmImg').value = '';
-  document.getElementById('pmAvailable').checked = true;
-  const m = document.getElementById('productModal');
-  m.style.display = 'flex';
-}
-
-function openEditProductModal(p) {
-  document.getElementById('productModalTitle').textContent = 'تعديل منتج';
-  document.getElementById('pmId').value = p.id;
-  document.getElementById('pmName').value = p.name || '';
-  document.getElementById('pmCategory').value = p.category || 'باقات';
-  document.getElementById('pmPrice').value = p.price || '';
-  document.getElementById('pmDesc').value = p.description || '';
-  document.getElementById('pmImg').value = p.img || '';
-  document.getElementById('pmAvailable').checked = !!p.available;
-  const m = document.getElementById('productModal');
-  m.style.display = 'flex';
-}
-
-function closeProductModal() {
-  document.getElementById('productModal').style.display = 'none';
-}
-
-function saveProduct() {
-  const id = document.getElementById('pmId').value;
-  const body = {
-    name: document.getElementById('pmName').value.trim(),
-    category: document.getElementById('pmCategory').value,
-    price: parseFloat(document.getElementById('pmPrice').value) || 0,
-    description: document.getElementById('pmDesc').value.trim(),
-    img: document.getElementById('pmImg').value.trim(),
-    available: document.getElementById('pmAvailable').checked,
-  };
-  if (!body.name) { alert('اسم المنتج مطلوب'); return; }
-  const url = id ? `/api/admin/store/products/${id}` : '/api/admin/store/products';
-  const method = id ? 'PUT' : 'POST';
-  fetch(url, {method, headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)})
-    .then(r=>r.json())
-    .then(d=>{ if(d.ok){ closeProductModal(); loadStoreProducts(); } })
-    .catch(()=>{});
-}
-
-function deleteProduct(id, name) {
-  if (!confirm(`حذف "${name}"؟`)) return;
-  fetch(`/api/admin/store/products/${id}`, {method:'DELETE'})
-    .then(()=>loadStoreProducts());
-}
-
-function loadStoreData() {
-  loadStoreOrders();
-  loadStoreProducts();
-}
-
-function deleteBrokenProducts() {
-  if (!confirm('حذف جميع المنتجات التي صورها مكسورة (ليست من تلغرام)؟')) return;
-  fetch('/api/admin/store/products/delete_broken', {method:'POST'})
-    .then(r=>r.json())
-    .then(d=>{ alert('تم حذف ' + (d.deleted||0) + ' منتج'); loadStoreProducts(); })
-    .catch(()=>alert('خطأ'));
-}
 </script>
 </body>
 </html>"""
