@@ -1860,6 +1860,59 @@ def api_del_catalog(pid):
     return jsonify({"ok": True})
 
 # ══════════════════════════════════════════════════════════════
+# ── Catalog Slides API (login page gallery) ───────────────────
+# ══════════════════════════════════════════════════════════════
+import re as _re
+
+def _drive_url(url):
+    m = _re.search(r'drive\.google\.com/file/d/([a-zA-Z0-9_-]+)', url)
+    if m: return f"https://drive.google.com/uc?export=view&id={m.group(1)}"
+    m = _re.search(r'drive\.google\.com/open\?.*id=([a-zA-Z0-9_-]+)', url)
+    if m: return f"https://drive.google.com/uc?export=view&id={m.group(1)}"
+    m = _re.search(r'id=([a-zA-Z0-9_-]{25,})', url)
+    if m and 'google' in url: return f"https://drive.google.com/uc?export=view&id={m.group(1)}"
+    return url
+
+@app.route("/api/catalog-slides", methods=["GET"])
+def api_get_catalog_slides():
+    rows = db_get("SELECT * FROM catalog_slides ORDER BY sort_order ASC, id ASC")
+    return jsonify(rows or [])
+
+@app.route("/api/catalog-slides", methods=["POST"])
+@auth
+def api_add_catalog_slide():
+    d = request.json or {}
+    raw = (d.get("img_url") or "").strip()
+    if not raw:
+        return jsonify({"ok": False, "error": "img_url required"}), 400
+    img_url = _drive_url(raw)
+    db_run(
+        "INSERT INTO catalog_slides (img_url, title, subtitle, sort_order) VALUES (?,?,?,?)",
+        (img_url, d.get("title",""), d.get("subtitle",""), d.get("sort_order",0))
+    )
+    return jsonify({"ok": True})
+
+@app.route("/api/catalog-slides/<int:sid>", methods=["DELETE"])
+@auth
+def api_del_catalog_slide(sid):
+    db_run("DELETE FROM catalog_slides WHERE id=?", (sid,))
+    return jsonify({"ok": True})
+
+@app.route("/api/catalog-slides/<int:sid>", methods=["PATCH"])
+@auth
+def api_update_catalog_slide(sid):
+    d = request.json or {}
+    fields, vals = [], []
+    for col in ("title","subtitle","sort_order","img_url"):
+        if col in d:
+            fields.append(f"{col}=?")
+            vals.append(d[col])
+    if fields:
+        vals.append(sid)
+        db_run(f"UPDATE catalog_slides SET {','.join(fields)} WHERE id=?", vals)
+    return jsonify({"ok": True})
+
+# ══════════════════════════════════════════════════════════════
 # ── Debts API ─────────────────────────────────────────────────
 # ══════════════════════════════════════════════════════════════
 @app.route("/api/debts", methods=["GET"])

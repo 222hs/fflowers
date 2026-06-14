@@ -233,6 +233,13 @@ def init_db():
             ref_id INTEGER,
             date TEXT NOT NULL,
             created TEXT DEFAULT (datetime('now')))""",
+        """CREATE TABLE IF NOT EXISTS catalog_slides (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            img_url TEXT NOT NULL,
+            title TEXT DEFAULT '',
+            subtitle TEXT DEFAULT '',
+            sort_order INTEGER DEFAULT 0,
+            created TEXT DEFAULT (datetime('now')))""",
     ]
     for sql in new_tables:
         if USE_TURSO: turso_run(sql)

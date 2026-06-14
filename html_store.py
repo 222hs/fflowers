@@ -617,6 +617,119 @@ STORE_PAGE = """<!DOCTYPE html>
     }
 
     /* ─────────────────────────────────────────
+       CARD SHORT DESC
+    ───────────────────────────────────────── */
+    .card-short-desc {
+      font-size: 11px;
+      color: var(--text-sec);
+      line-height: 1.45;
+      margin: 4px 0 6px;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+
+    /* ─────────────────────────────────────────
+       7b. PRODUCT DETAIL SHEET
+    ───────────────────────────────────────── */
+    .detail-sheet {
+      position: fixed;
+      bottom: 0;
+      left: 50%;
+      transform: translateX(-50%) translateY(100%);
+      width: 100%;
+      max-width: 480px;
+      background: white;
+      border-radius: 20px 20px 0 0;
+      z-index: 102;
+      max-height: 92vh;
+      overflow-y: auto;
+      scrollbar-width: none;
+      transition: transform 0.38s cubic-bezier(0.32,0.72,0,1);
+    }
+    .detail-sheet.open { transform: translateX(-50%) translateY(0); }
+    .detail-sheet::-webkit-scrollbar { display: none; }
+
+    .detail-img {
+      width: 100%;
+      aspect-ratio: 4/3;
+      object-fit: cover;
+      display: block;
+      border-radius: 20px 20px 0 0;
+      background: linear-gradient(135deg,#fdf0f2,#fce8d4);
+    }
+    .detail-img-placeholder {
+      width: 100%;
+      aspect-ratio: 4/3;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 60px;
+      background: linear-gradient(135deg,#fdf0f2,#fce8d4);
+      border-radius: 20px 20px 0 0;
+    }
+    .detail-body { padding: 20px 20px 32px; }
+    .detail-cat-badge {
+      display: inline-block;
+      background: var(--primary-light);
+      color: var(--primary);
+      font-size: 11px;
+      font-weight: 700;
+      padding: 3px 10px;
+      border-radius: 20px;
+      margin-bottom: 10px;
+    }
+    .detail-name {
+      font-size: 20px;
+      font-weight: 800;
+      color: var(--text);
+      line-height: 1.3;
+      margin-bottom: 6px;
+    }
+    .detail-price {
+      font-size: 22px;
+      font-weight: 900;
+      color: var(--primary);
+      margin-bottom: 16px;
+    }
+    .detail-desc {
+      font-size: 14px;
+      color: var(--text-sec);
+      line-height: 1.8;
+      margin-bottom: 24px;
+      white-space: pre-line;
+    }
+    .detail-order-btn {
+      width: 100%;
+      padding: 15px;
+      background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+      color: white;
+      border: none;
+      border-radius: 12px;
+      font-size: 16px;
+      font-weight: 700;
+      font-family: 'Almarai', sans-serif;
+      cursor: pointer;
+    }
+    .detail-close {
+      position: absolute;
+      top: 14px;
+      left: 14px;
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      background: rgba(0,0,0,0.45);
+      color: white;
+      border: none;
+      font-size: 16px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    /* ─────────────────────────────────────────
        8. ORDER BOTTOM SHEET
     ───────────────────────────────────────── */
     .order-sheet {
@@ -1100,7 +1213,20 @@ STORE_PAGE = """<!DOCTYPE html>
   </a>
 
   <!-- ══ OVERLAY ══ -->
-  <div class="sheet-overlay" id="sheetOverlay" onclick="closeOrderSheet()" aria-hidden="true"></div>
+  <div class="sheet-overlay" id="sheetOverlay" onclick="closeTopSheet()" aria-hidden="true"></div>
+
+  <!-- ══ PRODUCT DETAIL SHEET ══ -->
+  <div class="detail-sheet" id="detailSheet" role="dialog" aria-modal="true" aria-label="تفاصيل المنتج">
+    <button class="detail-close" onclick="closeDetailSheet()" aria-label="إغلاق">✕</button>
+    <div id="detailImgWrap"></div>
+    <div class="detail-body">
+      <span class="detail-cat-badge" id="detailCat"></span>
+      <p class="detail-name" id="detailName"></p>
+      <p class="detail-price" id="detailPrice"></p>
+      <p class="detail-desc" id="detailDesc"></p>
+      <button class="detail-order-btn" onclick="detailOrderNow()">🛒 اطلب الآن</button>
+    </div>
+  </div>
 
   <!-- ══ 8. ORDER BOTTOM SHEET ══ -->
   <div class="order-sheet" id="orderSheet" role="dialog" aria-modal="true" aria-label="نموذج الطلب">
@@ -1271,6 +1397,9 @@ STORE_PAGE = """<!DOCTYPE html>
         var priceHtml = priceStr
           ? '<span class="card-price">' + esc(priceStr) + '</span>'
           : '<span class="card-price-on-request">السعر عند الطلب</span>';
+        var shortDesc = p.description
+          ? '<p class="card-short-desc">' + esc(p.description) + '</p>'
+          : '';
         return '<article class="prod-card" data-idx="' + idx + '">' +
           '<div class="card-img-wrap">' +
             (p.img ? imgHtml : '<div class="card-img-placeholder">🌸</div>') +
@@ -1278,7 +1407,7 @@ STORE_PAGE = """<!DOCTYPE html>
           '</div>' +
           '<div class="card-body">' +
             '<p class="card-name">' + esc(p.name) + '</p>' +
-            '<p class="card-category">' + esc(p.category || '') + '</p>' +
+            shortDesc +
             '<div class="card-price-row">' +
               priceHtml +
               '<button class="card-order-btn">اطلب</button>' +
@@ -1290,7 +1419,7 @@ STORE_PAGE = """<!DOCTYPE html>
       g.querySelectorAll('.prod-card').forEach(function(card) {
         card.addEventListener('click', function() {
           var idx = parseInt(this.dataset.idx);
-          openOrderSheet(window._storeProducts[idx]);
+          openDetailSheet(window._storeProducts[idx]);
         });
       });
     }
@@ -1318,6 +1447,49 @@ STORE_PAGE = """<!DOCTYPE html>
         .replace(/>/g,  '&gt;')
         .replace(/"/g,  '&quot;')
         .replace(/'/g,  '&#39;');
+    }
+
+    // ────────────────────────────────────────
+    // DETAIL SHEET — OPEN / CLOSE
+    // ────────────────────────────────────────
+    function openDetailSheet(product) {
+      selectedProduct = product;
+      var imgWrap = document.getElementById('detailImgWrap');
+      if (product.img) {
+        imgWrap.innerHTML = '<img class="detail-img" src="' + esc(product.img) + '" alt="' + esc(product.name) + '" loading="eager">';
+      } else {
+        imgWrap.innerHTML = '<div class="detail-img-placeholder">🌸</div>';
+      }
+      document.getElementById('detailCat').textContent   = product.category || '';
+      document.getElementById('detailName').textContent  = product.name || '—';
+      var priceStr = product.price ? formatPrice(product.price) + ' ر.ع' : 'السعر عند الطلب';
+      document.getElementById('detailPrice').textContent = priceStr;
+      document.getElementById('detailDesc').textContent  = product.description || '';
+      document.getElementById('sheetOverlay').classList.add('open');
+      document.getElementById('detailSheet').classList.add('open');
+      document.body.style.overflow = 'hidden';
+      document.getElementById('detailSheet').scrollTop = 0;
+    }
+
+    function closeDetailSheet() {
+      document.getElementById('detailSheet').classList.remove('open');
+      if (!document.getElementById('orderSheet').classList.contains('open')) {
+        document.getElementById('sheetOverlay').classList.remove('open');
+        document.body.style.overflow = '';
+      }
+    }
+
+    function detailOrderNow() {
+      closeDetailSheet();
+      openOrderSheet(selectedProduct);
+    }
+
+    function closeTopSheet() {
+      if (document.getElementById('detailSheet').classList.contains('open')) {
+        closeDetailSheet();
+      } else {
+        closeOrderSheet();
+      }
     }
 
     // ────────────────────────────────────────
@@ -1361,9 +1533,9 @@ STORE_PAGE = """<!DOCTYPE html>
       selectedProduct = null;
     }
 
-    // Escape key closes sheet
+    // Escape key closes top sheet
     document.addEventListener('keydown', function(e) {
-      if (e.key === 'Escape') closeOrderSheet();
+      if (e.key === 'Escape') closeTopSheet();
     });
 
     // ────────────────────────────────────────

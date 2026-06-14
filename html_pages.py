@@ -1215,6 +1215,35 @@ input[type="date"]{width:100%;padding:10px 12px;border:1px solid var(--border);b
 <div id="tab-catalog" class="page">
   <div class="slbl">كتالوج المنتجات</div>
 
+  <!-- ── SLIDES GALLERY MANAGER ── -->
+  <div class="gc" style="padding:16px;margin-bottom:16px;border:1px solid rgba(212,168,67,.25);background:linear-gradient(135deg,rgba(212,168,67,.05),transparent);">
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;">
+      <div style="width:36px;height:36px;border-radius:10px;background:linear-gradient(135deg,#d4a843,#b8891f);display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0;">🖼️</div>
+      <div>
+        <div style="font-size:14px;font-weight:900;color:var(--text);">معرض صور شاشة الدخول</div>
+        <div style="font-size:11px;color:var(--text2);">الصور تظهر كاتالوج قابل للسحب للزباين</div>
+      </div>
+    </div>
+
+    <div class="fgrid fg2" style="margin-bottom:10px;">
+      <div class="fld">
+        <label>🔗 رابط الصورة *</label>
+        <input id="sl-url" type="url" placeholder="https://... أو رابط Google Drive"/>
+      </div>
+      <div class="fld">
+        <label>عنوان الصورة (اختياري)</label>
+        <input id="sl-title" type="text" placeholder="مثال: باقة رومانسية"/>
+      </div>
+    </div>
+    <div class="fld" style="margin-bottom:12px;">
+      <label>وصف / شارة (اختياري)</label>
+      <input id="sl-sub" type="text" placeholder="مثال: NEW ARRIVAL"/>
+    </div>
+    <button onclick="addSlide()" class="sbtn sb-s" style="width:100%;background:linear-gradient(135deg,#d4a843,#c49030);color:#1a1208;">🌟 إضافة صورة للكاتالوج</button>
+
+    <div id="slidesGrid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:10px;margin-top:16px;"></div>
+  </div>
+
   <!-- Add product form -->
   <div class="gc" style="padding:14px;margin-bottom:14px;">
     <div style="font-size:13px;font-weight:800;color:var(--text2);margin-bottom:10px;">➕ إضافة منتج للكتالوج</div>
@@ -1664,7 +1693,7 @@ function switchTab(t){
   if(t==='shelves') loadShelves();
   if(t==='flowerinv') loadFlowerInvPage();
   if(t==='customers') { loadCustomers(); loadOrders('pending'); loadDebts(); }
-  if(t==='catalog') loadCatalog();
+  if(t==='catalog'){ loadCatalog(); loadSlides(); }
 }
 
 function setFT(t){
@@ -2935,6 +2964,44 @@ async function delDebt(id){
   await api(`/api/debts/${id}`, {method:'DELETE'});
   showToast('🗑️ تم الحذف');
   loadDebts();
+}
+
+/* ══════════════════════════════════════════
+   CATALOG SLIDES (login page gallery)
+══════════════════════════════════════════ */
+async function loadSlides(){
+  const el=document.getElementById('slidesGrid');
+  if(!el)return;
+  const rows=await api('/api/catalog-slides');
+  if(!rows||!rows.length){
+    el.innerHTML='<div style="grid-column:1/-1;text-align:center;color:var(--text3);padding:20px;font-size:12px;">لا توجد صور بعد — أضف صور لتظهر على شاشة الدخول 🖼️</div>';
+    return;
+  }
+  el.innerHTML=rows.map(s=>`
+    <div style="border-radius:12px;overflow:hidden;position:relative;aspect-ratio:3/4;background:var(--bg2);">
+      <img src="${s.img_url}" style="width:100%;height:100%;object-fit:cover;" onerror="this.src=''" loading="lazy"/>
+      <div style="position:absolute;inset:0;background:linear-gradient(to top,rgba(0,0,0,.7) 0%,transparent 50%);z-index:1;"></div>
+      <div style="position:absolute;bottom:6px;left:6px;right:6px;z-index:2;">
+        ${s.title?`<div style="font-size:10px;font-weight:700;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${s.title}</div>`:''}
+      </div>
+      <button onclick="delSlide(${s.id})" style="position:absolute;top:6px;left:6px;z-index:3;width:26px;height:26px;border-radius:50%;background:rgba(220,50,50,.85);border:none;color:#fff;font-size:12px;cursor:pointer;display:flex;align-items:center;justify-content:center;">✕</button>
+    </div>`).join('');
+}
+async function addSlide(){
+  const url=document.getElementById('sl-url').value.trim();
+  const title=document.getElementById('sl-title').value.trim();
+  const sub=document.getElementById('sl-sub').value.trim();
+  if(!url){showToast('⚠️ رابط الصورة مطلوب');return;}
+  await api('/api/catalog-slides',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({img_url:url,title,subtitle:sub})});
+  ['sl-url','sl-title','sl-sub'].forEach(id=>{const e=document.getElementById(id);if(e)e.value='';});
+  showToast('✅ تمت إضافة الصورة للكاتالوج');
+  loadSlides();
+}
+async function delSlide(id){
+  if(!confirm('حذف هذه الصورة من الكاتالوج؟'))return;
+  await api(`/api/catalog-slides/${id}`,{method:'DELETE'});
+  showToast('🗑️ تم حذف الصورة');
+  loadSlides();
 }
 
 /* ══════════════════════════════════════════
