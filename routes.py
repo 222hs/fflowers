@@ -140,15 +140,18 @@ def store_product_image(file_id):
 
 @app.route("/api/store/products")
 def store_products_list():
-    cat = request.args.get("category", "all")
-    occ = request.args.get("occasion", "")
-    if occ:
-        rows = db_get("SELECT * FROM store_products WHERE available=1 AND occasion=? ORDER BY sort_order,id", (occ,))
-    elif cat == "all":
-        rows = db_get("SELECT * FROM store_products WHERE available=1 ORDER BY sort_order,id")
-    else:
-        rows = db_get("SELECT * FROM store_products WHERE available=1 AND category=? ORDER BY sort_order,id", (cat,))
-    return jsonify(rows)
+    try:
+        cat = request.args.get("category", "all")
+        occ = request.args.get("occasion", "")
+        if occ:
+            rows = db_get("SELECT * FROM store_products WHERE available=1 AND occasion=? ORDER BY sort_order,id", (occ,))
+        elif cat == "all":
+            rows = db_get("SELECT * FROM store_products WHERE available=1 ORDER BY sort_order,id")
+        else:
+            rows = db_get("SELECT * FROM store_products WHERE available=1 AND category=? ORDER BY sort_order,id", (cat,))
+        return jsonify(rows)
+    except Exception as e:
+        return jsonify([])  # الجدول ما اتكرى بعد → array فارغة بدل 500
 
 @app.route("/api/store/order", methods=["POST"])
 def store_place_order():

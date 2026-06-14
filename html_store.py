@@ -1251,11 +1251,12 @@ STORE_PAGE = """<!DOCTYPE html>
     function renderProducts(products) {
       var g = document.getElementById('productsGrid');
       if (!products.length) {
+        var isEmpty = (!currentCategory || currentCategory === 'all') && !currentOccasion;
         g.innerHTML =
           '<div class="empty-state">' +
             '<span class="empty-icon">🌸</span>' +
-            '<p class="empty-text">لا توجد منتجات في هذه الفئة</p>' +
-            '<p class="empty-sub">تابعنا للجديد قريباً</p>' +
+            '<p class="empty-text">' + (isEmpty ? 'لا توجد منتجات حتى الآن' : 'لا توجد منتجات في هذه الفئة') + '</p>' +
+            '<p class="empty-sub">' + (isEmpty ? 'أرسل صورة منتج للبوت في تلغرام لإضافته' : 'جرّب فئة أخرى') + '</p>' +
           '</div>';
         return;
       }
