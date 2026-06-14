@@ -256,6 +256,7 @@ def init_db():
         "ALTER TABLE orders ADD COLUMN product_id INTEGER",
         "ALTER TABLE orders ADD COLUMN delivery_type TEXT DEFAULT 'pickup'",
         "ALTER TABLE orders ADD COLUMN address TEXT",
+        "ALTER TABLE store_products ADD COLUMN occasion TEXT DEFAULT ''",
     ]
     if USE_TURSO:
         turso_run(store_products_sql)

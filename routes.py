@@ -124,7 +124,10 @@ def admin_index(): return Response(HTML_PAGE, mimetype="text/html")
 @app.route("/api/store/products")
 def store_products_list():
     cat = request.args.get("category", "all")
-    if cat == "all":
+    occ = request.args.get("occasion", "")
+    if occ:
+        rows = db_get("SELECT * FROM store_products WHERE available=1 AND occasion=? ORDER BY sort_order,id", (occ,))
+    elif cat == "all":
         rows = db_get("SELECT * FROM store_products WHERE available=1 ORDER BY sort_order,id")
     else:
         rows = db_get("SELECT * FROM store_products WHERE available=1 AND category=? ORDER BY sort_order,id", (cat,))
@@ -728,9 +731,11 @@ def webhook():
     if "photo" in msg:
         file_id=msg["photo"][-1]["file_id"]; caption=msg.get("caption","").strip()
 
-        # ── إضافة منتج للمتجر: "باقات | 8.500" ──
+        # ── إضافة منتج للمتجر: "باقات | 8.500 | زواج" ──
         STORE_CATS = ["باقات","استاندات","مجسمات","شرايط"]
+        STORE_OCCASIONS = ["زواج","عيد ميلاد","تخرج","هدية","افتتاح","تخص"]
         detected_cat = next((c for c in STORE_CATS if c in caption), None)
+        detected_occ = next((o for o in STORE_OCCASIONS if o in caption), None)
         price_match = re.search(r'(\d+(?:[.,]\d+)?)', caption)
         if detected_cat and price_match:
             tg(chat, "🌸 جاري إضافة المنتج للمتجر...")
@@ -803,13 +808,15 @@ def webhook():
                         prod_name = detected_cat
                 # حفظ المنتج في قاعدة البيانات
                 db_run(
-                    "INSERT INTO store_products (name,description,price,category,img) VALUES (?,?,?,?,?)",
-                    (prod_name, prod_desc, prod_price, detected_cat, img_url)
+                    "INSERT INTO store_products (name,description,price,category,occasion,img) VALUES (?,?,?,?,?,?)",
+                    (prod_name, prod_desc, prod_price, detected_cat, detected_occ or "", img_url)
                 )
+                occ_line = f"🎀 المناسبة: {detected_occ}\n" if detected_occ else ""
                 tg(chat,
                     f"✅ <b>تم إضافة المنتج للمتجر!</b>\n\n"
                     f"🌸 <b>{prod_name}</b>\n"
                     f"📂 الفئة: {detected_cat}\n"
+                    f"{occ_line}"
                     f"💰 السعر: {prod_price:,.3f} ر.ع\n\n"
                     f"📝 <b>الوصف:</b>\n{prod_desc}\n\n"
                     f"——\n"

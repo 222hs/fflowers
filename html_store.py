@@ -995,35 +995,35 @@ STORE_PAGE = """<!DOCTYPE html>
     <p class="section-title" id="occasionsTitle">تصفح حسب المناسبة</p>
     <div class="occasions-scroll" role="list">
       <div class="occasion-card" role="listitem" tabindex="0"
-           onclick="filterCat('زواج')" onkeydown="if(event.key==='Enter')filterCat('زواج')" aria-label="زواج">
+           onclick="filterOccasion('زواج')" onkeydown="if(event.key==='Enter')filterOccasion('زواج')" aria-label="زواج">
         <div class="occasion-circle" style="background:linear-gradient(135deg,#fce4ec,#f8bbd0);">
           <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#c2185b" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="M9 12l2 2 4-4"/></svg>
         </div>
         <span class="occasion-label">زواج</span>
       </div>
       <div class="occasion-card" role="listitem" tabindex="0"
-           onclick="filterCat('عيد ميلاد')" onkeydown="if(event.key==='Enter')filterCat('عيد ميلاد')" aria-label="عيد ميلاد">
+           onclick="filterOccasion('عيد ميلاد')" onkeydown="if(event.key==='Enter')filterOccasion('عيد ميلاد')" aria-label="عيد ميلاد">
         <div class="occasion-circle" style="background:linear-gradient(135deg,#fff8e1,#ffe082);">
           <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#f9a825" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/><path d="M12 3v2M8 5l1.5 1.5M16 5l-1.5 1.5"/></svg>
         </div>
         <span class="occasion-label">عيد ميلاد</span>
       </div>
       <div class="occasion-card" role="listitem" tabindex="0"
-           onclick="filterCat('تخرج')" onkeydown="if(event.key==='Enter')filterCat('تخرج')" aria-label="تخرج">
+           onclick="filterOccasion('تخرج')" onkeydown="if(event.key==='Enter')filterOccasion('تخرج')" aria-label="تخرج">
         <div class="occasion-circle" style="background:linear-gradient(135deg,#e8f5e9,#a5d6a7);">
           <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#2e7d32" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c3 3 9 3 12 0v-5"/></svg>
         </div>
         <span class="occasion-label">تخرج</span>
       </div>
       <div class="occasion-card" role="listitem" tabindex="0"
-           onclick="filterCat('هدية')" onkeydown="if(event.key==='Enter')filterCat('هدية')" aria-label="هدية">
+           onclick="filterOccasion('هدية')" onkeydown="if(event.key==='Enter')filterOccasion('هدية')" aria-label="هدية">
         <div class="occasion-circle" style="background:linear-gradient(135deg,#fce4ec,#ef9a9a);">
           <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#c62828" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 12 20 22 4 22 4 12"/><rect x="2" y="7" width="20" height="5"/><path d="M12 22V7M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7zM12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z"/></svg>
         </div>
         <span class="occasion-label">هدية</span>
       </div>
       <div class="occasion-card" role="listitem" tabindex="0"
-           onclick="filterCat('افتتاح')" onkeydown="if(event.key==='Enter')filterCat('افتتاح')" aria-label="افتتاح">
+           onclick="filterOccasion('افتتاح')" onkeydown="if(event.key==='Enter')filterOccasion('افتتاح')" aria-label="افتتاح">
         <div class="occasion-circle" style="background:linear-gradient(135deg,#e3f2fd,#90caf9);">
           <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#1565c0" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
         </div>
@@ -1181,15 +1181,29 @@ STORE_PAGE = """<!DOCTYPE html>
     // ────────────────────────────────────────
     // CATEGORY FILTER
     // ────────────────────────────────────────
+    var currentOccasion = '';
+
     function filterCat(cat) {
       currentCategory = cat;
+      currentOccasion = '';
       document.querySelectorAll('.cat-pill').forEach(function(el) {
         var isActive = el.dataset.cat === cat;
         el.classList.toggle('active', isActive);
         el.setAttribute('aria-selected', String(isActive));
       });
-      loadProducts(cat);
-      // Scroll products into view on occasion tap
+      loadProducts(cat, '');
+      var sec = document.getElementById('productsSection');
+      if (sec) sec.scrollIntoView({ behavior: 'smooth' });
+    }
+
+    function filterOccasion(occ) {
+      currentOccasion = occ;
+      // deactivate category pills
+      document.querySelectorAll('.cat-pill').forEach(function(el) {
+        el.classList.remove('active');
+        el.setAttribute('aria-selected', 'false');
+      });
+      loadProducts('all', occ);
       var sec = document.getElementById('productsSection');
       if (sec) sec.scrollIntoView({ behavior: 'smooth' });
     }
@@ -1197,10 +1211,15 @@ STORE_PAGE = """<!DOCTYPE html>
     // ────────────────────────────────────────
     // LOAD PRODUCTS
     // ────────────────────────────────────────
-    async function loadProducts(category) {
+    async function loadProducts(category, occasion) {
       renderSkeletons();
       try {
-        var qs  = (!category || category === 'all') ? '' : '?category=' + encodeURIComponent(category);
+        var qs = '';
+        if (occasion) {
+          qs = '?occasion=' + encodeURIComponent(occasion);
+        } else if (category && category !== 'all') {
+          qs = '?category=' + encodeURIComponent(category);
+        }
         var res = await fetch('/api/store/products' + qs);
         if (!res.ok) throw new Error('HTTP ' + res.status);
         var data = await res.json();
@@ -1449,7 +1468,7 @@ STORE_PAGE = """<!DOCTYPE html>
     // ────────────────────────────────────────
     // INIT
     // ────────────────────────────────────────
-    loadProducts('all');
+    loadProducts('all', '');
   </script>
 </body>
 </html>"""
