@@ -66,6 +66,7 @@ STORE_PAGE = """<!DOCTYPE html>
       justify-content: space-between;
       padding: 0 12px;
       z-index: 50;
+      direction: ltr;
     }
 
     .header-logo {
@@ -178,24 +179,44 @@ STORE_PAGE = """<!DOCTYPE html>
     ───────────────────────────────────────── */
     .hero {
       position: relative;
-      height: 220px;
+      height: 210px;
       overflow: hidden;
       background: linear-gradient(135deg, #fff0f3 0%, #fce8d4 100%);
-      background-image:
-        url('/background.jpg'),
-        linear-gradient(135deg, #fff0f3 0%, #fce8d4 100%);
-      background-position: right center, center;
-      background-size: 50% auto, cover;
-      background-repeat: no-repeat, no-repeat;
       display: flex;
-      align-items: center;
+      align-items: stretch;
+      direction: rtl;
     }
 
     .hero-content {
-      padding: 24px;
-      max-width: 60%;
+      flex: 1;
+      padding: 20px 20px 20px 8px;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
       position: relative;
       z-index: 2;
+    }
+
+    .hero-img-side {
+      width: 48%;
+      flex-shrink: 0;
+      overflow: hidden;
+      position: relative;
+    }
+
+    .hero-img-side img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      object-position: center;
+      display: block;
+    }
+
+    .hero-img-side::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(to left, transparent 60%, #fff0f3 100%);
     }
 
     .hero-tag {
@@ -210,24 +231,25 @@ STORE_PAGE = """<!DOCTYPE html>
     }
 
     .hero-heading {
-      font-size: 22px;
-      font-weight: 700;
+      font-size: 20px;
+      font-weight: 800;
       color: var(--text);
       line-height: 1.3;
       white-space: pre-line;
+      margin-bottom: 4px;
     }
 
     .hero-cta {
       display: inline-block;
-      margin-top: 12px;
+      margin-top: 10px;
       background: var(--primary);
       color: white;
       border: none;
       border-radius: 8px;
-      padding: 9px 20px;
+      padding: 8px 16px;
       font-family: 'Almarai', sans-serif;
       font-size: 13px;
-      font-weight: 600;
+      font-weight: 700;
       cursor: pointer;
       text-decoration: none;
       -webkit-tap-highlight-color: transparent;
@@ -1126,6 +1148,9 @@ STORE_PAGE = """<!DOCTYPE html>
          onclick="document.getElementById('productsSection').scrollIntoView({behavior:'smooth'}); return false;">
         تصفح المنتجات
       </a>
+    </div>
+    <div class="hero-img-side">
+      <img src="/background.jpg" alt="فيروز فلورز" loading="eager" onerror="this.parentElement.style.background='linear-gradient(135deg,#fce8d4,#f9d5e5)'">
     </div>
   </section>
 
