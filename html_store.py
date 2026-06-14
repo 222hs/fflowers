@@ -64,34 +64,55 @@ STORE_PAGE = """<!DOCTYPE html>
       display: flex;
       align-items: center;
       justify-content: space-between;
-      padding: 0 16px;
+      padding: 0 12px;
       z-index: 50;
     }
 
     .header-logo {
       display: flex;
       align-items: center;
-      gap: 6px;
-      font-weight: 700;
-      font-size: 16px;
-      color: var(--text);
+      gap: 8px;
       text-decoration: none;
       user-select: none;
+      flex-shrink: 0;
     }
 
-    .header-logo .logo-emoji {
+    .header-logo-icon {
+      width: 34px;
+      height: 34px;
+      background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
       font-size: 18px;
-      line-height: 1;
+      flex-shrink: 0;
     }
 
-    .header-center {
-      flex: 1;
+    .header-logo-text {
+      display: flex;
+      flex-direction: column;
+      line-height: 1.2;
+    }
+
+    .header-logo-name {
+      font-size: 15px;
+      font-weight: 800;
+      color: var(--text);
+      letter-spacing: -0.2px;
+    }
+
+    .header-logo-sub {
+      font-size: 10px;
+      color: var(--text-muted);
+      font-weight: 400;
     }
 
     .header-actions {
       display: flex;
       align-items: center;
-      gap: 8px;
+      gap: 4px;
+      flex-shrink: 0;
     }
 
     .header-action-btn {
@@ -643,7 +664,7 @@ STORE_PAGE = """<!DOCTYPE html>
       background: white;
       border-radius: 20px 20px 0 0;
       z-index: 102;
-      max-height: 92vh;
+      max-height: 90vh;
       overflow-y: auto;
       scrollbar-width: none;
       transition: transform 0.38s cubic-bezier(0.32,0.72,0,1);
@@ -651,25 +672,29 @@ STORE_PAGE = """<!DOCTYPE html>
     .detail-sheet.open { transform: translateX(-50%) translateY(0); }
     .detail-sheet::-webkit-scrollbar { display: none; }
 
-    .detail-img {
+    .detail-img-wrap {
       width: 100%;
-      aspect-ratio: 4/3;
-      object-fit: cover;
-      display: block;
-      border-radius: 20px 20px 0 0;
+      aspect-ratio: 1/1;
       background: linear-gradient(135deg,#fdf0f2,#fce8d4);
-    }
-    .detail-img-placeholder {
-      width: 100%;
-      aspect-ratio: 4/3;
       display: flex;
       align-items: center;
       justify-content: center;
-      font-size: 60px;
-      background: linear-gradient(135deg,#fdf0f2,#fce8d4);
+      overflow: hidden;
       border-radius: 20px 20px 0 0;
     }
-    .detail-body { padding: 20px 20px 32px; }
+    .detail-img {
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+      display: block;
+    }
+    .detail-img-placeholder {
+      font-size: 60px;
+    }
+    .detail-body {
+      padding: 20px 20px;
+      padding-bottom: max(32px, env(safe-area-inset-bottom, 32px));
+    }
     .detail-cat-badge {
       display: inline-block;
       background: var(--primary-light);
@@ -1059,11 +1084,12 @@ STORE_PAGE = """<!DOCTYPE html>
   <!-- ══ 1. HEADER ══ -->
   <header class="site-header" role="banner">
     <a class="header-logo" href="#" aria-label="فيروز فلورز - الصفحة الرئيسية">
-      <span class="logo-emoji">🌸</span>
-      <span>فيروز فلورز</span>
+      <div class="header-logo-icon">🌸</div>
+      <div class="header-logo-text">
+        <span class="header-logo-name">فيروز فلورز</span>
+        <span class="header-logo-sub">متجر الزهور والهدايا</span>
+      </div>
     </a>
-
-    <div class="header-center"></div>
 
     <div class="header-actions">
       <!-- WhatsApp -->
@@ -1218,7 +1244,7 @@ STORE_PAGE = """<!DOCTYPE html>
   <!-- ══ PRODUCT DETAIL SHEET ══ -->
   <div class="detail-sheet" id="detailSheet" role="dialog" aria-modal="true" aria-label="تفاصيل المنتج">
     <button class="detail-close" onclick="closeDetailSheet()" aria-label="إغلاق">✕</button>
-    <div id="detailImgWrap"></div>
+    <div class="detail-img-wrap" id="detailImgWrap"></div>
     <div class="detail-body">
       <span class="detail-cat-badge" id="detailCat"></span>
       <p class="detail-name" id="detailName"></p>
