@@ -121,6 +121,23 @@ def admin_index(): return Response(HTML_PAGE, mimetype="text/html")
 
 # ── Store API ─────────────────────────────────────────────────
 
+@app.route("/api/store/img/<file_id>")
+def store_product_image(file_id):
+    """Proxy Telegram images so they work on Railway without local storage"""
+    if not BOT_TOKEN:
+        return "", 404
+    try:
+        r = requests.get(f"https://api.telegram.org/bot{BOT_TOKEN}/getFile",
+                         params={"file_id": file_id}, timeout=10).json()
+        fp = r.get("result", {}).get("file_path", "")
+        if not fp:
+            return "", 404
+        img = requests.get(f"https://api.telegram.org/file/bot{BOT_TOKEN}/{fp}", timeout=15)
+        return Response(img.content, mimetype=img.headers.get("Content-Type", "image/jpeg"),
+                        headers={"Cache-Control": "public, max-age=86400"})
+    except:
+        return "", 404
+
 @app.route("/api/store/products")
 def store_products_list():
     cat = request.args.get("category", "all")
@@ -741,19 +758,15 @@ def webhook():
             tg(chat, "🌸 جاري إضافة المنتج للمتجر...")
             try:
                 prod_price = float(price_match.group(1).replace(',', '.'))
-                # تحميل الصورة وحفظها
+                # نحفظ الـ file_id ونستخدم proxy endpoint بدل الحفظ المحلي
+                img_url = f"/api/store/img/{file_id}"
+                # نحتاج الـ bytes للذكاء الاصطناعي فقط
                 r_file = requests.get(
                     f"https://api.telegram.org/bot{BOT_TOKEN}/getFile",
                     params={"file_id": file_id}, timeout=10).json()
                 fp = r_file.get("result",{}).get("file_path","")
                 img_bytes = requests.get(
                     f"https://api.telegram.org/file/bot{BOT_TOKEN}/{fp}", timeout=15).content
-                import uuid, os as _os
-                _os.makedirs("static/products", exist_ok=True)
-                fname = f"product_{uuid.uuid4().hex[:10]}.jpg"
-                img_path = f"static/products/{fname}"
-                with open(img_path, "wb") as f:
-                    f.write(img_bytes)
                 img_url = f"/static/products/{fname}"
                 # توليد اسم ووصف بالذكاء الاصطناعي
                 prod_name = detected_cat  # اسم افتراضي
