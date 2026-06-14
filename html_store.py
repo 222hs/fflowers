@@ -57,68 +57,72 @@ STORE_PAGE = """<!DOCTYPE html>
       transform: translateX(-50%);
       width: 100%;
       max-width: 480px;
-      height: 56px;
+      height: 60px;
       background: #ffffff;
       border-bottom: 1px solid var(--border);
-      box-shadow: 0 1px 8px rgba(0,0,0,0.06);
-      display: flex;
+      box-shadow: 0 2px 12px rgba(0,0,0,0.07);
+      display: grid;
+      grid-template-columns: 1fr auto 1fr;
       align-items: center;
-      justify-content: space-between;
       padding: 0 12px;
       z-index: 50;
-      direction: ltr;
     }
 
-    .header-logo {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      text-decoration: none;
-      user-select: none;
-      flex-shrink: 0;
-    }
-
-    .header-logo-icon {
-      width: 34px;
-      height: 34px;
-      background: linear-gradient(135deg, var(--primary), var(--primary-dark));
-      border-radius: 10px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 18px;
-      flex-shrink: 0;
-    }
-
-    .header-logo-text {
-      display: flex;
-      flex-direction: column;
-      line-height: 1.2;
-    }
-
-    .header-logo-name {
-      font-size: 15px;
-      font-weight: 800;
-      color: var(--text);
-      letter-spacing: -0.2px;
-    }
-
-    .header-logo-sub {
-      font-size: 10px;
-      color: var(--text-muted);
-      font-weight: 400;
-    }
-
-    .header-actions {
+    .header-left {
       display: flex;
       align-items: center;
       gap: 4px;
-      flex-shrink: 0;
+      justify-content: flex-start;
+    }
+
+    .header-center-logo {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      text-decoration: none;
+      user-select: none;
+      gap: 1px;
+    }
+
+    .header-brand-name {
+      font-size: 16px;
+      font-weight: 800;
+      color: var(--text);
+      letter-spacing: -0.3px;
+      line-height: 1;
+      display: flex;
+      align-items: center;
+      gap: 5px;
+    }
+
+    .header-brand-name .brand-flower {
+      color: var(--primary);
+      font-size: 14px;
+    }
+
+    .header-brand-sub {
+      font-size: 9px;
+      color: var(--text-muted);
+      letter-spacing: 0.8px;
+      text-transform: uppercase;
+      font-weight: 400;
+    }
+
+    .header-right {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      justify-content: flex-end;
+    }
+
+    .header-actions {
+      display: contents;
     }
 
     .header-action-btn {
-      width: 36px;
-      height: 36px;
+      width: 38px;
+      height: 38px;
       display: flex;
       align-items: center;
       justify-content: center;
@@ -129,23 +133,29 @@ STORE_PAGE = """<!DOCTYPE html>
       position: relative;
       text-decoration: none;
       color: var(--text-sec);
+      border-radius: 50%;
+      transition: background 0.15s;
+    }
+
+    .header-action-btn:active {
+      background: var(--section-bg);
     }
 
     .header-action-btn svg {
-      width: 22px;
-      height: 22px;
+      width: 21px;
+      height: 21px;
     }
 
     .cart-badge {
       position: absolute;
-      top: 2px;
-      right: 2px;
+      top: 4px;
+      right: 4px;
       background: var(--primary);
       color: white;
       font-size: 9px;
       font-weight: 700;
-      width: 15px;
-      height: 15px;
+      width: 14px;
+      height: 14px;
       border-radius: 50%;
       display: none;
       align-items: center;
@@ -161,7 +171,7 @@ STORE_PAGE = """<!DOCTYPE html>
        2. ANNOUNCEMENT BAR
     ───────────────────────────────────────── */
     .announce-bar {
-      margin-top: 56px;
+      margin-top: 60px;
       height: 36px;
       background: var(--primary);
       color: white;
@@ -1105,23 +1115,27 @@ STORE_PAGE = """<!DOCTYPE html>
 
   <!-- ══ 1. HEADER ══ -->
   <header class="site-header" role="banner">
-    <a class="header-logo" href="#" aria-label="فيروز فلورز - الصفحة الرئيسية">
-      <div class="header-logo-icon">🌸</div>
-      <div class="header-logo-text">
-        <span class="header-logo-name">فيروز فلورز</span>
-        <span class="header-logo-sub">متجر الزهور والهدايا</span>
-      </div>
-    </a>
-
-    <div class="header-actions">
-      <!-- WhatsApp -->
+    <!-- Left: WhatsApp -->
+    <div class="header-left">
       <a class="header-action-btn" href="#" aria-label="واتساب" rel="noopener noreferrer">
         <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
           <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z" fill="#25D366"/>
           <path d="M12 2C6.477 2 2 6.477 2 12c0 1.89.525 3.658 1.438 5.168L2 22l4.95-1.414A9.953 9.953 0 0012 22c5.523 0 10-4.477 10-10S17.523 2 12 2zm0 18a7.95 7.95 0 01-4.073-1.117l-.292-.174-3.017.862.863-3.037-.19-.31A7.95 7.95 0 014 12c0-4.418 3.582-8 8-8s8 3.582 8 8-3.582 8-8 8z" fill="#25D366"/>
         </svg>
       </a>
-      <!-- Cart -->
+    </div>
+
+    <!-- Center: Brand -->
+    <a class="header-center-logo" href="#" aria-label="فيروز فلورز">
+      <span class="header-brand-name">
+        فيروز فلورز
+        <span class="brand-flower">🌸</span>
+      </span>
+      <span class="header-brand-sub">flower boutique</span>
+    </a>
+
+    <!-- Right: Cart -->
+    <div class="header-right">
       <button class="header-action-btn" id="cartBtn" aria-label="السلة">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
           <path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z"/>
