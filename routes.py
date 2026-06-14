@@ -773,16 +773,16 @@ def webhook():
             tg(chat, "🌸 جاري إضافة المنتج للمتجر...")
             try:
                 prod_price = float(price_match.group(1).replace(',', '.'))
-                # نحفظ الـ file_id ونستخدم proxy endpoint بدل الحفظ المحلي
-                img_url = f"/api/store/img/{file_id}"
-                # نحتاج الـ bytes للذكاء الاصطناعي فقط
+                # تحميل الصورة من تلغرام
                 r_file = requests.get(
                     f"https://api.telegram.org/bot{BOT_TOKEN}/getFile",
                     params={"file_id": file_id}, timeout=10).json()
                 fp = r_file.get("result",{}).get("file_path","")
                 img_bytes = requests.get(
                     f"https://api.telegram.org/file/bot{BOT_TOKEN}/{fp}", timeout=15).content
-                img_url = f"/static/products/{fname}"
+                # رفع لـ Cloudinary إذا متاح، وإلا استخدام proxy تلغرام
+                cld_url = cloudinary_upload(img_bytes) if USE_CLOUDINARY else ""
+                img_url = cld_url if cld_url else f"/api/store/img/{file_id}"
                 # توليد اسم ووصف بالذكاء الاصطناعي
                 prod_name = detected_cat  # اسم افتراضي
                 prod_desc = ""

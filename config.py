@@ -141,3 +141,40 @@ TURSO_TOKEN     = os.environ.get("TURSO_TOKEN", "")
 USE_TURSO       = bool(TURSO_URL and TURSO_TOKEN)
 APP_PASSWORD    = os.environ.get("APP_PASSWORD", "1233")
 WORKER_PASSWORD = os.environ.get("WORKER_PASSWORD", "1233")
+
+# ── Cloudinary ────────────────────────────────────────────────
+_cld_url = os.environ.get("CLOUDINARY_URL", "")
+if _cld_url.startswith("cloudinary://"):
+    _parts = _cld_url[len("cloudinary://"):].split("@")
+    _cloud_name = _parts[1] if len(_parts) > 1 else ""
+    _key_secret = _parts[0].split(":")
+    CLOUDINARY_CLOUD  = _cloud_name
+    CLOUDINARY_KEY    = _key_secret[0] if _key_secret else ""
+    CLOUDINARY_SECRET = _key_secret[1] if len(_key_secret) > 1 else ""
+else:
+    CLOUDINARY_CLOUD  = os.environ.get("CLOUDINARY_CLOUD_NAME", "")
+    CLOUDINARY_KEY    = os.environ.get("CLOUDINARY_API_KEY", "")
+    CLOUDINARY_SECRET = os.environ.get("CLOUDINARY_API_SECRET", "")
+
+USE_CLOUDINARY = bool(CLOUDINARY_CLOUD and CLOUDINARY_KEY and CLOUDINARY_SECRET)
+
+def cloudinary_upload(img_bytes, folder="fflowers"):
+    """Upload image bytes to Cloudinary, return secure_url or empty string."""
+    if not USE_CLOUDINARY:
+        return ""
+    import hashlib, time as _time
+    ts = int(_time.time())
+    params_str = f"folder={folder}&timestamp={ts}"
+    signature = hashlib.sha1((params_str + CLOUDINARY_SECRET).encode()).hexdigest()
+    try:
+        r = requests.post(
+            f"https://api.cloudinary.com/v1_1/{CLOUDINARY_CLOUD}/image/upload",
+            files={"file": ("image.jpg", img_bytes, "image/jpeg")},
+            data={"api_key": CLOUDINARY_KEY, "timestamp": ts,
+                  "folder": folder, "signature": signature},
+            timeout=30
+        )
+        return r.json().get("secure_url", "")
+    except Exception as e:
+        print("Cloudinary upload error:", e)
+        return ""
