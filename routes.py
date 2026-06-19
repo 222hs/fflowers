@@ -2,6 +2,7 @@ from config import *
 from database import *
 from helpers import *
 from telegram_bot import *
+from instagram_module import handle_instagram_photo, handle_instagram_callback, handle_instagram_time_text
 from html_pages import HTML_PAGE, WORKER_PAGE
 from html_login import LOGIN_PAGE
 from html_store import STORE_PAGE
@@ -710,6 +711,11 @@ def webhook():
         try: requests.post(f"https://api.telegram.org/bot{BOT_TOKEN}/editMessageReplyMarkup",json={"chat_id":chat,"message_id":cb["message"]["message_id"],"reply_markup":{"inline_keyboard":[]}},timeout=5)
         except: pass
         
+        if cbd.startswith("ig_"):
+            user_id = cb.get("from", {}).get("id", chat)
+            handle_instagram_callback(BOT_TOKEN, chat, cb["message"]["message_id"], cbd, user_id)
+            return "ok"
+
         if cbd == "cancel_del":
             tg(chat, "✅ تم الإلغاء، المبيعة محفوظة")
             return "ok"
@@ -896,6 +902,11 @@ def webhook():
             return "ok"
 
         # Check if flower counting request
+        # ── انستجرام / رييلز → تدفق كامل صورة→فيديو→جدولة ──
+        if any(w in caption for w in ["انستجرام","انستقرام","reels","رييل","ريلز","instagram reel"]):
+            handle_instagram_photo(BOT_TOKEN, chat, file_id)
+            return "ok"
+
         # ── كابشن تسويقي بالذكاء الاصطناعي ──
         caption_is_caption = any(w in caption.lower() for w in [
             "كابشن","كابشن","caption","وصف","بوست","post","نشر","انستقرام",
@@ -1047,6 +1058,11 @@ def webhook():
 
     text=msg.get("text","").strip()
     if not text: return "ok"
+
+    # ── وقت مخصص لانستجرام ──
+    uid = msg.get("from", {}).get("id", chat)
+    if handle_instagram_time_text(BOT_TOKEN, chat, text, uid):
+        return "ok"
 
     # Handle electricity manual amount
     if pending.get(chat,{}).get("waiting") == "elec_amt":
