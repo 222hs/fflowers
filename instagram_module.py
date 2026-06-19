@@ -77,7 +77,7 @@ def handle_instagram_photo(bot_token, chat_id, file_id):
         r = requests.get(f"https://api.telegram.org/bot{bot_token}/getFile",
                          params={"file_id": file_id}, timeout=10)
         fp = r.json()["result"]["file_path"]
-        image_url = fp  # الرابط الكامل مع التوكن
+        image_url = f"https://api.telegram.org/file/bot{bot_token}/{fp}"
     except:
         tg_send(bot_token, chat_id, "❌ تعذّر جلب الصورة")
         return
